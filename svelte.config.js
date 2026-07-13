@@ -102,6 +102,7 @@ const config = {
 				'/merge-pdf',
 				'/split-pdf',
 				'/compress-mp4',
+				'/compress-mov',
 				'/resize-image',
 				'/png-to-pdf',
 				'/mp4-to-gif',

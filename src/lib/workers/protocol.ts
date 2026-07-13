@@ -81,7 +81,11 @@ export interface VideoProbeResult {
 	likelyHdr: boolean;
 	/** First encodable codec per target container in THIS browser, checked at
 	 *  the requested OUTPUT dimensions (post-downscale), null = none. */
-	encodable: { mp4: 'avc' | 'hevc' | null; webm: 'vp9' | 'vp8' | null };
+	encodable: {
+		mp4: 'avc' | 'hevc' | null;
+		mov: 'avc' | 'hevc' | null;
+		webm: 'vp9' | 'vp8' | null;
+	};
 	aacEncodable: boolean;
 	/** Whether THIS browser can decode the source audio (false when no audio). */
 	audioDecodable: boolean;
@@ -92,7 +96,7 @@ export interface VideoConvertPayload {
 	jobId: number;
 	/** File clones without copying its data; mediabunny streams from it lazily. */
 	file: File;
-	container: 'mp4' | 'webm';
+	container: 'mp4' | 'webm' | 'mov';
 	video: {
 		codec: 'avc' | 'hevc' | 'vp9' | 'vp8';
 		bitrate: number;
@@ -129,7 +133,7 @@ export interface VideoToGifPayload {
 export interface GifToVideoPayload {
 	jobId: number;
 	bytes: ArrayBuffer;
-	container: 'mp4' | 'webm';
+	container: 'mp4' | 'webm' | 'mov';
 	quality: number;
 	maxDimension: number | null;
 }
@@ -188,7 +192,7 @@ export interface WorkerContracts {
 		};
 		/** Video → animated GIF (CanvasSink sampling + gifenc). */
 		toGif: { payload: VideoToGifPayload; result: { bytes: ArrayBuffer }; progress: FrameProgress };
-		/** Animated GIF → silent MP4/WebM (ImageDecoder + CanvasSource). */
+		/** Animated GIF → silent MP4/MOV/WebM (ImageDecoder + CanvasSource). */
 		fromGif: {
 			payload: GifToVideoPayload;
 			result: VideoConvertResult;

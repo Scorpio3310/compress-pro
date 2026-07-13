@@ -1,6 +1,6 @@
 /**
- * LP-01…14: standalone landing pages (/merge-pdf, /split-pdf, /compress-mp4,
- * /resize-image, /png-to-pdf, /mp4-to-gif, …, /compress-image,
+ * LP-01…15: standalone landing pages (/merge-pdf, /split-pdf, /compress-mp4,
+ * /compress-mov, /resize-image, /png-to-pdf, /mp4-to-gif, …, /compress-image,
  * /compress-jpg-to-100kb) — each URL must preselect its op or settings and
  * carry its own copy. The pipelines have their own specs; the contract here is
  * the preset landing, plus two end-to-end flows.
@@ -43,6 +43,18 @@ test('LP-03: /compress-mp4 scopes the dropzone to MP4 on the video tab', async (
 	);
 	await upload(page, fxVideo('v-320x240-3s.mp4'));
 	await expect(page.locator('button[data-seg="mp4"]')).toHaveAttribute('aria-pressed', 'true');
+});
+
+test('LP-15: /compress-mov scopes the dropzone to MOV and presets the MOV container', async ({
+	page
+}) => {
+	await gotoPath(page, '/compress-mov');
+	await expect(page).toHaveTitle(/Compress MOV/);
+	await expect(page.locator('h1')).toHaveText('Compress MOV videos.');
+	await expect(page.getByText('Drop MOV files here')).toBeVisible();
+	await expect(page.locator('input[type=file]')).toHaveAttribute('accept', 'video/quicktime,.mov');
+	await upload(page, fxVideo('v-320x240-3s.mov'));
+	await expect(page.locator('button[data-seg="mov"]')).toHaveAttribute('aria-pressed', 'true');
 });
 
 test('LP-04: /resize-image presets a 1920 px cap that spans image tabs', async ({ page }) => {

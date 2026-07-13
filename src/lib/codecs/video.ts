@@ -21,8 +21,8 @@ export interface VideoProgress {
 export interface VideoResult {
 	blob: Blob;
 	warning: string | null;
-	container: 'mp4' | 'webm' | 'gif';
-	/** Source container differs from the target (mov/mkv always count). */
+	container: 'mp4' | 'webm' | 'mov' | 'gif';
+	/** Source container differs from the target (mkv/unknown always count). */
 	formatChanged: boolean;
 	/** Resize, fps cap or audio removal — disqualifies the keep-original guard. */
 	transformed: boolean;
@@ -45,16 +45,17 @@ function decideAudio(
 	if (!probe.audioCodec || settings.removeAudio) return { kind: 'discard' };
 	const source = probe.audioCodec;
 
-	if (settings.container === 'mp4') {
+	if (settings.container === 'mp4' || settings.container === 'mov') {
+		const target = settings.container.toUpperCase();
 		if (source === 'aac' || source === 'mp3') return { kind: 'copy' };
-		// Opus-in-MP4 is spec-legal but Safari/QuickTime won't play it — the UI
-		// promises "plays everywhere", so re-encode to AAC when this browser can.
+		// Opus in ISOBMFF is spec-legal but Safari/QuickTime won't play it — the
+		// UI promises Apple compatibility, so re-encode to AAC when this browser can.
 		if (source === 'opus') {
 			if (probe.aacEncodable && probe.audioDecodable) {
 				return { kind: 'encode', codec: 'aac', bitrate: AUDIO_BITRATE };
 			}
 			warnings.push(
-				'Opus audio kept as-is — this MP4 may play without sound in Safari/QuickTime. Choose WebM for full compatibility.'
+				`Opus audio kept as-is — this ${target} may play without sound in Safari/QuickTime. Choose WebM for full compatibility.`
 			);
 			return { kind: 'copy' };
 		}
@@ -62,7 +63,7 @@ function decideAudio(
 			return { kind: 'encode', codec: 'aac', bitrate: AUDIO_BITRATE };
 		}
 		warnings.push(
-			`Audio removed — this browser can’t convert ${source.toUpperCase()} audio for MP4. Choose WebM to keep it.`
+			`Audio removed — this browser can’t convert ${source.toUpperCase()} audio for ${target}. Choose WebM to keep it.`
 		);
 		return { kind: 'discard' };
 	}
@@ -77,11 +78,12 @@ function decideAudio(
 	return { kind: 'encode', codec: 'opus', bitrate: AUDIO_BITRATE };
 }
 
-/** 'mp4' | 'webm' | null (mov/mkv/unknown — always a container change). */
-function sniffContainer(file: File): 'mp4' | 'webm' | null {
+/** 'mp4' | 'webm' | 'mov' | null (mkv/unknown — always a container change). */
+function sniffContainer(file: File): 'mp4' | 'webm' | 'mov' | null {
 	const name = file.name.toLowerCase();
 	if (file.type === 'video/mp4' || name.endsWith('.mp4') || name.endsWith('.m4v')) return 'mp4';
 	if (file.type === 'video/webm' || name.endsWith('.webm')) return 'webm';
+	if (file.type === 'video/quicktime' || name.endsWith('.mov')) return 'mov';
 	return null;
 }
 
@@ -97,7 +99,7 @@ export async function convertVideo(
 	const gifInput = head[0] === 0x47 && head[1] === 0x49 && head[2] === 0x46 && head[3] === 0x38; // 'GIF8'
 	if (gifInput) {
 		if (settings.container === 'gif') {
-			throw new Error('This file is already a GIF — choose MP4 or WebM output');
+			throw new Error('This file is already a GIF — choose MP4, WebM or MOV output');
 		}
 		return convertGifToVideo(file, settings.container, settings, onProgress, signal);
 	}
@@ -120,7 +122,7 @@ export async function convertVideo(
 	const codec = probe.encodable[container];
 	if (!codec) {
 		throw new Error(
-			`This browser can’t encode ${container.toUpperCase()} video — try the other output format` +
+			`This browser can’t encode ${container.toUpperCase()} video — try another output format` +
 				(settings.maxDimension ? '' : ', or set a Max dimension to downscale first')
 		);
 	}
@@ -268,7 +270,7 @@ async function convertVideoToGif(
 
 async function convertGifToVideo(
 	file: File,
-	container: 'mp4' | 'webm',
+	container: 'mp4' | 'webm' | 'mov',
 	settings: VideoConversionSettings,
 	onProgress?: (p: VideoProgress) => void,
 	signal?: AbortSignal

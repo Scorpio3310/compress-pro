@@ -122,6 +122,10 @@ describe('mergeStoredSettings', () => {
 		expect(bad.video.targetMb).toBe(0.1);
 		expect(bad.video.quality).toBe(75);
 		expect(bad.video.maxDimension).toBe(65_535);
+
+		const mov = defaultSettings();
+		mergeStoredSettings(mov, { video: { container: 'mov' } });
+		expect(mov.video.container).toBe('mov');
 	});
 
 	it('merges keepMetadata as a bool, defaults false, rejects garbage', () => {

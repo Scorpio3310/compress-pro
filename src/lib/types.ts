@@ -114,7 +114,7 @@ export interface PdfCompressionSettings {
 
 export interface VideoConversionSettings {
 	/** 'gif' turns the tab into a video→GIF converter (silent, palette-based). */
-	container: 'mp4' | 'webm' | 'gif';
+	container: 'mp4' | 'webm' | 'mov' | 'gif';
 	mode: 'quality' | 'target';
 	/** 1-100, mapped to a bitrate from resolution and frame rate (GIF: palette size). */
 	quality: number;

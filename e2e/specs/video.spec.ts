@@ -1,8 +1,8 @@
 /**
- * V-01…20: the video tab — container round-trips, target size with one
- * corrective pass, resize/fps caps, smart audio copy, cancel + worker
- * recovery, rotation, real iPhone HDR (skip-if-absent), persistence,
- * drop-routing and a band-color visual smoke.
+ * V-01…29: the video tab — container round-trips (incl. MOV in AND out),
+ * target size with one corrective pass, resize/fps caps, smart audio copy,
+ * cancel + worker recovery, rotation, real iPhone HDR (skip-if-absent),
+ * persistence, drop-routing and band-color visual proofs.
  */
 import { readFileSync } from 'node:fs';
 import { basename } from 'node:path';
@@ -540,6 +540,158 @@ test('V-24: Remove audio on a silent clip cannot defeat keep-original', async ({
 		input: { name: 'v-320x240-3s.mp4', bytes: input.length },
 		output: { name: art.name, bytes: art.bytes.length },
 		metrics: { keptOriginal: art.bytes.length === input.length }
+	});
+});
+
+test('V-25: mov → mov quality 60 shrinks and stays QuickTime', async ({ page, rec }) => {
+	const input = readFileSync(fxVideo('v-320x240-3s.mov'));
+	await gotoTab(page, 'video');
+	await upload(page, fxVideo('v-320x240-3s.mov'));
+	await setContainer(page, 'mov');
+	await setQuality(page, 60);
+	const run = await compress(page);
+	expect(run.warnings).toEqual([]);
+	const art = await downloadRow(page);
+	expect(art.name).toBe('v-320x240-3s.mov');
+	const info = await videoInfo(art.bytes);
+	expect(info.formatMime, 'output container is QuickTime, not renamed MP4').toBe('video/quicktime');
+	expect(info.videoCodec).toBe('avc');
+	expect([info.width, info.height]).toEqual([320, 240]);
+	expect(Math.abs(info.durationSec - 3)).toBeLessThanOrEqual(0.2);
+	expect(art.bytes.length, 'q60 must shrink the 1.2 Mbps source').toBeLessThan(input.length);
+	rec.record({
+		id: 'V-25',
+		title: 'mov → mov compresses without leaving QuickTime',
+		settings: { tab: 'video', container: 'mov', quality: 60 },
+		input: { name: 'v-320x240-3s.mov', bytes: input.length },
+		output: { name: art.name, bytes: art.bytes.length },
+		metrics: {
+			savingsPct: Number((((input.length - art.bytes.length) / input.length) * 100).toFixed(1))
+		},
+		assets: {
+			original: rec.saveAsset('V-25', 'original', 'v-320x240-3s.mov', fxVideo('v-320x240-3s.mov')),
+			output: rec.saveAsset('V-25', 'output', art.name, art.bytes)
+		}
+	});
+});
+
+test('V-26: mp4 → mov converts with a .mov name and the band intact', async ({ page, rec }) => {
+	await gotoTab(page, 'video');
+	await upload(page, fxVideo('v-320x240-3s.mp4'));
+	await setContainer(page, 'mov');
+	await compress(page);
+	const art = await downloadRow(page);
+	expect(art.name).toBe('v-320x240-3s.mov');
+	const info = await videoInfo(art.bytes);
+	expect(info.formatMime).toBe('video/quicktime');
+	expect(info.videoCodec).toBe('avc');
+	// Real pixel proof for the new mux path — Chromium plays H.264-in-MOV.
+	const meta = videoFixtures().files['v-320x240-3s.mp4'] as BandMeta;
+	const frame = await expectBandColor(
+		page,
+		art.bytes,
+		'video/quicktime',
+		1.5,
+		meta.bandColors[1],
+		'V-26'
+	);
+	rec.record({
+		id: 'V-26',
+		settings: { tab: 'video', container: 'mov', quality: 75 },
+		input: { name: 'v-320x240-3s.mp4', bytes: readFileSync(fxVideo('v-320x240-3s.mp4')).length },
+		output: { name: art.name, bytes: art.bytes.length, format: info.videoCodec },
+		assets: {
+			output: rec.saveAsset('V-26', 'output', art.name, art.bytes),
+			visual: rec.saveAsset('V-26', 'visual', 'frame-1.5s.png', frame)
+		}
+	});
+});
+
+test('V-27: mov → mov at q100 cannot beat keep-original', async ({ page, rec }) => {
+	// sniffContainer must read .mov output as "same format" — a q100 re-encode
+	// that loses to the source falls back to the untouched original bytes.
+	const input = readFileSync(fxVideo('v-320x240-3s.mov'));
+	await gotoTab(page, 'video');
+	await upload(page, fxVideo('v-320x240-3s.mov'));
+	await setContainer(page, 'mov');
+	await setQuality(page, 100);
+	await compress(page);
+	const art = await downloadRow(page);
+	expect(
+		art.bytes.length,
+		'mov → mov must never ship a bigger file than the source'
+	).toBeLessThanOrEqual(input.length);
+	rec.record({
+		id: 'V-27',
+		title: 'mov → mov q100 keeps the original when the re-encode loses',
+		settings: { tab: 'video', container: 'mov', quality: 100 },
+		input: { name: 'v-320x240-3s.mov', bytes: input.length },
+		output: { name: art.name, bytes: art.bytes.length },
+		metrics: { keptOriginal: art.bytes.length === input.length }
+	});
+});
+
+test('V-28: opus audio in a MOV run becomes AAC (QuickTime compat)', async ({ page, rec }) => {
+	// Same policy as V-09's MP4 case: Opus is spec-legal in ISOBMFF but
+	// QuickTime won't play it, so the MOV path re-encodes to AAC when it can.
+	const aacEncodable = videoFixtures().capabilities.aac;
+	await gotoTab(page, 'video');
+	await upload(page, fxVideo('v-audio-3s.mp4'));
+	await setContainer(page, 'mov');
+	const run = await compress(page);
+	const art = await downloadRow(page);
+	expect(art.name).toBe('v-audio-3s.mov');
+	const info = await videoInfo(art.bytes);
+	expect(info.formatMime).toBe('video/quicktime');
+	if (aacEncodable) {
+		expect(info.audioCodec, 're-encoded for QuickTime compatibility').toBe('aac');
+		expect(run.warnings).toHaveLength(0);
+	} else {
+		expect(info.audioCodec, 'kept as opus when AAC encode is unavailable').toBe('opus');
+		expect(run.warnings.join(' ')).toMatch(/Safari/i);
+	}
+	expect(info.trackCount).toBe(2);
+	rec.record({
+		id: 'V-28',
+		settings: { tab: 'video', container: 'mov', audio: aacEncodable ? 'opus→aac' : 'copy' },
+		input: { name: 'v-audio-3s.mp4', bytes: readFileSync(fxVideo('v-audio-3s.mp4')).length },
+		output: { name: art.name, bytes: art.bytes.length },
+		metrics: { audioCodec: info.audioCodec ?? '' },
+		assets: { output: rec.saveAsset('V-28', 'output', art.name, art.bytes) }
+	});
+});
+
+test('V-29: mov → mov source-vs-output frame PSNR (before/after proof)', async ({ page, rec }) => {
+	const input = readFileSync(fxVideo('v-320x240-3s.mov'));
+	await gotoTab(page, 'video');
+	await upload(page, fxVideo('v-320x240-3s.mov'));
+	await setContainer(page, 'mov');
+	await compress(page); // q75 default
+
+	const art = await downloadRow(page);
+	// Same timestamp from source and compressed output, band-only strip (see
+	// V-21) — proves the re-encoded QuickTime frames match the original ones.
+	const [srcFrame] = await rasterizeVideoFramesInPage(page, input, 'video/quicktime', [1.5]);
+	const [outFrame] = await rasterizeVideoFramesInPage(page, art.bytes, 'video/quicktime', [1.5]);
+	const region = { left: 0, top: 150, width: 320, height: 90 };
+	const framePsnr = await psnr(srcFrame, outFrame, { region });
+	assertFloor(framePsnr, VIDEO_QUALITY.psnrFloor, 'V-29 frame psnr');
+	rec.record({
+		id: 'V-29',
+		title: 'mov source vs compressed mov frame PSNR @1.5s (band region)',
+		settings: { tab: 'video', container: 'mov', quality: 75 },
+		input: { name: 'v-320x240-3s.mov', bytes: input.length },
+		output: { name: art.name, bytes: art.bytes.length },
+		metrics: { framePsnr: Number(Math.min(framePsnr, 99).toFixed(1)) },
+		assets: {
+			output: rec.saveAsset('V-29', 'output', art.name, art.bytes),
+			visual: rec.saveAsset(
+				'V-29',
+				'visual',
+				'source-vs-output-1.5s.png',
+				await stitchHorizontal([srcFrame, outFrame])
+			)
+		}
 	});
 });
 

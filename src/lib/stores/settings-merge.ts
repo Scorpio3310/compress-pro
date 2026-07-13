@@ -129,7 +129,7 @@ function mergeSvg(target: SvgCompressionSettings, s: Record<string, unknown>): v
 }
 
 function mergeVideo(target: VideoConversionSettings, s: Record<string, unknown>): void {
-	target.container = oneOf(s.container, ['mp4', 'webm', 'gif'] as const, target.container);
+	target.container = oneOf(s.container, ['mp4', 'webm', 'mov', 'gif'] as const, target.container);
 	target.mode = oneOf(s.mode, ['quality', 'target'] as const, target.mode);
 	target.quality = num(s.quality, 1, 100, target.quality);
 	target.targetMb = num(s.targetMb, 0.1, 10_000, target.targetMb);

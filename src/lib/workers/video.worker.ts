@@ -14,6 +14,7 @@ import {
 	CanvasSource,
 	Conversion,
 	Input,
+	MovOutputFormat,
 	Mp3OutputFormat,
 	Mp4OutputFormat,
 	OggOutputFormat,
@@ -47,6 +48,13 @@ function undecodableMessage(codec: string | null): string {
 		'or convert on the device that recorded it'
 	);
 }
+
+/** Container → muxer + result MIME. MOV is MP4's ISOBMFF sibling — same codecs. */
+const VIDEO_OUTPUT: Record<'mp4' | 'mov' | 'webm', { format: () => OutputFormat; mime: string }> = {
+	mp4: { format: () => new Mp4OutputFormat(), mime: 'video/mp4' },
+	mov: { format: () => new MovOutputFormat(), mime: 'video/quicktime' },
+	webm: { format: () => new WebMOutputFormat(), mime: 'video/webm' }
+};
 
 // --- Audio output plumbing ---
 
@@ -138,6 +146,7 @@ expose<WorkerContracts['video']>({
 			getFirstEncodableVideoCodec(['vp9', 'vp8'], probeDims),
 			canEncodeAudio('aac')
 		]);
+		const isobmffCodec = mp4Codec === 'avc' || mp4Codec === 'hevc' ? mp4Codec : null;
 
 		const result: VideoProbeResult = {
 			durationSec,
@@ -152,7 +161,8 @@ expose<WorkerContracts['video']>({
 			rotation,
 			likelyHdr: detectHdr(colorSpace, codecString),
 			encodable: {
-				mp4: mp4Codec === 'avc' || mp4Codec === 'hevc' ? mp4Codec : null,
+				mp4: isobmffCodec,
+				mov: isobmffCodec, // MOV shares MP4's codec policy — only the wrapper differs
 				webm: webmCodec === 'vp9' || webmCodec === 'vp8' ? webmCodec : null
 			},
 			aacEncodable: aacOk,
@@ -165,7 +175,7 @@ expose<WorkerContracts['video']>({
 		const input = openInput(file);
 		const target = new BufferTarget();
 		const output = new Output({
-			format: container === 'mp4' ? new Mp4OutputFormat() : new WebMOutputFormat(),
+			format: VIDEO_OUTPUT[container].format(),
 			target
 		});
 
@@ -218,7 +228,7 @@ expose<WorkerContracts['video']>({
 		const bytes = target.buffer;
 		if (!bytes || bytes.byteLength === 0) throw new Error('Video conversion produced no output');
 		return {
-			result: { bytes, mimeType: container === 'mp4' ? 'video/mp4' : 'video/webm' },
+			result: { bytes, mimeType: VIDEO_OUTPUT[container].mime },
 			transfer: [bytes]
 		};
 	},
@@ -297,13 +307,13 @@ expose<WorkerContracts['video']>({
 			throw new Error('This browser can’t decode GIF animations — try Chrome');
 		}
 		const found = await getFirstEncodableVideoCodec(
-			container === 'mp4' ? ['avc', 'hevc'] : ['vp9', 'vp8']
+			container === 'webm' ? ['vp9', 'vp8'] : ['avc', 'hevc']
 		);
 		const codec =
 			found === 'avc' || found === 'hevc' || found === 'vp9' || found === 'vp8' ? found : null;
 		if (!codec) {
 			throw new Error(
-				`This browser can’t encode ${container.toUpperCase()} video — try the other output format`
+				`This browser can’t encode ${container.toUpperCase()} video — try another output format`
 			);
 		}
 
@@ -342,7 +352,7 @@ expose<WorkerContracts['video']>({
 
 			const target = new BufferTarget();
 			const output = new Output({
-				format: container === 'mp4' ? new Mp4OutputFormat() : new WebMOutputFormat(),
+				format: VIDEO_OUTPUT[container].format(),
 				target
 			});
 			const canvas = new OffscreenCanvas(width, height);
@@ -374,7 +384,7 @@ expose<WorkerContracts['video']>({
 			const out = target.buffer;
 			if (!out || out.byteLength === 0) throw new Error('Video conversion produced no output');
 			return {
-				result: { bytes: out, mimeType: container === 'mp4' ? 'video/mp4' : 'video/webm' },
+				result: { bytes: out, mimeType: VIDEO_OUTPUT[container].mime },
 				transfer: [out]
 			};
 		} finally {

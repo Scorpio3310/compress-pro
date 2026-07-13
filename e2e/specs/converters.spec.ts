@@ -173,9 +173,7 @@ test('CV-14: /mov-to-mp4 scopes the dropzone to MOV and presets MP4', async ({ p
 	await expect(page.locator('h1')).toHaveText('Convert MOV to MP4.');
 	await expect(page.getByText('Drop MOV files here')).toBeVisible();
 	await expect(page.locator('input[type=file]')).toHaveAttribute('accept', 'video/quicktime,.mov');
-	// No MOV fixture exists; controls render only once a file is parked, and
-	// setInputFiles bypasses the accept filter — an mp4 stands in fine here.
-	await upload(page, fxVideo('v-320x240-3s.mp4'));
+	await upload(page, fxVideo('v-320x240-3s.mov'));
 	await expect(page.locator('button[data-seg="mp4"]')).toHaveAttribute('aria-pressed', 'true');
 });
 

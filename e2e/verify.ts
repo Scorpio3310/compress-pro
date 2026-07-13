@@ -422,6 +422,8 @@ export interface VideoFileInfo {
 	rotation: number;
 	/** Average packet rate ≈ frame rate. */
 	frameRate: number | null;
+	/** Demuxed container MIME, e.g. 'video/quicktime' — proves the wrapper, not just the codec. */
+	formatMime: string;
 }
 
 /** Structural video verification — mediabunny parses in plain Node (no WebCodecs). */
@@ -466,7 +468,8 @@ export async function videoInfo(buf: Buffer): Promise<VideoFileInfo> {
 		audioCodec: audio ? await audio.getCodec() : null,
 		trackCount: (await input.getTracks()).length,
 		rotation: await video.getRotation(),
-		frameRate: stats && stats.averagePacketRate > 0 ? stats.averagePacketRate : null
+		frameRate: stats && stats.averagePacketRate > 0 ? stats.averagePacketRate : null,
+		formatMime: (await input.getFormat()).mimeType
 	};
 }
 

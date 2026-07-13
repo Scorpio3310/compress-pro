@@ -78,6 +78,7 @@ const PAGES = [
 	['og/merge-pdf.jpg', 'Merge PDFs.', 'Many documents into one — reordered, never uploaded.'],
 	['og/split-pdf.jpg', 'Split PDFs.', 'Extract or remove pages with ranges like 1-3,7. Local.'],
 	['og/compress-mp4.jpg', 'Compress MP4.', 'Hit 10 MB for Discord — encoded on your device.'],
+	['og/compress-mov.jpg', 'Compress MOV.', 'QuickTime in, QuickTime out — shrunk on your device.'],
 	['og/resize-image.jpg', 'Resize images.', 'Cap the longest side — aspect kept, resized locally.'],
 	['og/png-to-pdf.jpg', 'PNG → PDF', 'Screenshots into one document. Assembled locally.'],
 	['og/mp4-to-gif.jpg', 'MP4 → GIF', 'Looping GIFs, no watermark — made in your browser.'],

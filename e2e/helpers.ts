@@ -175,7 +175,10 @@ export async function toggle(page: Page, label: string, on: boolean): Promise<vo
 	await page.getByLabel(label).setChecked(on);
 }
 
-export async function setContainer(page: Page, container: 'mp4' | 'webm' | 'gif'): Promise<void> {
+export async function setContainer(
+	page: Page,
+	container: 'mp4' | 'webm' | 'mov' | 'gif'
+): Promise<void> {
 	await setSeg(page, container);
 }
 

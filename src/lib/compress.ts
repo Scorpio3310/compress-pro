@@ -33,6 +33,7 @@ const extMap: Record<string, string> = {
 	ico: '.ico',
 	mp4: '.mp4',
 	webm: '.webm',
+	mov: '.mov',
 	mp3: '.mp3',
 	m4a: '.m4a',
 	wav: '.wav',

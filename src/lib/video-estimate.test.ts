@@ -39,6 +39,12 @@ describe('estimateVideoBytes', () => {
 		);
 	});
 
+	it('estimates MOV exactly like MP4 (same avc curve)', () => {
+		expect(estimateVideoBytes([hd], settings({ container: 'mov' }))).toBe(
+			estimateVideoBytes([hd], settings())
+		);
+	});
+
 	it('caps by the source bitrate so a small source cannot balloon', () => {
 		// same clip but only ~1 Mbps of source data — the cap must bite
 		const small = { meta: hd.meta, bytes: 4_000_000 };

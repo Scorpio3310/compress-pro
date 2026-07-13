@@ -13,6 +13,7 @@
 
 	const containers = [
 		{ id: 'mp4', label: 'MP4' },
+		{ id: 'mov', label: 'MOV' },
 		{ id: 'webm', label: 'WebM' },
 		{ id: 'gif', label: 'GIF' }
 	];
@@ -99,9 +100,11 @@
 	<p class="mt-2 hint text-faint">
 		{settings.container === 'mp4'
 			? 'H.264 + AAC — plays everywhere.'
-			: settings.container === 'webm'
-				? 'VP9 + Opus — smaller at the same quality, plays in browsers.'
-				: 'Animated GIF — silent, loops forever, works in chats and docs.'}
+			: settings.container === 'mov'
+				? 'H.264 + AAC in a QuickTime container — for Apple, Final Cut and Premiere workflows.'
+				: settings.container === 'webm'
+					? 'VP9 + Opus — smaller at the same quality, plays in browsers.'
+					: 'Animated GIF — silent, loops forever, works in chats and docs.'}
 	</p>
 </div>
 

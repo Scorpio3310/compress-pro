@@ -26,7 +26,7 @@ The whole app is prerendered and served as static assets, so files never leave t
 
 - **🖼️ Images** — JPG, PNG, WebP, GIF, HEIC, SVG. Squoosh codecs ([jSquash](https://github.com/jamsinclair/jSquash)): MozJPEG **with trellis quantization** (3–30% smaller at the same quality), libwebp (effort 6), libavif, oxipng; lossy PNG via libimagequant ([icodec](https://github.com/Kaciras/icodec), quality 100 stays lossless). Optional max-dimension downscale (Lanczos3) and **target-size** mode ("fit under 500 KB", binary search).
 - **📄 PDF** — Ghostscript 10 in wasm ([`@okathira/ghostpdl-wasm`](https://github.com/okathira/ghostpdl-wasm)): explicit DPI + JPEG-quality control, bicubic downsampling, duplicate-image detection, font subsetting, metadata stripping. 5 preset levels or **target size** ("fit under 2 MB") via binary search over a quality ladder. Before/after page-1 comparison via pdf.js.
-- **🎬 Video** — compress and convert MP4/MOV/WebM/MKV via **WebCodecs** (the browser's hardware encoders) orchestrated by [mediabunny](https://mediabunny.dev) — no ffmpeg, ~realtime encodes. H.264 (MP4), VP9 (WebM) or **animated GIF** output, quality or **target-size** mode, longest-side downscale, fps cap, remove-audio; audio otherwise transmuxes losslessly when container-legal. GIFs convert back to silent MP4/WebM too.
+- **🎬 Video** — compress and convert MP4/MOV/WebM/MKV via **WebCodecs** (the browser's hardware encoders) orchestrated by [mediabunny](https://mediabunny.dev) — no ffmpeg, ~realtime encodes. H.264 (MP4/MOV), VP9 (WebM) or **animated GIF** output, quality or **target-size** mode, longest-side downscale, fps cap, remove-audio; audio otherwise transmuxes losslessly when container-legal. GIFs convert back to silent MP4/MOV/WebM too.
 - **🎵 Audio** — compress and convert MP3/M4A/WAV/OGG — FLAC as input (LAME wasm for MP3), extract audio from video (MP4 → MP3), bitrate or target-size mode.
 - **🔐 PDF unlock & protect** — remove a known password or add one (128-bit encryption) — the password never leaves the device.
 - **📦 ZIP** — create archives from any files (deflate level knob) and extract existing ones, entirely client-side (fflate).
@@ -55,6 +55,7 @@ Every tool is its own real, prerendered page.
 | [Compress PDF](https://compress-pro.com/compress-pdf)                    | Ghostscript            |
 | [Compress Video](https://compress-pro.com/compress-video)                | WebCodecs + mediabunny |
 | [Compress MP4](https://compress-pro.com/compress-mp4)                    | WebCodecs + mediabunny |
+| [Compress MOV](https://compress-pro.com/compress-mov)                    | WebCodecs + mediabunny |
 | [Compress any image](https://compress-pro.com/compress-image)            | Auto format race       |
 | [Compress JPG to 100 KB](https://compress-pro.com/compress-jpg-to-100kb) | target-size search     |
 | [Compress Audio](https://compress-pro.com/compress-audio)                | mediabunny + LAME MP3  |

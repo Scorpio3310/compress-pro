@@ -64,7 +64,7 @@ export type ConverterPreset =
 	| { kind: 'pdf-to-images'; imageFormat: 'jpg' | 'png' }
 	// SVG tab raster export — 'svg' output itself is the tab default.
 	| { kind: 'svg'; to: 'png' | 'ico' }
-	| { kind: 'video'; container: 'mp4' | 'webm' | 'gif' }
+	| { kind: 'video'; container: 'mp4' | 'webm' | 'mov' | 'gif' }
 	| { kind: 'audio'; output: 'mp3' | 'm4a' | 'wav' | 'ogg' }
 	| { kind: 'pdf-op'; op: 'unlock' | 'protect' | 'merge' | 'pages' }
 	// Longest-side cap across every image tab — the page's whole point, so
@@ -1496,11 +1496,11 @@ export const CONVERTERS: ConverterEntry[] = [
 			{
 				heading: 'Converting a whole camera roll',
 				paragraphs: [
-					'Drop any number of MOV files at once — they convert in sequence with per-file progress, and nothing uploads in the background while you wait, because there is no background. AirDrop the folder from your iPhone to a Mac, drop it here, and download the converted set. Clips that only need shrinking, not converting, belong on [Compress MP4](/compress-mp4).'
+					'Drop any number of MOV files at once — they convert in sequence with per-file progress, and nothing uploads in the background while you wait, because there is no background. AirDrop the folder from your iPhone to a Mac, drop it here, and download the converted set. Clips that only need shrinking, not converting, belong on [Compress MOV](/compress-mov) — it keeps the QuickTime format.'
 				]
 			}
 		],
-		related: ['/compress-mp4', '/compress-video', '/webm-to-mp4', '/mkv-to-mp4']
+		related: ['/compress-mov', '/compress-mp4', '/webm-to-mp4', '/mkv-to-mp4']
 	},
 	{
 		format: 'video',
@@ -2555,6 +2555,66 @@ export const TOOLS: ConverterEntry[] = [
 			}
 		],
 		related: ['/compress-video', '/mov-to-mp4', '/mp4-to-webm', '/mp4-to-gif']
+	},
+	{
+		format: 'video',
+		path: '/compress-mov',
+		ogImage: '/og/compress-mov.jpg',
+		label: 'Compress MOV',
+		feature: 'Compress MOV (QuickTime) video',
+		preset: { kind: 'video', container: 'mov' },
+		accept: 'video/quicktime,.mov',
+		dropSubject: 'MOV files',
+		dropHint: 'MOV only · multiple files supported',
+		title: 'Compress MOV (QuickTime) Online — No Upload | Compress Pro',
+		description:
+			'Shrink MOV videos right in your browser and keep the QuickTime format — set a quality or a target size. No uploads, no watermarks. Free & private.',
+		h1: 'Compress MOV videos.',
+		tagline: 'Shrink QuickTime MOV files on your device — still a MOV.',
+		intro:
+			'Compress MOV files without changing what they are — the video is re-encoded on your own device and stays in its QuickTime container, so it drops straight back into Final Cut, QuickTime Player and every Apple workflow. Pick a quality for a smaller look-alike, or type the limit you’re fighting and target-size mode finds settings that fit. Audio is carried over untouched whenever possible, and nothing is uploaded anywhere.',
+		faq: [
+			{
+				q: 'Why compress MOV to MOV instead of converting to MP4?',
+				a: 'Keeping the QuickTime container means editors and Apple apps treat the file exactly as before — same format, just smaller. Convert only when a destination refuses MOV; the dedicated MOV to MP4 converter handles that case.'
+			},
+			{
+				q: 'How much smaller will my MOV get?',
+				a: 'iPhone and screen recordings are encoded generously at capture time and typically shrink 50–80% at the default quality. Files that were already compressed hard shrink less — the tool keeps the original if it can’t beat it.'
+			},
+			{
+				q: 'What happens to HEVC and HDR iPhone footage?',
+				a: 'The video is re-encoded to H.264 for reliable playback, and HDR colors are tone-mapped to standard range — the tool warns you when that applies. Raise the quality slider for extra headroom on detailed clips.'
+			},
+			{ q: 'Is my MOV uploaded?', a: PRIVACY_A_NO }
+		],
+		guide: [
+			{
+				heading: 'Same container in, same container out',
+				paragraphs: [
+					'Compression here changes the bitrate, not the identity of the file: a .mov goes in, a smaller .mov comes out, with audio carried over or converted as needed. That matters for format-picky pipelines — Final Cut libraries, review tools, archives that expect QuickTime. When universal playback is the actual goal, [MOV to MP4](/mov-to-mp4) converts instead, and files that are already MP4 belong on [Compress MP4](/compress-mp4).'
+				]
+			},
+			{
+				heading: 'Recommended settings by destination',
+				table: {
+					columns: ['Destination', 'Setting'],
+					rows: [
+						['Email attachment', 'Target size: 19 MB'],
+						['Slack or Teams share', 'Target size: 25 MB'],
+						['Archive a screen recording', 'Quality 70'],
+						['Compatible master copy', 'Quality 90, original size']
+					]
+				}
+			},
+			{
+				heading: 'Quality mode or target-size mode',
+				paragraphs: [
+					'Quality mode answers “make it smaller, keep it looking good” — bitrates are matched to resolution and frame rate. Target-size mode answers hard limits: it works backwards from the number you type and the clip duration, verifies the result, and re-encodes once if the first pass lands over. Long clips fit the same cap as short ones — they just look softer.'
+				]
+			}
+		],
+		related: ['/mov-to-mp4', '/compress-mp4', '/compress-video']
 	},
 	{
 		format: 'jpg',

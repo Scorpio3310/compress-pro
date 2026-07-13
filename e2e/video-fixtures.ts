@@ -27,7 +27,7 @@ interface ClipSpec {
 	height: number;
 	fps: number;
 	seconds: number;
-	container: 'mp4' | 'webm' | 'mkv';
+	container: 'mp4' | 'webm' | 'mkv' | 'mov';
 	videoCodec: 'avc' | 'vp9';
 	audio: boolean;
 	rotate?: 90;
@@ -59,6 +59,16 @@ const CLIPS: ClipSpec[] = [
 		fps: 30,
 		seconds: 3,
 		container: 'mp4',
+		videoCodec: 'avc',
+		audio: false
+	}),
+	clip({
+		name: 'v-320x240-3s.mov',
+		width: 320,
+		height: 240,
+		fps: 30,
+		seconds: 3,
+		container: 'mov',
 		videoCodec: 'avc',
 		audio: false
 	}),
@@ -204,9 +214,11 @@ export async function generateVideoFixtures(): Promise<void> {
 						const format =
 							spec.container === 'mp4'
 								? new mod.Mp4OutputFormat()
-								: spec.container === 'mkv'
-									? new mod.MkvOutputFormat()
-									: new mod.WebMOutputFormat();
+								: spec.container === 'mov'
+									? new mod.MovOutputFormat()
+									: spec.container === 'mkv'
+										? new mod.MkvOutputFormat()
+										: new mod.WebMOutputFormat();
 						const target = new mod.BufferTarget();
 						const output = new mod.Output({ format, target });
 						const videoSource = new mod.CanvasSource(canvas, {
