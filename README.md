@@ -1,4 +1,4 @@
-# Compress Pro | Private, In-Browser Image, Video, PDF & Audio Compressor
+# Compress Pro | Private, In-Browser Image, Video, PDF, Audio & Font Compressor
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Privacy](https://img.shields.io/badge/Privacy-No%20Upload-brightgreen.svg)
@@ -8,17 +8,17 @@
 ![Vite](https://img.shields.io/badge/Vite-646CFF?logo=vite&logoColor=white)
 ![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-06B6D4?logo=tailwindcss&logoColor=white)
 
-**Keywords:** `image compression` • `pdf compression` • `video compression` • `webp` • `avif` • `heic` • `remove exif` • `webassembly` • `webcodecs` • `client-side` • `private` • `no upload`
+**Keywords:** `image compression` • `pdf compression` • `video compression` • `webp` • `avif` • `heic` • `remove exif` • `font converter` • `ttf to woff2` • `font subsetting` • `variable font` • `webassembly` • `webcodecs` • `client-side` • `private` • `no upload`
 
 ## 🔗 [Try it live → compress-pro.com](https://compress-pro.com)
 
 ![Compress Pro — private, in-browser file compressor](docs/screenshot.png)
 
-> **Compress images, video, audio and PDFs — and strip EXIF — entirely in your browser.** No uploads, no ads, no login, nothing stored server-side. Free & open source — files never leave your machine.
+> **Compress images, video, audio and PDFs — convert and subset fonts — and strip EXIF, entirely in your browser.** No uploads, no ads, no login, nothing stored server-side. Free & open source — files never leave your machine.
 
 ## 👀 Overview
 
-Compress Pro is a free, open-source, private-by-design file compressor. It shrinks **images, video, audio and PDFs** — zips and unzips archives, and strips **EXIF** metadata — running **entirely in the browser** via WebAssembly + WebCodecs.
+Compress Pro is a free, open-source, private-by-design file compressor. It shrinks **images, video, audio and PDFs** — converts and subsets **fonts** (TTF/OTF/WOFF/WOFF2), zips and unzips archives, and strips **EXIF** metadata — running **entirely in the browser** via WebAssembly + WebCodecs. Fonts especially benefit from the privacy angle: they are licensed software most EULAs forbid handing to third-party servers.
 
 The whole app is prerendered and served as static assets, so files never leave the machine. Compression runs in Web Workers, so the UI stays responsive. There are no ads, no login and nothing stored server-side — privacy is the product's core promise and its SEO angle. It deploys to **Cloudflare Workers** for ~$0/month.
 
@@ -28,6 +28,7 @@ The whole app is prerendered and served as static assets, so files never leave t
 - **📄 PDF** — Ghostscript 10 in wasm ([`@okathira/ghostpdl-wasm`](https://github.com/okathira/ghostpdl-wasm)): explicit DPI + JPEG-quality control, bicubic downsampling, duplicate-image detection, font subsetting, metadata stripping. 5 preset levels or **target size** ("fit under 2 MB") via binary search over a quality ladder. Before/after page-1 comparison via pdf.js.
 - **🎬 Video** — compress and convert MP4/MOV/WebM/MKV via **WebCodecs** (the browser's hardware encoders) orchestrated by [mediabunny](https://mediabunny.dev) — no ffmpeg, ~realtime encodes. H.264 (MP4/MOV), VP9 (WebM) or **animated GIF** output, quality or **target-size** mode, longest-side downscale, fps cap, remove-audio; audio otherwise transmuxes losslessly when container-legal. GIFs convert back to silent MP4/MOV/WebM too.
 - **🎵 Audio** — compress and convert MP3/M4A/WAV/OGG — FLAC as input (LAME wasm for MP3), extract audio from video (MP4 → MP3), bitrate or target-size mode.
+- **🔤 Fonts** — convert between TTF, OTF, WOFF, WOFF2 (and legacy EOT) as **lossless repackaging** of the raw font tables (Google's woff2 codec in wasm — glyphs, kerning and hinting survive byte-for-byte); **subset** fonts to chosen character sets or exact text via **HarfBuzz** (kerning/ligatures among kept glyphs preserved), and pin **variable fonts** to static instances per axis. Outlines are never converted lossily — a CFF font asked to become TTF keeps its honest `.otf` extension.
 - **🔐 PDF unlock & protect** — remove a known password or add one (128-bit encryption) — the password never leaves the device.
 - **📦 ZIP** — create archives from any files (deflate level knob) and extract existing ones, entirely client-side (fflate).
 - **🧹 EXIF removal** — lossless byte surgery on JPG/PNG/WebP: EXIF/GPS, XMP, Photoshop blocks, comments and PNG text chunks are cut out with pixels copied verbatim; ICC profiles kept by default (toggle), orientation re-embedded so photos never turn sideways. Each result row discloses what was found.
@@ -44,24 +45,27 @@ Every tool is its own real, prerendered page.
 
 ### Compress
 
-| Tool                                                                     | Engine                 |
-| ------------------------------------------------------------------------ | ---------------------- |
-| [Compress JPG](https://compress-pro.com/compress-jpg)                    | MozJPEG + trellis      |
-| [Compress PNG](https://compress-pro.com/compress-png)                    | oxipng / libimagequant |
-| [Compress WebP](https://compress-pro.com/compress-webp)                  | libwebp                |
-| [Compress GIF](https://compress-pro.com/compress-gif)                    | gifsicle               |
-| [Compress HEIC](https://compress-pro.com/compress-heic)                  | libheif (icodec)       |
-| [Compress SVG](https://compress-pro.com/compress-svg)                    | svgo                   |
-| [Compress PDF](https://compress-pro.com/compress-pdf)                    | Ghostscript            |
-| [Compress Video](https://compress-pro.com/compress-video)                | WebCodecs + mediabunny |
-| [Compress MP4](https://compress-pro.com/compress-mp4)                    | WebCodecs + mediabunny |
-| [Compress MOV](https://compress-pro.com/compress-mov)                    | WebCodecs + mediabunny |
-| [Compress any image](https://compress-pro.com/compress-image)            | Auto format race       |
-| [Compress JPG to 100 KB](https://compress-pro.com/compress-jpg-to-100kb) | target-size search     |
-| [Compress Audio](https://compress-pro.com/compress-audio)                | mediabunny + LAME MP3  |
-| [Zip & Unzip files](https://compress-pro.com/zip-files)                  | fflate                 |
-| [Resize images](https://compress-pro.com/resize-image)                   | Lanczos3 downscale     |
-| [Remove EXIF](https://compress-pro.com/remove-exif)                      | lossless byte surgery  |
+| Tool                                                                       | Engine                         |
+| -------------------------------------------------------------------------- | ------------------------------ |
+| [Compress JPG](https://compress-pro.com/compress-jpg)                      | MozJPEG + trellis              |
+| [Compress PNG](https://compress-pro.com/compress-png)                      | oxipng / libimagequant         |
+| [Compress WebP](https://compress-pro.com/compress-webp)                    | libwebp                        |
+| [Compress GIF](https://compress-pro.com/compress-gif)                      | gifsicle                       |
+| [Compress HEIC](https://compress-pro.com/compress-heic)                    | libheif (icodec)               |
+| [Compress SVG](https://compress-pro.com/compress-svg)                      | svgo                           |
+| [Compress PDF](https://compress-pro.com/compress-pdf)                      | Ghostscript                    |
+| [Compress Video](https://compress-pro.com/compress-video)                  | WebCodecs + mediabunny         |
+| [Compress MP4](https://compress-pro.com/compress-mp4)                      | WebCodecs + mediabunny         |
+| [Compress MOV](https://compress-pro.com/compress-mov)                      | WebCodecs + mediabunny         |
+| [Compress any image](https://compress-pro.com/compress-image)              | Auto format race               |
+| [Compress JPG to 100 KB](https://compress-pro.com/compress-jpg-to-100kb)   | target-size search             |
+| [Compress Audio](https://compress-pro.com/compress-audio)                  | mediabunny + LAME MP3          |
+| [Convert fonts](https://compress-pro.com/font-converter)                   | raw sfnt repack + Google woff2 |
+| [Subset font](https://compress-pro.com/subset-font)                        | HarfBuzz subsetter             |
+| [Variable font → static](https://compress-pro.com/variable-font-to-static) | HarfBuzz instancer             |
+| [Zip & Unzip files](https://compress-pro.com/zip-files)                    | fflate                         |
+| [Resize images](https://compress-pro.com/resize-image)                     | Lanczos3 downscale             |
+| [Remove EXIF](https://compress-pro.com/remove-exif)                        | lossless byte surgery          |
 
 ### Convert
 
@@ -73,17 +77,18 @@ Every tool is its own real, prerendered page.
 - **Audio** — [MP4 → MP3](https://compress-pro.com/mp4-to-mp3) · [WAV → MP3](https://compress-pro.com/wav-to-mp3) · [M4A → MP3](https://compress-pro.com/m4a-to-mp3)
 - **Images** — [BMP → JPG](https://compress-pro.com/bmp-to-jpg) · [TIFF → JPG](https://compress-pro.com/tiff-to-jpg) · [PNG → ICO](https://compress-pro.com/png-to-ico) · [JPG → ICO](https://compress-pro.com/jpg-to-ico) · [SVG → PNG](https://compress-pro.com/svg-to-png) · [SVG → ICO](https://compress-pro.com/svg-to-ico)
 - **PDF tools** — [Merge PDF](https://compress-pro.com/merge-pdf) · [Split PDF](https://compress-pro.com/split-pdf) · [Unlock PDF](https://compress-pro.com/unlock-pdf) · [Protect PDF](https://compress-pro.com/protect-pdf)
+- **Fonts** — [TTF → WOFF2](https://compress-pro.com/ttf-to-woff2) · [TTF → WOFF](https://compress-pro.com/ttf-to-woff) · [OTF → WOFF2](https://compress-pro.com/otf-to-woff2) · [OTF → WOFF](https://compress-pro.com/otf-to-woff) · [WOFF → TTF](https://compress-pro.com/woff-to-ttf) · [WOFF → OTF](https://compress-pro.com/woff-to-otf) · [WOFF → WOFF2](https://compress-pro.com/woff-to-woff2) · [WOFF2 → TTF](https://compress-pro.com/woff2-to-ttf) · [WOFF2 → OTF](https://compress-pro.com/woff2-to-otf) · [WOFF2 → WOFF](https://compress-pro.com/woff2-to-woff) · [TTF → EOT](https://compress-pro.com/ttf-to-eot) · [EOT → TTF](https://compress-pro.com/eot-to-ttf)
 
 ## 🛠️ Tech Stack
 
 - **[SvelteKit](https://svelte.dev/docs/kit)** (Svelte 5 runes) + **[Tailwind CSS v4](https://tailwindcss.com)** on **[Vite 8](https://vite.dev)**
 - **[Cloudflare Workers](https://workers.cloudflare.com)** via `@sveltejs/adapter-cloudflare` — fully prerendered / static
-- **WASM codecs** — [jSquash](https://github.com/jamsinclair/jSquash) (MozJPEG, libwebp, libavif, oxipng), [icodec](https://github.com/Kaciras/icodec) (HEIC, lossy PNG), [`@okathira/ghostpdl-wasm`](https://github.com/okathira/ghostpdl-wasm) (Ghostscript), gifsicle, [svgo](https://github.com/svg/svgo), [pdf-lib](https://github.com/Hopding/pdf-lib) / [pdf.js](https://mozilla.github.io/pdf.js/)
+- **WASM codecs** — [jSquash](https://github.com/jamsinclair/jSquash) (MozJPEG, libwebp, libavif, oxipng), [icodec](https://github.com/Kaciras/icodec) (HEIC, lossy PNG), [`@okathira/ghostpdl-wasm`](https://github.com/okathira/ghostpdl-wasm) (Ghostscript), gifsicle, [svgo](https://github.com/svg/svgo), [pdf-lib](https://github.com/Hopding/pdf-lib) / [pdf.js](https://mozilla.github.io/pdf.js/), [fonteditor-core](https://github.com/kekee000/fonteditor-core)'s Google-woff2 wasm + [harfbuzzjs](https://github.com/harfbuzz/harfbuzzjs) hb-subset (fonts)
 - **[mediabunny](https://mediabunny.dev)** driving **WebCodecs** for video
 
 ## 🏗️ Architecture
 
-- `src/lib/workers/` — Web Workers (`gs`, `image`, `svg`, `video`); `rpc.ts` lazy-spawns a **pool** of image workers (least-busy routing, capped at `min(cores, 4)`) with typed payload/result/progress contracts in `protocol.ts`. `src/lib/compress.ts` schedules files through `runWithConcurrency` (`src/lib/concurrency.ts`), keeps input order (rows/ZIP), and supports **cancel** — in-flight worker calls abort while finished files keep their results.
+- `src/lib/workers/` — Web Workers (`gs`, `image`, `svg`, `video`, `font`); `rpc.ts` lazy-spawns a **pool** of image workers (least-busy routing, capped at `min(cores, 4)`) with typed payload/result/progress contracts in `protocol.ts`. `src/lib/compress.ts` schedules files through `runWithConcurrency` (`src/lib/concurrency.ts`), keeps input order (rows/ZIP), and supports **cancel** — in-flight worker calls abort while finished files keep their results.
 - `src/lib/codecs/` — main-thread facades; `pdf.ts` holds the Ghostscript argument builder and target ladder; the shared binary search lives in `target-search.ts`.
 - **Fully prerendered** — every request is served from the free static-asset layer; content-hashed, immutable-cached wasm downloads once.
 - **SEO** — every format and converter is a real prerendered route served by the single `src/routes/[[tool=tool]]/+page.svelte`, so tab switches never remount. All copy lives in `src/lib/seo.ts` (`FORMATS` + `CONVERTERS` + `TOOLS`). **Adding a tool means extending `prerender.entries` in `svelte.config.js`.**

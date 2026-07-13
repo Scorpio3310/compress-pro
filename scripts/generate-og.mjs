@@ -97,7 +97,30 @@ const PAGES = [
 	],
 	['og/jpg-to-ico.jpg', 'JPG → ICO', 'Any logo or photo becomes a favicon. Locally.'],
 	['og/svg-to-png.jpg', 'SVG → PNG', 'Vector art rendered crisp at any size. Locally.'],
-	['og/svg-to-ico.jpg', 'SVG → ICO', 'Vector-sharp favicons — made in your browser.']
+	['og/svg-to-ico.jpg', 'SVG → ICO', 'Vector-sharp favicons — made in your browser.'],
+	[
+		'og/font-converter.jpg',
+		'Convert fonts.',
+		'TTF, OTF, WOFF & WOFF2 — lossless, in your browser.'
+	],
+	['og/ttf-to-woff2.jpg', 'TTF → WOFF2', 'Web-ready fonts at half the size. Locally.'],
+	['og/ttf-to-woff.jpg', 'TTF → WOFF', 'Legacy web fonts, byte-exact. No uploads.'],
+	['og/otf-to-woff2.jpg', 'OTF → WOFF2', 'Web-ready fonts, outlines untouched. Locally.'],
+	['og/otf-to-woff.jpg', 'OTF → WOFF', 'Legacy web wrapper, byte-exact. No uploads.'],
+	['og/woff-to-ttf.jpg', 'WOFF → TTF', 'Web fonts unwrapped to installable TTF. Locally.'],
+	['og/woff-to-otf.jpg', 'WOFF → OTF', 'Web fonts unwrapped to desktop OTF. Locally.'],
+	['og/woff-to-woff2.jpg', 'WOFF → WOFF2', 'Same font, about 30% smaller. In your browser.'],
+	['og/woff2-to-ttf.jpg', 'WOFF2 → TTF', 'Web fonts decoded to installable TTF. Locally.'],
+	['og/woff2-to-otf.jpg', 'WOFF2 → OTF', 'Web fonts decoded to desktop OTF. Locally.'],
+	['og/woff2-to-woff.jpg', 'WOFF2 → WOFF', 'The fallback old browsers still ask for. Local.'],
+	['og/ttf-to-eot.jpg', 'TTF → EOT', 'For Internet Explorer 6–8 holdouts. Locally.'],
+	['og/eot-to-ttf.jpg', 'EOT → TTF', 'Fonts rescued from legacy EOT files. Locally.'],
+	['og/subset-font.jpg', 'Subset fonts.', 'Keep only the glyphs you use — subset locally.'],
+	[
+		'og/variable-font-to-static.jpg',
+		'Variable → static',
+		'Pin the axes, ship one static font. Locally.'
+	]
 ];
 
 // favicon.svg glyph with the light-scheme colors hardcoded (no media queries here).

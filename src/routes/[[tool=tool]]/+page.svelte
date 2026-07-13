@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type {
 		FileFormat,
+		FontOp,
 		UploadedFile,
 		CompressedFile,
 		TabState,
@@ -16,6 +17,7 @@
 	import { familyOf, matchesAccept, routeFileToFormat, TAB_ACCEPT } from '$lib/routing';
 	import { formatBytes, toUploadedFiles } from '$lib/utils';
 	import { mediaMeta, probeMedia, removeMeta } from '$lib/media-meta.svelte';
+	import { fontMeta, probeFont, removeFontMeta } from '$lib/font-meta.svelte';
 	import { estimateAudioBytes, estimateVideoBytes } from '$lib/video-estimate';
 	import * as actionLabels from '$lib/action-labels';
 	import Tabs, { type TabBadgeStatus } from '$lib/components/Tabs.svelte';
@@ -75,6 +77,7 @@
 		pdf: emptyTab(),
 		video: emptyTab(),
 		audio: emptyTab(),
+		font: emptyTab(),
 		zip: emptyTab(),
 		exif: emptyTab()
 	});
@@ -86,6 +89,7 @@
 
 	let pdfOp = $derived(settings.pdf.op);
 	let zipOp = $derived(settings.zip.op);
+	let fontOp = $derived(settings.font.op);
 
 	// `/` is the universal intake: it takes any file, parks what belongs on its
 	// default tab and routes everything else to the right tool — a first-time
@@ -174,6 +178,31 @@
 		}
 		return null;
 	});
+	// Union of the probed variable axes across the font tab's files (by tag:
+	// widest bounds, first-seen default) — drives the subset op's axis inputs.
+	// A font lacking a pinned tag simply ignores it (the worker prunes).
+	let fontAxes = $derived.by(() => {
+		if (activeTab !== 'font') return [];
+		// Plain-object accumulator (local, never reactive) — insertion-ordered.
+		const byTag: Record<
+			string,
+			{ tag: string; min: number; def: number; max: number; hidden: boolean }
+		> = {};
+		for (const f of tabStates.font.files) {
+			const meta = fontMeta(f.id);
+			if (!meta) continue;
+			for (const axis of meta.axes) {
+				const prev = byTag[axis.tag];
+				if (!prev) byTag[axis.tag] = { ...axis };
+				else {
+					prev.min = Math.min(prev.min, axis.min);
+					prev.max = Math.max(prev.max, axis.max);
+					prev.hidden = prev.hidden && axis.hidden;
+				}
+			}
+		}
+		return Object.values(byTag);
+	});
 	// Advanced disclosure state — survives tab switches (this component never
 	// remounts), resets on reload; deliberately not persisted.
 	let advancedOpen = $state(false);
@@ -239,6 +268,8 @@
 		state.error = null;
 		// duration/dimensions feed the live output-size estimate on these tabs
 		if (format === 'video' || format === 'audio') files.forEach(probeMedia);
+		// variable axes + glyph counts feed the subset op's axis inputs
+		if (format === 'font') files.forEach(probeFont);
 	}
 
 	// One controller per tab; runs on different tabs are independent. A cancel
@@ -259,7 +290,8 @@
 		gif: ['image'],
 		heic: ['image'],
 		svg: ['svg', 'image'], // raster (PNG/ICO) output encodes via the image worker
-		pdf: ['gs', 'image'] // fromImages re-encodes pages via the image worker
+		pdf: ['gs', 'image'], // fromImages re-encodes pages via the image worker
+		font: ['font'] // synchronous brotli — terminate is the only mid-encode cancel
 	};
 
 	async function handleCompress() {
@@ -368,6 +400,7 @@
 		if (file) URL.revokeObjectURL(file.objectUrl);
 		if (result) URL.revokeObjectURL(result.objectUrl);
 		removeMeta(id);
+		removeFontMeta(id);
 		state.files = state.files.filter((f) => f.id !== id);
 		state.results = state.results.filter((r) => r.id !== id);
 		state.failures = state.failures.filter((f) => f.id !== id);
@@ -414,6 +447,15 @@
 		pdfSettings.op = op;
 	}
 
+	function handleFontOpChange(op: FontOp) {
+		if (op === settings.font.op) return;
+		const state = tabStates.font;
+		clearResults(state);
+		state.error = null;
+		// Both ops consume the same inputs — files stay parked across the switch.
+		settings.font.op = op;
+	}
+
 	// Converter landing pages preset the tool. afterNavigate fires on hydration
 	// ('enter') and on every client navigation while this shared component stays
 	// mounted — once per navigation, so manual changes afterwards are never
@@ -436,6 +478,17 @@
 			settings.video.container = preset.container;
 		} else if (preset.kind === 'audio') {
 			settings.audio.outputFormat = preset.output;
+		} else if (preset.kind === 'font') {
+			handleFontOpChange('convert'); // converter pages always land on Convert
+			settings.font.outputFormat = preset.to;
+		} else if (preset.kind === 'font-op') {
+			handleFontOpChange('subset');
+			if (preset.op === 'instance') {
+				// Instancing is the page's point: static mode, no charset restriction.
+				settings.font.variableMode = 'static';
+				settings.font.subsetPresets = [];
+				settings.font.subsetText = '';
+			}
 		} else if (preset.kind === 'pdf-op') {
 			handlePdfOpChange(preset.op);
 		} else if (preset.kind === 'resize') {
@@ -639,8 +692,10 @@
 			status={tabStatus}
 			{pdfOp}
 			{zipOp}
+			{fontOp}
 			onpdfop={handlePdfOpChange}
 			onzipop={handleZipOpChange}
+			onfontop={handleFontOpChange}
 			opsDisabled={currentState.isCompressing}
 		/>
 
@@ -679,6 +734,7 @@
 				isCompressing={currentState.isCompressing}
 				{totalOriginalSize}
 				{estimatedSize}
+				{fontAxes}
 			/>
 		</div>
 
@@ -712,6 +768,7 @@
 				ondownloadcombined={handleDownloadCombined}
 				compareEnabled={activeTab !== 'video' &&
 					activeTab !== 'audio' &&
+					activeTab !== 'font' &&
 					activeTab !== 'zip' &&
 					(activeTab !== 'pdf' || pdfOp === 'compress')}
 			/>

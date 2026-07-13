@@ -14,6 +14,11 @@ export function actionLabel(
 	const plural = filesCount !== 1 ? 's' : '';
 	if (format === 'exif') return `Remove metadata from ${filesCount} file${plural}`;
 	if (format === 'audio') return `Convert ${filesCount} file${plural}`;
+	if (format === 'font') {
+		return (settings as SettingsMap['font']).op === 'subset'
+			? `Subset ${filesCount} font${plural}`
+			: `Convert ${filesCount} file${plural}`;
+	}
 	if (format === 'zip') {
 		return (settings as SettingsMap['zip']).op === 'create'
 			? `Create ZIP from ${filesCount} file${plural}`
@@ -42,6 +47,9 @@ export function actionLabel(
 export function busyLabel(format: FileFormat, settings: ToolSettings): string {
 	if (format === 'exif') return 'Cleaning…';
 	if (format === 'audio') return 'Converting…';
+	if (format === 'font') {
+		return (settings as SettingsMap['font']).op === 'subset' ? 'Subsetting…' : 'Converting…';
+	}
 	if (format === 'zip') return 'Working…';
 	if (format === 'pdf' && (settings as SettingsMap['pdf']).op !== 'compress') return 'Working…';
 	return 'Compressing…';

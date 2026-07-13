@@ -6,16 +6,19 @@
 		PdfCompressionSettings,
 		VideoConversionSettings,
 		AudioConversionSettings,
+		FontConversionSettings,
 		ZipSettings,
 		ExifSettings
 	} from '$lib/types';
 	import { isImageFormat } from '$lib/types';
+	import type { FontAxisInfo } from '$lib/workers/protocol';
 	import { reveal } from '$lib/motion/reveal';
 	import ImageControls from './controls/ImageControls.svelte';
 	import SvgControls from './controls/SvgControls.svelte';
 	import PdfControls from './controls/PdfControls.svelte';
 	import VideoControls from './controls/VideoControls.svelte';
 	import AudioControls from './controls/AudioControls.svelte';
+	import FontControls from './controls/FontControls.svelte';
 	import ZipControls from './controls/ZipControls.svelte';
 	import ExifControls from './controls/ExifControls.svelte';
 	import AdvancedDisclosure from './controls/AdvancedDisclosure.svelte';
@@ -31,6 +34,7 @@
 			| PdfCompressionSettings
 			| VideoConversionSettings
 			| AudioConversionSettings
+			| FontConversionSettings
 			| ZipSettings
 			| ExifSettings;
 		isCompressing: boolean;
@@ -38,6 +42,8 @@
 		/** Predicted output size for the video/audio tabs (page-computed — it
 		 *  needs the files' probed duration/dimensions). */
 		estimatedSize?: string | null;
+		/** Variable axes of the font tab's files (page-computed from probes). */
+		fontAxes?: FontAxisInfo[];
 		/** The Advanced disclosure's open state — owned by the page so presets
 		 *  (e.g. /resize-image) can open it. */
 		advancedOpen: boolean;
@@ -49,6 +55,7 @@
 		isCompressing,
 		totalOriginalSize,
 		estimatedSize = null,
+		fontAxes = [],
 		advancedOpen = $bindable()
 	}: Props = $props();
 
@@ -61,6 +68,7 @@
 	let pdfSettings = $derived(settings as PdfCompressionSettings);
 	let videoSettings = $derived(settings as VideoConversionSettings);
 	let audioSettings = $derived(settings as AudioConversionSettings);
+	let fontSettings = $derived(settings as FontConversionSettings);
 	let zipSettings = $derived(settings as ZipSettings);
 	let exifSettings = $derived(settings as ExifSettings);
 
@@ -98,6 +106,8 @@
 				<VideoControls bind:settings={videoSettings} {estimatedSize} />
 			{:else if format === 'audio'}
 				<AudioControls bind:settings={audioSettings} {estimatedSize} />
+			{:else if format === 'font'}
+				<FontControls bind:settings={fontSettings} {fontAxes} />
 			{:else if format === 'zip'}
 				<ZipControls bind:settings={zipSettings} />
 			{:else if format === 'exif'}

@@ -74,6 +74,8 @@ export function videoFixtures(): VideoManifest {
 interface FixtureManifest {
 	genHash: string;
 	heicAvailable: boolean;
+	/** False when the generator's node-side woff2 wasm failed — the .woff2 fixture is then absent. */
+	fontWoff2Available: boolean;
 	files: Record<string, Record<string, unknown>>;
 }
 

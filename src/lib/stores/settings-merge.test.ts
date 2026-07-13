@@ -198,6 +198,41 @@ describe('mergeStoredSettings', () => {
 		expect(target.pdf.password).toBe('');
 	});
 
+	it('never persists or restores font axis pins (per-font runtime state)', () => {
+		const map = defaultSettings();
+		map.font.axisValues = { wght: 725 };
+		const stored = serializeSettings(2, map);
+		expect(
+			(JSON.parse(stored) as { data: { font: { axisValues: object } } }).data.font.axisValues
+		).toEqual({});
+
+		const target = defaultSettings();
+		mergeStoredSettings(target, { font: { op: 'subset', axisValues: { wght: 999 } } });
+		expect(target.font.op).toBe('subset');
+		expect(target.font.axisValues).toEqual({});
+	});
+
+	it('whitelists font subset presets and caps the custom text', () => {
+		const target = defaultSettings();
+		mergeStoredSettings(target, {
+			font: {
+				subsetPresets: ['basic-latin', 'nope', 42, 'cyrillic'],
+				subsetText: 'abc',
+				keepHinting: false,
+				variableMode: 'static'
+			}
+		});
+		expect(target.font.subsetPresets).toEqual(['basic-latin', 'cyrillic']);
+		expect(target.font.subsetText).toBe('abc');
+		expect(target.font.keepHinting).toBe(false);
+		expect(target.font.variableMode).toBe('static');
+
+		const capped = defaultSettings();
+		mergeStoredSettings(capped, { font: { subsetText: 'x'.repeat(1001), variableMode: 'nope' } });
+		expect(capped.font.subsetText).toBe('');
+		expect(capped.font.variableMode).toBe('keep');
+	});
+
 	it('ignores non-object payloads and unknown keys wholesale', () => {
 		const target = defaultSettings();
 		mergeStoredSettings(target, 'garbage');

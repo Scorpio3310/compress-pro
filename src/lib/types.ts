@@ -1,5 +1,16 @@
 export type FileFormat =
-	'jpg' | 'png' | 'webp' | 'gif' | 'heic' | 'svg' | 'pdf' | 'video' | 'audio' | 'zip' | 'exif';
+	| 'jpg'
+	| 'png'
+	| 'webp'
+	| 'gif'
+	| 'heic'
+	| 'svg'
+	| 'pdf'
+	| 'video'
+	| 'audio'
+	| 'font'
+	| 'zip'
+	| 'exif';
 
 /** The raster-image pipeline tabs — one family: shared worker pool, shared
  *  ImageCompressionSettings. familyOf(), the CTA labels, the concurrency
@@ -140,6 +151,34 @@ export interface AudioConversionSettings {
 	targetMb: number;
 }
 
+/** Font containers the font tab converts between. 'ttf'/'otf' are the two
+ *  sfnt flavors (TrueType glyf vs PostScript CFF outlines) — conversion keeps
+ *  the actual flavor, so the real output format can differ from the request
+ *  (see the flavor rule in font.worker.ts). */
+export const FONT_FORMATS = ['ttf', 'otf', 'woff', 'woff2', 'eot'] as const;
+export type FontFormat = (typeof FONT_FORMATS)[number];
+
+export type FontOp = 'convert' | 'subset';
+
+export interface FontConversionSettings {
+	op: FontOp;
+	/** Target container — shared by both ops. */
+	outputFormat: FontFormat;
+	/** Subset op: preset ids from SUBSET_PRESETS. Empty presets + empty text
+	 *  = keep every glyph (pure instance/repackage — /variable-font-to-static). */
+	subsetPresets: string[];
+	/** Subset op: exact characters to keep, unioned with the presets. */
+	subsetText: string;
+	/** Subset op: keep TrueType hinting bytecode (fpgm/prep/cvt). */
+	keepHinting: boolean;
+	/** Variable fonts under the subset op: keep the axes, or pin a static instance. */
+	variableMode: 'keep' | 'static';
+	/** Static mode per-axis pins keyed by fvar tag — RUNTIME ONLY: per-font
+	 *  values, not preferences. Stripped before persisting and never merged
+	 *  back (see serializeSettings / mergeFont), like pdf.password. */
+	axisValues: Record<string, number>;
+}
+
 export interface ZipSettings {
 	op: 'create' | 'extract';
 	/** Deflate level for create — 0 = store, 9 = smallest. */
@@ -162,6 +201,7 @@ export interface SettingsMap {
 	pdf: PdfCompressionSettings;
 	video: VideoConversionSettings;
 	audio: AudioConversionSettings;
+	font: FontConversionSettings;
 	zip: ZipSettings;
 	exif: ExifSettings;
 }

@@ -57,6 +57,8 @@
 		],
 		video: ['M3.5 7h11v10h-11z', 'M20.5 7.5v9l-6-4.5z'],
 		audio: ['M5.5 9v6', 'M10 5.5v13', 'M14.5 8v8', 'M19 10v4'],
+		// crossbar/stem/baseline split — the tab activation draws stem + baseline
+		font: ['M6 5h12', 'M12 5v14', 'M8.5 19h7'],
 		archive: ['M3.5 5h17v4h-17z', 'M5.5 9v10h13V9', 'M10 12.5h4'],
 		tag: ['M4 4h8l8 8-8 8-8-8z', 'M8.5 8a.5.5 0 1 0 0 1 .5.5 0 1 0 0-1']
 	} as const;

@@ -17,6 +17,7 @@
 			['Images', ['jpg', 'png', 'webp', 'gif', 'heic', 'svg']],
 			['Video & audio', ['video', 'audio']],
 			['PDF', ['pdf']],
+			['Fonts', ['font']],
 			['Archives & metadata', ['zip', 'exif']]
 		] as const
 	).map(([title, formats]) => ({
@@ -104,9 +105,16 @@
 	<div class="spec-row">
 		<h2 class="microlabel text-muted">How it works</h2>
 		<ol class="how-steps mt-6">
-			<li>Drop files anywhere on the page, click to browse, or paste with {pasteKey()}.</li>
-			<li>Pick a quality or preset — or set an exact target size and let the tool find it.</li>
-			<li>Compress, compare before/after, and download — individually or as a ZIP.</li>
+			{#if entry.steps}
+				{#each entry.steps as step (step)}
+					<li>{step}</li>
+				{/each}
+			{:else}
+				<!-- Generic compress-tool trio — pages whose flow differs override via entry.steps. -->
+				<li>Drop files anywhere on the page, click to browse, or paste with {pasteKey()}.</li>
+				<li>Pick a quality or preset — or set an exact target size and let the tool find it.</li>
+				<li>Compress, compare before/after, and download — individually or as a ZIP.</li>
+			{/if}
 		</ol>
 	</div>
 

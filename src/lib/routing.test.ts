@@ -50,6 +50,14 @@ describe('routeFileToFormat', () => {
 		expect(routeFileToFormat(file('BUNDLE.ZIP', ''))).toBe('zip');
 	});
 
+	it('routes fonts to the font tab (pickers usually blank the MIME)', () => {
+		expect(routeFileToFormat(file('Inter.ttf', ''))).toBe('font');
+		expect(routeFileToFormat(file('Inter.WOFF2', ''))).toBe('font');
+		expect(routeFileToFormat(file('a.woff', 'font/woff'))).toBe('font');
+		expect(routeFileToFormat(file('a.otf', 'font/otf'))).toBe('font');
+		expect(routeFileToFormat(file('legacy.eot', 'application/vnd.ms-fontobject'))).toBe('font');
+	});
+
 	it('returns null for unknown or extensionless files', () => {
 		expect(routeFileToFormat(file('notes.txt', 'text/plain'))).toBeNull();
 		expect(routeFileToFormat(file('README', ''))).toBeNull();
@@ -64,7 +72,7 @@ describe('familyOf', () => {
 	});
 
 	it('keeps every non-image tab in its own family', () => {
-		for (const tab of ['svg', 'pdf', 'video', 'audio', 'zip', 'exif'] as const) {
+		for (const tab of ['svg', 'pdf', 'video', 'audio', 'font', 'zip', 'exif'] as const) {
 			expect(familyOf(tab)).toBe(tab);
 		}
 	});
@@ -96,6 +104,8 @@ describe('matchesAccept', () => {
 	it('admits a blank-MIME file via its extension token (picker quirk)', () => {
 		expect(matchesAccept(TAB_ACCEPT.heic, 'IMG_0001.HEIC', '')).toBe(true);
 		expect(matchesAccept(TAB_ACCEPT.video, 'clip.mkv', '')).toBe(true);
+		expect(matchesAccept(TAB_ACCEPT.font, 'Inter.woff2', '')).toBe(true);
+		expect(matchesAccept(TAB_ACCEPT.font, 'legacy.EOT', '')).toBe(true);
 	});
 
 	it('rejects cross-family files against each tab default', () => {

@@ -35,6 +35,16 @@ const MIME_TO_FORMAT: Record<string, FileFormat> = {
 	'audio/opus': 'audio',
 	'audio/flac': 'audio',
 	'audio/x-flac': 'audio',
+	'font/ttf': 'font',
+	'font/otf': 'font',
+	'font/sfnt': 'font',
+	'font/woff': 'font',
+	'font/woff2': 'font',
+	'application/font-woff': 'font',
+	'application/font-sfnt': 'font',
+	'application/x-font-ttf': 'font',
+	'application/x-font-otf': 'font',
+	'application/vnd.ms-fontobject': 'font',
 	'application/zip': 'zip',
 	'application/x-zip-compressed': 'zip'
 };
@@ -68,6 +78,12 @@ const EXT_TO_FORMAT: Record<string, FileFormat> = {
 	oga: 'audio',
 	flac: 'audio',
 	opus: 'audio',
+	// Load-bearing: pickers/drops report a blank MIME for most font files.
+	ttf: 'font',
+	otf: 'font',
+	woff: 'font',
+	woff2: 'font',
+	eot: 'font',
 	zip: 'zip'
 };
 
@@ -84,7 +100,7 @@ export function routeFileToFormat(file: File): FileFormat | null {
 	return MIME_TO_FORMAT[file.type.toLowerCase()] ?? formatFromName(file.name);
 }
 
-export type FormatFamily = 'image' | 'svg' | 'pdf' | 'video' | 'audio' | 'zip' | 'exif';
+export type FormatFamily = 'image' | 'svg' | 'pdf' | 'video' | 'audio' | 'font' | 'zip' | 'exif';
 
 /**
  * Pipeline family of a tab. Same-family drops on a dropzone park there (a PNG
@@ -130,6 +146,8 @@ export const TAB_ACCEPT: Record<FileFormat, string> = {
 	video: 'video/mp4,video/quicktime,video/webm,video/x-matroska,.mp4,.m4v,.mov,.webm,.mkv',
 	// Video is accepted too — the audio tab extracts the audio track.
 	audio: 'audio/*,video/mp4,video/quicktime,.mp3,.wav,.m4a,.aac,.ogg,.oga,.flac,.opus,.mp4,.mov',
+	// Extensions load-bearing (blank MIMEs, see EXT_TO_FORMAT).
+	font: 'font/ttf,font/otf,font/woff,font/woff2,application/vnd.ms-fontobject,.ttf,.otf,.woff,.woff2,.eot',
 	// Extract default; the create op overrides accept to '' (anything) in-page.
 	zip: 'application/zip,.zip',
 	exif: 'image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp'

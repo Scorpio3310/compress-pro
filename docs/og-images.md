@@ -13,53 +13,68 @@ mirrors this table; edit copy here, then re-run it. Output: `static/og.jpg`
 (default) + `static/og/<name>.jpg`, wired as `ogImage: '/og/<name>.jpg'` on
 each entry in `src/lib/seo.ts` — pages without one fall back to `/og.jpg`.
 
-| Page                     | Headline            | Subline                                                        |
-| ------------------------ | ------------------- | -------------------------------------------------------------- |
-| `/` (default `og.jpg`)   | Compress anything.  | Images, video, audio & PDFs — private, in your browser.        |
-| `/compress-pdf`          | Compress PDFs.      | Hit 2 MB exactly — compressed in your browser. Never uploaded. |
-| `/compress-video`        | Compress video.     | MP4 & WebM under any size limit — encoded on your device.      |
-| `/compress-jpg`          | Compress JPGs.      | Quality sliders, target sizes, batches — all local.            |
-| `/compress-png`          | Compress PNGs.      | Lossless or tiny — your pixels never leave.                    |
-| `/compress-webp`         | Compress WebP.      | Still or animated — re-encoded on your device.                 |
-| `/compress-gif`          | Compress GIFs.      | Keep the animation, lose the megabytes.                        |
-| `/compress-heic`         | Compress HEIC.      | iPhone photos, shrunk locally.                                 |
-| `/compress-svg`          | Compress SVGs.      | Minified locally — your artwork stays yours.                   |
-| `/remove-exif`           | Remove EXIF.        | See what your photos reveal — then wipe it, locally.           |
-| `/heic-to-jpg`           | HEIC → JPG          | iPhone photos that open anywhere. Converted locally.           |
-| `/webp-to-jpg`           | WebP → JPG          | For every app that still wants JPG. No uploads.                |
-| `/webp-to-png`           | WebP → PNG          | Lossless, transparency intact — in your browser.               |
-| `/avif-to-jpg`           | AVIF → JPG          | The newest format, made universal. Locally.                    |
-| `/png-to-jpg`            | PNG → JPG           | Photos 5–10× smaller. Flattened to white, never uploaded.      |
-| `/jpg-to-webp`           | JPG → WebP          | ~30% smaller at the same quality.                              |
-| `/png-to-webp`           | PNG → WebP          | Smaller files, alpha preserved.                                |
-| `/jpg-to-pdf`            | JPG → PDF           | Photos into one PDF — built in your browser.                   |
-| `/pdf-to-jpg`            | PDF → JPG           | Every page becomes an image. Rendered locally.                 |
-| `/mov-to-mp4`            | MOV → MP4           | iPhone video that plays everywhere.                            |
-| `/webm-to-mp4`           | WebM → MP4          | For Apple devices, TVs and editors.                            |
-| `/mkv-to-mp4`            | MKV → MP4           | Universal playback, converted on-device.                       |
-| `/mp4-to-webm`           | MP4 → WebM          | Smaller video for the web. Converted locally.                  |
-| `/compress-audio`        | Compress audio.     | MP3, M4A, WAV & OGG — encoded on your device.                  |
-| `/zip-files`             | Zip & Unzip.        | Archives created and opened locally. No upload.                |
-| `/unlock-pdf`            | Unlock PDFs.        | Your password never leaves your device.                        |
-| `/protect-pdf`           | Protect PDFs.       | Set a password — encrypted on your device.                     |
-| `/video-to-gif`          | Video → GIF         | Clips become loops — right in your browser.                    |
-| `/gif-to-mp4`            | GIF → MP4           | Same loop, a tenth of the bytes.                               |
-| `/mp4-to-mp3`            | MP4 → MP3           | Pull the audio out of any video. Locally.                      |
-| `/wav-to-mp3`            | WAV → MP3           | Huge recordings, made shareable.                               |
-| `/bmp-to-jpg`            | BMP → JPG           | Raw bitmaps, 10–20× smaller.                                   |
-| `/tiff-to-jpg`           | TIFF → JPG          | Scans that fit in an email. Converted locally.                 |
-| `/png-to-ico`            | PNG → ICO           | A multi-size favicon in one click.                             |
-| `/jpg-to-ico`            | JPG → ICO           | Any logo or photo becomes a favicon. Locally.                  |
-| `/svg-to-png`            | SVG → PNG           | Vector art rendered crisp at any size. Locally.                |
-| `/svg-to-ico`            | SVG → ICO           | Vector-sharp favicons — made in your browser.                  |
-| `/merge-pdf`             | Merge PDFs.         | Many documents into one — reordered, never uploaded.           |
-| `/split-pdf`             | Split PDFs.         | Extract or remove pages with ranges like 1-3,7. Local.         |
-| `/compress-mp4`          | Compress MP4.       | Hit 10 MB for Discord — encoded on your device.                |
-| `/resize-image`          | Resize images.      | Cap the longest side — aspect kept, resized locally.           |
-| `/png-to-pdf`            | PNG → PDF           | Screenshots into one document. Assembled locally.              |
-| `/mp4-to-gif`            | MP4 → GIF           | Looping GIFs, no watermark — made in your browser.             |
-| `/pdf-to-png`            | PDF → PNG           | Lossless page renders — made in your browser.                  |
-| `/heic-to-png`           | HEIC → PNG          | iPhone photos, converted lossless. Locally.                    |
-| `/m4a-to-mp3`            | M4A → MP3           | Voice memos that play anywhere. No upload.                     |
-| `/compress-image`        | Compress any image. | JPG, PNG, WebP, HEIC & more — smaller on your device.          |
-| `/compress-jpg-to-100kb` | JPG under 100 KB.   | Type the cap — the best quality that fits, locally.            |
+| Page                       | Headline            | Subline                                                        |
+| -------------------------- | ------------------- | -------------------------------------------------------------- |
+| `/` (default `og.jpg`)     | Compress anything.  | Images, video, audio & PDFs — private, in your browser.        |
+| `/compress-pdf`            | Compress PDFs.      | Hit 2 MB exactly — compressed in your browser. Never uploaded. |
+| `/compress-video`          | Compress video.     | MP4 & WebM under any size limit — encoded on your device.      |
+| `/compress-jpg`            | Compress JPGs.      | Quality sliders, target sizes, batches — all local.            |
+| `/compress-png`            | Compress PNGs.      | Lossless or tiny — your pixels never leave.                    |
+| `/compress-webp`           | Compress WebP.      | Still or animated — re-encoded on your device.                 |
+| `/compress-gif`            | Compress GIFs.      | Keep the animation, lose the megabytes.                        |
+| `/compress-heic`           | Compress HEIC.      | iPhone photos, shrunk locally.                                 |
+| `/compress-svg`            | Compress SVGs.      | Minified locally — your artwork stays yours.                   |
+| `/remove-exif`             | Remove EXIF.        | See what your photos reveal — then wipe it, locally.           |
+| `/heic-to-jpg`             | HEIC → JPG          | iPhone photos that open anywhere. Converted locally.           |
+| `/webp-to-jpg`             | WebP → JPG          | For every app that still wants JPG. No uploads.                |
+| `/webp-to-png`             | WebP → PNG          | Lossless, transparency intact — in your browser.               |
+| `/avif-to-jpg`             | AVIF → JPG          | The newest format, made universal. Locally.                    |
+| `/png-to-jpg`              | PNG → JPG           | Photos 5–10× smaller. Flattened to white, never uploaded.      |
+| `/jpg-to-webp`             | JPG → WebP          | ~30% smaller at the same quality.                              |
+| `/png-to-webp`             | PNG → WebP          | Smaller files, alpha preserved.                                |
+| `/jpg-to-pdf`              | JPG → PDF           | Photos into one PDF — built in your browser.                   |
+| `/pdf-to-jpg`              | PDF → JPG           | Every page becomes an image. Rendered locally.                 |
+| `/mov-to-mp4`              | MOV → MP4           | iPhone video that plays everywhere.                            |
+| `/webm-to-mp4`             | WebM → MP4          | For Apple devices, TVs and editors.                            |
+| `/mkv-to-mp4`              | MKV → MP4           | Universal playback, converted on-device.                       |
+| `/mp4-to-webm`             | MP4 → WebM          | Smaller video for the web. Converted locally.                  |
+| `/compress-audio`          | Compress audio.     | MP3, M4A, WAV & OGG — encoded on your device.                  |
+| `/zip-files`               | Zip & Unzip.        | Archives created and opened locally. No upload.                |
+| `/unlock-pdf`              | Unlock PDFs.        | Your password never leaves your device.                        |
+| `/protect-pdf`             | Protect PDFs.       | Set a password — encrypted on your device.                     |
+| `/video-to-gif`            | Video → GIF         | Clips become loops — right in your browser.                    |
+| `/gif-to-mp4`              | GIF → MP4           | Same loop, a tenth of the bytes.                               |
+| `/mp4-to-mp3`              | MP4 → MP3           | Pull the audio out of any video. Locally.                      |
+| `/wav-to-mp3`              | WAV → MP3           | Huge recordings, made shareable.                               |
+| `/bmp-to-jpg`              | BMP → JPG           | Raw bitmaps, 10–20× smaller.                                   |
+| `/tiff-to-jpg`             | TIFF → JPG          | Scans that fit in an email. Converted locally.                 |
+| `/png-to-ico`              | PNG → ICO           | A multi-size favicon in one click.                             |
+| `/jpg-to-ico`              | JPG → ICO           | Any logo or photo becomes a favicon. Locally.                  |
+| `/svg-to-png`              | SVG → PNG           | Vector art rendered crisp at any size. Locally.                |
+| `/svg-to-ico`              | SVG → ICO           | Vector-sharp favicons — made in your browser.                  |
+| `/merge-pdf`               | Merge PDFs.         | Many documents into one — reordered, never uploaded.           |
+| `/split-pdf`               | Split PDFs.         | Extract or remove pages with ranges like 1-3,7. Local.         |
+| `/compress-mp4`            | Compress MP4.       | Hit 10 MB for Discord — encoded on your device.                |
+| `/resize-image`            | Resize images.      | Cap the longest side — aspect kept, resized locally.           |
+| `/png-to-pdf`              | PNG → PDF           | Screenshots into one document. Assembled locally.              |
+| `/mp4-to-gif`              | MP4 → GIF           | Looping GIFs, no watermark — made in your browser.             |
+| `/pdf-to-png`              | PDF → PNG           | Lossless page renders — made in your browser.                  |
+| `/heic-to-png`             | HEIC → PNG          | iPhone photos, converted lossless. Locally.                    |
+| `/m4a-to-mp3`              | M4A → MP3           | Voice memos that play anywhere. No upload.                     |
+| `/compress-image`          | Compress any image. | JPG, PNG, WebP, HEIC & more — smaller on your device.          |
+| `/compress-jpg-to-100kb`   | JPG under 100 KB.   | Type the cap — the best quality that fits, locally.            |
+| `/font-converter`          | Convert fonts.      | TTF, OTF, WOFF & WOFF2 — lossless, in your browser.            |
+| `/ttf-to-woff2`            | TTF → WOFF2         | Web-ready fonts at half the size. Locally.                     |
+| `/ttf-to-woff`             | TTF → WOFF          | Legacy web fonts, byte-exact. No uploads.                      |
+| `/otf-to-woff2`            | OTF → WOFF2         | Web-ready fonts, outlines untouched. Locally.                  |
+| `/otf-to-woff`             | OTF → WOFF          | Legacy web wrapper, byte-exact. No uploads.                    |
+| `/woff-to-ttf`             | WOFF → TTF          | Web fonts unwrapped to installable TTF. Locally.               |
+| `/woff-to-otf`             | WOFF → OTF          | Web fonts unwrapped to desktop OTF. Locally.                   |
+| `/woff-to-woff2`           | WOFF → WOFF2        | Same font, about 30% smaller. In your browser.                 |
+| `/woff2-to-ttf`            | WOFF2 → TTF         | Web fonts decoded to installable TTF. Locally.                 |
+| `/woff2-to-otf`            | WOFF2 → OTF         | Web fonts decoded to desktop OTF. Locally.                     |
+| `/woff2-to-woff`           | WOFF2 → WOFF        | The fallback old browsers still ask for. Local.                |
+| `/ttf-to-eot`              | TTF → EOT           | For Internet Explorer 6–8 holdouts. Locally.                   |
+| `/eot-to-ttf`              | EOT → TTF           | Fonts rescued from legacy EOT files. Locally.                  |
+| `/subset-font`             | Subset fonts.       | Keep only the glyphs you use — subset locally.                 |
+| `/variable-font-to-static` | Variable → static   | Pin the axes, ship one static font. Locally.                   |

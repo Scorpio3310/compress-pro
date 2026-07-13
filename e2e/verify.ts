@@ -10,6 +10,9 @@ import { unzipSync } from 'fflate';
 import * as pdfLibNs from 'pdf-lib';
 import { detectColorSpace } from '../src/lib/codecs/color-profile';
 import { convertibleSpace, convertToSrgbInPlace } from '../src/lib/codecs/color-convert';
+import { sniffFont } from '../src/lib/codecs/font-sniff';
+import { findTable, readSfnt } from '../src/lib/codecs/sfnt';
+import { unwrapWoff1 } from '../src/lib/codecs/woff1';
 
 // pdf-lib is CJS; depending on the loader the namespace may nest under default.
 const { PDFDocument } = ((pdfLibNs as { default?: typeof pdfLibNs }).default ??
@@ -494,4 +497,83 @@ export function icoInfo(buf: Buffer): IcoInfo {
 		entries.push({ size, bytes, isPng: bytes[0] === 0x89 && bytes[1] === 0x50 });
 	}
 	return { count, sizes: entries.map((e) => e.size), entries };
+}
+
+// --- Fonts (parsed with the app's own container modules — their wrap/unwrap
+// correctness is proven independently by the codec unit tests) --------------
+
+export interface FontFileInfo {
+	container: 'ttf' | 'otf' | 'woff' | 'woff2' | 'eot' | 'ttc' | 'unknown';
+	flavor: 'glyf' | 'cff' | null;
+	/** Table count (woff2: header field only; eot: null). */
+	numTables: number | null;
+	/** Directory tags for sfnt/woff containers, null otherwise. */
+	tags: string[] | null;
+	/** maxp numGlyphs for sfnt/woff containers (the subset op's honest metric). */
+	glyphCount: number | null;
+}
+
+function sfntGlyphCount(bytes: Uint8Array): number | null {
+	const maxp = findTable(bytes, readSfnt(bytes), 'maxp');
+	if (!maxp || maxp.length < 6) return null;
+	return new DataView(maxp.buffer, maxp.byteOffset).getUint16(4);
+}
+
+export function fontInfo(buf: Buffer): FontFileInfo {
+	const bytes = new Uint8Array(buf);
+	const sniff = sniffFont(bytes);
+	if (!sniff)
+		return { container: 'unknown', flavor: null, numTables: null, tags: null, glyphCount: null };
+	if (sniff.container === 'ttf' || sniff.container === 'otf') {
+		const sfnt = readSfnt(bytes);
+		return {
+			container: sniff.container,
+			flavor: sniff.flavor,
+			numTables: sfnt.tables.length,
+			tags: sfnt.tables.map((t) => t.tag),
+			glyphCount: sfntGlyphCount(bytes)
+		};
+	}
+	if (sniff.container === 'woff') {
+		const inner = unwrapWoff1(bytes);
+		const sfnt = readSfnt(inner);
+		return {
+			container: 'woff',
+			flavor: sniff.flavor,
+			numTables: sfnt.tables.length,
+			tags: sfnt.tables.map((t) => t.tag),
+			glyphCount: sfntGlyphCount(inner)
+		};
+	}
+	if (sniff.container === 'woff2') {
+		// Full decode needs the wasm codec — the header carries what we assert.
+		return {
+			container: 'woff2',
+			flavor: sniff.flavor,
+			numTables: buf.readUInt16BE(12),
+			tags: null,
+			glyphCount: null
+		};
+	}
+	return {
+		container: sniff.container,
+		flavor: sniff.flavor,
+		numTables: null,
+		tags: null,
+		glyphCount: null
+	};
+}
+
+/** tag → exact table bytes of a raw sfnt (TTF/OTF) buffer. */
+export function sfntTableBytes(buf: Buffer): Record<string, Buffer> {
+	const bytes = new Uint8Array(buf);
+	const sfnt = readSfnt(bytes);
+	return Object.fromEntries(
+		sfnt.tables.map((t) => [t.tag, Buffer.from(bytes.subarray(t.offset, t.offset + t.length))])
+	);
+}
+
+/** tag → exact INNER table bytes of a WOFF — the byte-level losslessness probe. */
+export function woffTableBytes(buf: Buffer): Record<string, Buffer> {
+	return sfntTableBytes(Buffer.from(unwrapWoff1(new Uint8Array(buf))));
 }

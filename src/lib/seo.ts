@@ -1,4 +1,4 @@
-import type { FileFormat, ImageFormat } from '$lib/types';
+import type { FileFormat, FontFormat, ImageFormat } from '$lib/types';
 import * as publicEnv from '$env/static/public';
 
 // NOTE: this module is imported by the `tool` param matcher (src/params/tool.ts),
@@ -35,6 +35,9 @@ export interface SeoEntry {
 	feature?: string;
 	/** Longer crawlable guide sections, rendered between How-it-works and FAQ. */
 	guide?: SeoGuideSection[];
+	/** "How it works" copy override — exactly three cards; FormatInfo falls
+	 *  back to the generic compress-tool trio when absent. */
+	steps?: [string, string, string];
 	/** Curated cross-links to related tool pages (paths from FORMATS/CONVERTERS/TOOLS). */
 	related?: string[];
 	/** Per-page OG image path under static/ — falls back to /og.jpg. */
@@ -66,6 +69,10 @@ export type ConverterPreset =
 	| { kind: 'svg'; to: 'png' | 'ico' }
 	| { kind: 'video'; container: 'mp4' | 'webm' | 'mov' | 'gif' }
 	| { kind: 'audio'; output: 'mp3' | 'm4a' | 'wav' | 'ogg' }
+	| { kind: 'font'; to: FontFormat }
+	// Font-tab tools: 'subset' arrives on the Subset op with its defaults;
+	// 'instance' additionally flips to a static-instance, keep-all-glyphs run.
+	| { kind: 'font-op'; op: 'subset' | 'instance' }
 	| { kind: 'pdf-op'; op: 'unlock' | 'protect' | 'merge' | 'pages' }
 	// Longest-side cap across every image tab — the page's whole point, so
 	// drops that re-route to their native tab (png → png) land configured.
@@ -103,6 +110,22 @@ const PRIVACY_A =
 const PRIVACY_NO_BASE =
 	'No — everything runs right in your browser, and the server only delivers this page. Files never leave your device; close the tab and everything is gone.';
 const PRIVACY_A_NO = PRIVACY_NO_BASE + PRIVACY_PROOF;
+
+// The generic How-it-works trio talks quality/target-size — nonsense for
+// fonts, so every font page overrides it (seo.test.ts enforces this).
+const FONT_STEPS: [string, string, string] = [
+	'Drop TTF, OTF, WOFF, WOFF2 or EOT files anywhere on the page — or click to browse.',
+	'Pick the output format — the font tables are repackaged losslessly, never re-drawn.',
+	'Convert, then download each font on its own or the whole batch as a ZIP.'
+];
+
+// Fonts are licensed software — every font page carries this answer verbatim.
+const FONT_LICENSE_A =
+	'Converting a font never changes its license. Many desktop licenses do not cover web embedding (and vice versa), so check yours before publishing a converted font. Fonts under the OFL or Apache licenses and fonts you made yourself are fine. Your file also never leaves your device — nothing is uploaded anywhere.';
+
+// Subsetting/instancing MODIFIES the font — a stricter question than converting.
+const FONT_LICENSE_SUBSET_A =
+	'Subsetting is a modification of the font file, and licenses differ on it: many web-font licenses explicitly allow subsetting for performance, open licenses (OFL, Apache) allow it, and some commercial desktop licenses forbid modifications entirely. Check yours before shipping the result. Your file never leaves your device — nothing is uploaded anywhere.';
 
 export const FORMATS: (SeoEntry & { format: FileFormat })[] = [
 	{
@@ -628,6 +651,57 @@ export const FORMATS: (SeoEntry & { format: FileFormat })[] = [
 			}
 		],
 		related: ['/mp4-to-mp3', '/wav-to-mp3', '/compress-video']
+	},
+	{
+		format: 'font',
+		steps: FONT_STEPS,
+		path: '/font-converter',
+		ogImage: '/og/font-converter.jpg',
+		label: 'Fonts',
+		feature: 'Convert fonts — TTF, OTF, WOFF & WOFF2',
+		title: 'Font Converter — TTF, OTF, WOFF, WOFF2 Online | Compress Pro',
+		description:
+			'Convert fonts between TTF, OTF, WOFF and WOFF2 right in your browser. Lossless repackaging — glyphs, kerning and hinting survive. Free, nothing uploaded.',
+		h1: 'Convert fonts.',
+		tagline: 'TTF, OTF, WOFF & WOFF2 — converted right in your browser.',
+		intro:
+			'Convert fonts between TTF, OTF, WOFF, WOFF2 and even legacy EOT — entirely in your browser. These formats are different wrappers around the same font tables, so the conversion is true repackaging: glyphs, kerning and hinting come through untouched, and your font file never touches a server.',
+		faq: [
+			{
+				q: 'Is the conversion really lossless?',
+				a: 'Yes. TTF/OTF, WOFF, WOFF2 and EOT are containers around the same font tables — converting unwraps one and wraps another, so glyphs, spacing, kerning and hinting are preserved. The only exception the WOFF2 spec itself demands: digital signatures (DSIG) are dropped, and you will see a note when that happens.'
+			},
+			{
+				q: 'Can it turn TTF outlines into OTF outlines (or back)?',
+				a: 'No, deliberately. TTF and OTF store letterforms with different curve math, and converting between them degrades hinting and can distort shapes — so if you ask for TTF but the font contains OTF-style (CFF) outlines, it is saved as .otf, with a note. Same font, honest extension, zero quality loss.'
+			},
+			{ q: 'Am I allowed to convert this font?', a: FONT_LICENSE_A },
+			{ q: 'Is it private?', a: PRIVACY_A }
+		],
+		guide: [
+			{
+				heading: 'Which format goes where',
+				paragraphs: [
+					'All four formats carry the same glyphs — they differ in compression and in who can read them. For websites, [TTF to WOFF2](/ttf-to-woff2) is the conversion that matters; for installing a downloaded web font, [WOFF2 to TTF](/woff2-to-ttf) goes the other way.'
+				],
+				table: {
+					columns: ['Format', 'Use it for', 'Notes'],
+					rows: [
+						['WOFF2', 'Websites (@font-face)', 'Smallest — Brotli; all modern browsers'],
+						['WOFF', 'Very old browsers', 'zlib — larger than WOFF2'],
+						['TTF / OTF', 'Installing on desktop', 'What Font Book & Windows expect'],
+						['EOT', 'Internet Explorer 6–8', 'Legacy only — skip it today']
+					]
+				}
+			},
+			{
+				heading: 'Why fonts deserve local conversion',
+				paragraphs: [
+					'Fonts are licensed software, and many licenses forbid passing the files to third parties — which is exactly what uploading to a converter site does. Here the conversion runs in your browser: the font never leaves your machine, and there is nothing on a server to leak, cache or crawl.'
+				]
+			}
+		],
+		related: ['/ttf-to-woff2', '/woff2-to-ttf', '/subset-font']
 	},
 	{
 		format: 'zip',
@@ -2264,6 +2338,410 @@ export const CONVERTERS: ConverterEntry[] = [
 			}
 		],
 		related: ['/png-to-ico', '/svg-to-png', '/compress-svg']
+	},
+	{
+		format: 'font',
+		steps: FONT_STEPS,
+		path: '/ttf-to-woff2',
+		ogImage: '/og/ttf-to-woff2.jpg',
+		label: 'TTF → WOFF2',
+		feature: 'Convert TTF to WOFF2',
+		preset: { kind: 'font', to: 'woff2' },
+		accept: 'font/ttf,.ttf',
+		dropSubject: 'TTF fonts',
+		dropHint: 'TTF fonts · repackaged to WOFF2 locally',
+		inFooter: true,
+		title: 'TTF to WOFF2 Converter — Free, Private, Local | Compress Pro',
+		description:
+			'Convert TTF fonts to WOFF2 in your browser — typically half the size, identical glyphs, kerning and hinting. Nothing is uploaded. Free, no sign-up.',
+		h1: 'Convert TTF to WOFF2.',
+		tagline: 'Turn desktop TTF fonts into web-ready WOFF2 — privately.',
+		intro:
+			'WOFF2 is the same font wrapped in Brotli compression — the format every modern browser wants in @font-face. Drop a TTF (or a whole batch) and it comes out typically half the size, with glyphs, kerning and hinting untouched. Nothing is uploaded anywhere.',
+		faq: [
+			{
+				q: 'How much smaller does WOFF2 get?',
+				a: 'Typically 40–60% smaller than the raw TTF — Brotli compresses font tables extremely well. A 200 KB text font usually lands around 80–110 KB; large CJK fonts shrink the most in absolute terms.'
+			},
+			{
+				q: 'Is anything lost in the conversion?',
+				a: 'No glyphs, spacing, kerning or hinting — WOFF2 is a compressed wrapper around the same tables, and browsers reconstruct them exactly. Only a digital signature (DSIG), if present, is removed, because the WOFF2 spec requires it; a note tells you when that happens.'
+			},
+			{ q: 'Am I allowed to convert this font?', a: FONT_LICENSE_A },
+			{ q: 'Is it private?', a: PRIVACY_A }
+		],
+		guide: [
+			{
+				heading: 'Using the WOFF2 on your site',
+				paragraphs: [
+					'Reference the converted file in CSS with @font-face: set font-family to a name of your choice and src to url(yourfont.woff2) format("woff2"). Add font-display: swap so text renders immediately while the font loads. WOFF2 covers every browser released since 2016 — a WOFF fallback is only worth it for genuinely old traffic; [TTF to WOFF](/ttf-to-woff) makes one if you need it.'
+				]
+			}
+		],
+		related: ['/font-converter', '/otf-to-woff2', '/woff2-to-ttf']
+	},
+	{
+		format: 'font',
+		steps: FONT_STEPS,
+		path: '/ttf-to-woff',
+		ogImage: '/og/ttf-to-woff.jpg',
+		label: 'TTF → WOFF',
+		feature: 'Convert TTF to WOFF',
+		preset: { kind: 'font', to: 'woff' },
+		accept: 'font/ttf,.ttf',
+		dropSubject: 'TTF fonts',
+		dropHint: 'TTF fonts · wrapped as WOFF locally',
+		title: 'TTF to WOFF Converter — Free, Private, Local | Compress Pro',
+		description:
+			'Convert TTF to WOFF in your browser — a byte-exact zlib wrapper for older browsers. Your font never leaves your device. Free, private, no sign-up.',
+		h1: 'Convert TTF to WOFF.',
+		tagline: 'TTF wrapped as WOFF for legacy browsers — all in-browser.',
+		intro:
+			'WOFF (the original web font format) is a zlib-compressed wrapper around your TTF — every table comes through byte-for-byte. Modern sites should prefer WOFF2; reach for WOFF when you must support genuinely old browsers.',
+		faq: [
+			{
+				q: 'Should I use WOFF or WOFF2?',
+				a: 'WOFF2, almost always — it is about 25–30% smaller and every browser released since 2016 supports it. WOFF only earns its place as a fallback for very old browsers like IE9–11 or Android 4 stock.'
+			},
+			{
+				q: 'Is the conversion lossless?',
+				a: 'Bit-for-bit: WOFF stores each original font table zlib-compressed, and unwrapping returns exactly the bytes that went in. Glyphs, kerning, hinting — even the digital signature — all survive.'
+			},
+			{ q: 'Am I allowed to convert this font?', a: FONT_LICENSE_A },
+			{ q: 'Is it private?', a: PRIVACY_A }
+		],
+		related: ['/ttf-to-woff2', '/font-converter', '/woff-to-ttf']
+	},
+	{
+		format: 'font',
+		steps: FONT_STEPS,
+		path: '/otf-to-woff2',
+		ogImage: '/og/otf-to-woff2.jpg',
+		label: 'OTF → WOFF2',
+		feature: 'Convert OTF to WOFF2',
+		preset: { kind: 'font', to: 'woff2' },
+		accept: 'font/otf,.otf',
+		dropSubject: 'OTF fonts',
+		dropHint: 'OTF fonts · repackaged to WOFF2 locally',
+		inFooter: true,
+		title: 'OTF to WOFF2 Converter — Free, Private, Local | Compress Pro',
+		description:
+			'Convert OTF fonts to WOFF2 in your browser — smaller for the web, with CFF outlines stored byte-for-byte. Nothing is uploaded. Free and private.',
+		h1: 'Convert OTF to WOFF2.',
+		tagline: 'Web-ready WOFF2 from your OTF fonts — nothing uploaded.',
+		intro:
+			'OTF fonts go straight into WOFF2 with their PostScript (CFF) outlines stored as-is — no outline conversion, no quality loss, just Brotli compression around the same tables. The result is what modern browsers expect in @font-face.',
+		faq: [
+			{
+				q: 'Do the PostScript outlines survive?',
+				a: 'Byte-for-byte. WOFF2 has no special handling for CFF tables, so an OTF font round-trips exactly — converting back returns the identical outlines, kerning and features.'
+			},
+			{
+				q: 'How much smaller is the WOFF2?',
+				a: 'Typically 40–60% smaller than the OTF — CFF data compresses well under Brotli. The exact ratio depends on how many glyphs and features the font carries.'
+			},
+			{ q: 'Am I allowed to convert this font?', a: FONT_LICENSE_A },
+			{ q: 'Is it private?', a: PRIVACY_A }
+		],
+		related: ['/font-converter', '/ttf-to-woff2', '/woff2-to-otf']
+	},
+	{
+		format: 'font',
+		steps: FONT_STEPS,
+		path: '/otf-to-woff',
+		ogImage: '/og/otf-to-woff.jpg',
+		label: 'OTF → WOFF',
+		feature: 'Convert OTF to WOFF',
+		preset: { kind: 'font', to: 'woff' },
+		accept: 'font/otf,.otf',
+		dropSubject: 'OTF fonts',
+		dropHint: 'OTF fonts · wrapped as WOFF locally',
+		title: 'OTF to WOFF Converter — Free, Private, Local | Compress Pro',
+		description:
+			'Convert OTF to WOFF in your browser — a lossless zlib wrapper for older browsers. Your font file never leaves your device. Free, private, no sign-up.',
+		h1: 'Convert OTF to WOFF.',
+		tagline: 'OTF wrapped as WOFF for legacy browsers — all in-browser.',
+		intro:
+			'WOFF wraps your OTF in zlib compression, table by table, byte for byte — the PostScript outlines are untouched. Prefer WOFF2 for modern sites; WOFF exists for the long tail of old browsers.',
+		faq: [
+			{
+				q: 'When is WOFF the right choice over WOFF2?',
+				a: 'Only when you must serve genuinely old browsers — IE9–11 or Android 4-era stock browsers. Everything newer prefers WOFF2, which is also about a quarter smaller.'
+			},
+			{
+				q: 'Is the conversion lossless?',
+				a: 'Bit-for-bit: each table is stored zlib-compressed and unwraps to exactly the original bytes. Outlines, kerning, OpenType features and hinting all survive untouched.'
+			},
+			{ q: 'Am I allowed to convert this font?', a: FONT_LICENSE_A },
+			{ q: 'Is it private?', a: PRIVACY_A }
+		],
+		related: ['/otf-to-woff2', '/font-converter', '/woff-to-otf']
+	},
+	{
+		format: 'font',
+		steps: FONT_STEPS,
+		path: '/woff-to-ttf',
+		ogImage: '/og/woff-to-ttf.jpg',
+		label: 'WOFF → TTF',
+		feature: 'Convert WOFF to TTF',
+		preset: { kind: 'font', to: 'ttf' },
+		accept: 'font/woff,application/font-woff,.woff',
+		dropSubject: 'WOFF fonts',
+		dropHint: 'WOFF web fonts · unwrapped locally',
+		title: 'WOFF to TTF Converter — Free, Private, Local | Compress Pro',
+		description:
+			'Convert WOFF web fonts back to installable TTF in your browser — the original font data, unwrapped losslessly. Nothing uploaded. Free, no sign-up.',
+		h1: 'Convert WOFF to TTF.',
+		tagline: 'Unwrap WOFF web fonts back to installable TTF — locally.',
+		intro:
+			'A WOFF is a compressed envelope around a desktop font — unwrapping it returns the original TTF, byte for byte, ready to install or open in a font editor. The decompression happens entirely in your browser.',
+		faq: [
+			{
+				q: 'Can I install the result?',
+				a: 'Yes — the output is a regular desktop font file: double-click it and Font Book (macOS) or the Windows font viewer offers to install it. Whether the license permits desktop installation is a separate question, so check it.'
+			},
+			{
+				q: 'Why did my file come out as .otf?',
+				a: 'Because that is what was inside: some WOFFs carry PostScript (CFF) outlines, which by convention use the .otf extension. Converting the outlines themselves would lose hinting and can distort shapes, so the tool keeps them intact and names the file honestly — a note explains when this happens.'
+			},
+			{ q: 'Am I allowed to convert this font?', a: FONT_LICENSE_A },
+			{ q: 'Is it private?', a: PRIVACY_A }
+		],
+		related: ['/woff-to-woff2', '/font-converter', '/woff2-to-ttf']
+	},
+	{
+		format: 'font',
+		steps: FONT_STEPS,
+		path: '/woff-to-otf',
+		ogImage: '/og/woff-to-otf.jpg',
+		label: 'WOFF → OTF',
+		feature: 'Convert WOFF to OTF',
+		preset: { kind: 'font', to: 'otf' },
+		accept: 'font/woff,application/font-woff,.woff',
+		dropSubject: 'WOFF fonts',
+		dropHint: 'WOFF web fonts · unwrapped locally',
+		title: 'WOFF to OTF Converter — Free, Private, Local | Compress Pro',
+		description:
+			'Convert WOFF web fonts back to desktop OTF in your browser — the original CFF font, unwrapped losslessly. Nothing is uploaded. Free and private.',
+		h1: 'Convert WOFF to OTF.',
+		tagline: 'Unwrap WOFF web fonts back to desktop OTF — in-browser.',
+		intro:
+			'Unwrapping a WOFF returns the exact desktop font that was packaged into it. If that font has PostScript (CFF) outlines you get an .otf; if it is a TrueType font you get a .ttf — either way, byte-identical tables and a file you can install.',
+		faq: [
+			{
+				q: 'Why did my file come out as .ttf?',
+				a: 'Because the WOFF contained TrueType outlines — .otf is by convention the extension for PostScript (CFF) outlines. Converting between outline types would cost hinting and shape fidelity, so the tool never does it: same font, honest extension, and a note tells you when it happens.'
+			},
+			{
+				q: 'Is the unwrapped font identical to the original?',
+				a: 'Yes — WOFF stores each table zlib-compressed, and decompression returns the exact original bytes: outlines, kerning, OpenType features, hinting, everything.'
+			},
+			{ q: 'Am I allowed to convert this font?', a: FONT_LICENSE_A },
+			{ q: 'Is it private?', a: PRIVACY_A }
+		],
+		related: ['/woff-to-ttf', '/font-converter', '/otf-to-woff']
+	},
+	{
+		format: 'font',
+		steps: FONT_STEPS,
+		path: '/woff-to-woff2',
+		ogImage: '/og/woff-to-woff2.jpg',
+		label: 'WOFF → WOFF2',
+		feature: 'Convert WOFF to WOFF2',
+		preset: { kind: 'font', to: 'woff2' },
+		accept: 'font/woff,application/font-woff,.woff',
+		dropSubject: 'WOFF fonts',
+		dropHint: 'WOFF web fonts · upgraded to WOFF2 locally',
+		inFooter: true,
+		title: 'WOFF to WOFF2 Converter — Free, Private, Local | Compress Pro',
+		description:
+			'Convert WOFF to WOFF2 in your browser — Brotli recompression makes web fonts about a quarter smaller, losslessly. Nothing uploaded. Free, no sign-up.',
+		h1: 'Convert WOFF to WOFF2.',
+		tagline: 'Upgrade WOFF fonts to smaller WOFF2 — nothing uploaded.',
+		intro:
+			'Still serving WOFF? WOFF2 carries the same font in Brotli instead of zlib — usually 25–30% smaller, supported by every browser released since 2016. The upgrade is pure recompression: unwrap, rewrap, identical tables.',
+		faq: [
+			{
+				q: 'How much do I save?',
+				a: 'Usually 25–30% — Brotli beats zlib consistently on font tables. On a page loading three weights, that is often 100 KB+ off the critical path for one-line CSS changes.'
+			},
+			{
+				q: 'Do I still need the WOFF fallback?',
+				a: 'Only for genuinely old browsers (IE9–11, Android 4 stock). Every browser released since 2016 reads WOFF2, so most sites today ship WOFF2 alone.'
+			},
+			{ q: 'Am I allowed to convert this font?', a: FONT_LICENSE_A },
+			{ q: 'Is it private?', a: PRIVACY_A }
+		],
+		related: ['/ttf-to-woff2', '/font-converter', '/woff2-to-woff']
+	},
+	{
+		format: 'font',
+		steps: FONT_STEPS,
+		path: '/woff2-to-ttf',
+		ogImage: '/og/woff2-to-ttf.jpg',
+		label: 'WOFF2 → TTF',
+		feature: 'Convert WOFF2 to TTF',
+		preset: { kind: 'font', to: 'ttf' },
+		accept: 'font/woff2,.woff2',
+		dropSubject: 'WOFF2 fonts',
+		dropHint: 'WOFF2 web fonts · decoded locally',
+		inFooter: true,
+		title: 'WOFF2 to TTF Converter — Free, Private, Local | Compress Pro',
+		description:
+			'Convert WOFF2 web fonts to installable TTF in your browser — glyphs, kerning and hinting all preserved. Nothing is uploaded. Free, private, no sign-up.',
+		h1: 'Convert WOFF2 to TTF.',
+		tagline: 'Unpack WOFF2 web fonts into installable TTF — privately.',
+		intro:
+			'WOFF2 is a Brotli-compressed envelope around a desktop font. Decoding it in your browser returns a TTF you can install, inspect or edit — with every glyph, kerning pair and hinting instruction intact.',
+		faq: [
+			{
+				q: 'Can I install the result?',
+				a: 'Yes — the output is a regular TTF: double-click to install it on macOS or Windows. Do check the license first; a web-embedding license does not automatically allow desktop installation.'
+			},
+			{
+				q: 'Is the TTF identical to the font that was originally encoded?',
+				a: 'Functionally yes — every glyph, kerning pair, OpenType feature and hinting instruction is reconstructed exactly as the WOFF2 spec defines. The raw bytes of the glyph table may be laid out slightly differently than in the pre-encoding original, which no renderer or editor will ever notice.'
+			},
+			{ q: 'Am I allowed to convert this font?', a: FONT_LICENSE_A },
+			{ q: 'Is it private?', a: PRIVACY_A }
+		],
+		guide: [
+			{
+				heading: 'Got .otf instead of .ttf?',
+				paragraphs: [
+					'Some web fonts carry PostScript (CFF) outlines rather than TrueType ones. Converting between outline types is lossy (hinting dies, curves get approximated), so this tool never does it — a CFF font is saved as .otf with a note. It installs exactly the same way; only the extension differs. The reverse direction lives at [TTF to WOFF2](/ttf-to-woff2).'
+				]
+			}
+		],
+		related: ['/ttf-to-woff2', '/font-converter', '/woff2-to-otf']
+	},
+	{
+		format: 'font',
+		steps: FONT_STEPS,
+		path: '/woff2-to-otf',
+		ogImage: '/og/woff2-to-otf.jpg',
+		label: 'WOFF2 → OTF',
+		feature: 'Convert WOFF2 to OTF',
+		preset: { kind: 'font', to: 'otf' },
+		accept: 'font/woff2,.woff2',
+		dropSubject: 'WOFF2 fonts',
+		dropHint: 'WOFF2 web fonts · decoded locally',
+		title: 'WOFF2 to OTF Converter — Free, Private, Local | Compress Pro',
+		description:
+			'Convert WOFF2 web fonts to desktop OTF in your browser — the CFF font data comes out byte-for-byte intact. Nothing uploaded. Free, private, no sign-up.',
+		h1: 'Convert WOFF2 to OTF.',
+		tagline: 'Unpack WOFF2 web fonts into desktop OTF — in your browser.',
+		intro:
+			'Decoding a WOFF2 returns the desktop font it was made from. PostScript (CFF) outlines come out byte-for-byte — WOFF2 stores them without any transformation — so the .otf you download is exactly the font the site serves.',
+		faq: [
+			{
+				q: 'Why did my file come out as .ttf?',
+				a: 'Because the WOFF2 contained TrueType outlines — .otf is by convention reserved for PostScript (CFF) outlines. Outline conversion is lossy, so the tool keeps the original outlines and names the file honestly; a note explains it whenever that happens.'
+			},
+			{
+				q: 'Are CFF outlines really untouched?',
+				a: 'Yes — the WOFF2 format compresses CFF tables without transforming them, so decoding returns the identical bytes. Kerning, ligatures and every other OpenType feature come along unchanged.'
+			},
+			{ q: 'Am I allowed to convert this font?', a: FONT_LICENSE_A },
+			{ q: 'Is it private?', a: PRIVACY_A }
+		],
+		related: ['/woff2-to-ttf', '/font-converter', '/otf-to-woff2']
+	},
+	{
+		format: 'font',
+		steps: FONT_STEPS,
+		path: '/woff2-to-woff',
+		ogImage: '/og/woff2-to-woff.jpg',
+		label: 'WOFF2 → WOFF',
+		feature: 'Convert WOFF2 to WOFF',
+		preset: { kind: 'font', to: 'woff' },
+		accept: 'font/woff2,.woff2',
+		dropSubject: 'WOFF2 fonts',
+		dropHint: 'WOFF2 web fonts · repacked as WOFF locally',
+		title: 'WOFF2 to WOFF Converter — Free, Private, Local | Compress Pro',
+		description:
+			'Convert WOFF2 to WOFF in your browser for legacy browser support — lossless, though zlib output is larger. Nothing is uploaded. Free, private, no limits.',
+		h1: 'Convert WOFF2 to WOFF.',
+		tagline: 'Repack WOFF2 as WOFF for legacy browsers — output grows.',
+		intro:
+			'Going from WOFF2 back to WOFF trades size for reach: zlib compresses less than Brotli, so expect the output to be 25–40% larger — same font, older wrapper. Useful when a legacy browser or an old toolchain insists on WOFF.',
+		faq: [
+			{
+				q: 'Why is the converted file bigger than my WOFF2?',
+				a: 'Because WOFF uses zlib and WOFF2 uses Brotli, and Brotli simply compresses better. The font inside is identical — the older wrapper just costs 25–40% more bytes. That is the honest price of legacy compatibility.'
+			},
+			{
+				q: 'Who actually needs WOFF today?',
+				a: 'Browsers that predate 2016 — IE9–11, old Android stock browsers, some embedded webviews — and the occasional tool or CMS that validates uploads against a WOFF-only allowlist.'
+			},
+			{ q: 'Am I allowed to convert this font?', a: FONT_LICENSE_A },
+			{ q: 'Is it private?', a: PRIVACY_A }
+		],
+		related: ['/woff-to-woff2', '/font-converter', '/woff2-to-ttf']
+	},
+	{
+		format: 'font',
+		steps: FONT_STEPS,
+		path: '/ttf-to-eot',
+		ogImage: '/og/ttf-to-eot.jpg',
+		label: 'TTF → EOT',
+		feature: 'Convert TTF to EOT',
+		preset: { kind: 'font', to: 'eot' },
+		accept: 'font/ttf,.ttf',
+		dropSubject: 'TTF fonts',
+		dropHint: 'TTF fonts · wrapped as EOT locally',
+		title: 'TTF to EOT Converter — Free, Private, Local | Compress Pro',
+		description:
+			'Convert TTF fonts to EOT for Internet Explorer 6–8 in your browser — a lossless header wrapper. Your font never leaves your device. Free, no sign-up.',
+		h1: 'Convert TTF to EOT.',
+		tagline: 'EOT files for the old Internet Explorer — created locally.',
+		intro:
+			'EOT (Embedded OpenType) is the web font format Internet Explorer 6–8 understood — a small metadata header in front of the unchanged TTF. If a legacy intranet or an ancient CSS pipeline still demands it, this makes one without your font leaving the machine.',
+		faq: [
+			{
+				q: 'Do I actually need EOT?',
+				a: 'Almost certainly not — EOT only ever mattered for Internet Explorer 6–8, which are long dead outside legacy intranets. For anything current, WOFF2 is the format to serve; this page exists for maintaining old systems.'
+			},
+			{
+				q: 'Is the font changed in any way?',
+				a: 'No — a plain EOT is your TTF stored verbatim behind a metadata header (name, weight, embedding flags) read from the font itself. Unwrapping it returns the identical TTF.'
+			},
+			{ q: 'Am I allowed to convert this font?', a: FONT_LICENSE_A },
+			{ q: 'Is it private?', a: PRIVACY_A }
+		],
+		related: ['/eot-to-ttf', '/font-converter', '/ttf-to-woff2']
+	},
+	{
+		format: 'font',
+		steps: FONT_STEPS,
+		path: '/eot-to-ttf',
+		ogImage: '/og/eot-to-ttf.jpg',
+		label: 'EOT → TTF',
+		feature: 'Convert EOT to TTF',
+		preset: { kind: 'font', to: 'ttf' },
+		accept: 'application/vnd.ms-fontobject,.eot',
+		dropSubject: 'EOT fonts',
+		dropHint: 'legacy EOT fonts · decoded locally',
+		title: 'EOT to TTF Converter — Free, Private, Local | Compress Pro',
+		description:
+			'Convert legacy EOT fonts back to TTF in your browser — plain and XOR-obfuscated EOTs decode losslessly. Nothing is uploaded. Free, private, no sign-up.',
+		h1: 'Convert EOT to TTF.',
+		tagline: 'Rescue fonts from legacy EOT files — decoded in-browser.',
+		intro:
+			'Old sites and intranets left a trail of EOT files with no desktop counterpart. Most EOTs store the original TTF verbatim behind a header — this unwraps it (XOR-obfuscated ones included) into a font you can install or convert onward.',
+		faq: [
+			{
+				q: 'Does every EOT work?',
+				a: 'Most do — plain and XOR-obfuscated EOTs decode to the exact original font. The exception is EOTs made with MicroType Express compression (some WEFT-era files): browsers cannot decode MTX, so those are rejected with a clear message. If you have the original TTF, convert from that instead.'
+			},
+			{
+				q: 'Can I install the result?',
+				a: 'Yes — the unwrapped file is a regular desktop font. Note that EOTs were often produced under embedding-only licenses, so check whether desktop installation is actually permitted for your font.'
+			},
+			{ q: 'Am I allowed to convert this font?', a: FONT_LICENSE_A },
+			{ q: 'Is it private?', a: PRIVACY_A }
+		],
+		related: ['/ttf-to-eot', '/font-converter', '/woff-to-ttf']
 	}
 ];
 
@@ -2773,6 +3251,108 @@ export const TOOLS: ConverterEntry[] = [
 			}
 		],
 		related: ['/compress-jpg', '/resize-image', '/compress-image']
+	},
+	{
+		format: 'font',
+		path: '/subset-font',
+		ogImage: '/og/subset-font.jpg',
+		label: 'Subset font',
+		feature: 'Subset fonts — keep only the characters you use',
+		preset: { kind: 'font-op', op: 'subset' },
+		accept:
+			'font/ttf,font/otf,font/woff,font/woff2,application/vnd.ms-fontobject,.ttf,.otf,.woff,.woff2,.eot',
+		dropSubject: 'font files',
+		dropHint: 'TTF, WOFF & WOFF2 · subset locally',
+		title: 'Subset Font Online — Smaller Web Fonts, Private | Compress Pro',
+		description:
+			'Subset fonts in your browser — keep only the character sets or exact text you need and cut web font weight dramatically. Free, private, no upload.',
+		h1: 'Subset fonts.',
+		tagline: 'Keep only the characters you use — subset fonts locally.',
+		intro:
+			'A font ships every glyph it knows; your page usually needs a fraction of them. Pick character sets or paste the exact text, and HarfBuzz — the same subsetter the big font services run — keeps just those glyphs, with kerning and ligatures intact. Everything happens in your browser.',
+		steps: [
+			'Drop a font — TTF, or WOFF/WOFF2 with TrueType outlines (batches work too).',
+			'Tick the character sets you need, paste exact text, or pin variable axes.',
+			'Subset, check the before/after glyph counts, and download the result.'
+		],
+		faq: [
+			{
+				q: 'How much smaller does a subset font get?',
+				a: 'That depends on how much you cut: trimming a 2,000-glyph font down to Basic Latin routinely removes 80–95% of the glyphs. The per-file note shows the exact before/after glyph counts, so the result is never a guess.'
+			},
+			{
+				q: 'Do kerning and ligatures survive subsetting?',
+				a: 'Yes — HarfBuzz keeps the OpenType layout rules that involve the glyphs you kept and drops only the rules referencing removed glyphs. Ligatures and kerning between the letters you keep continue to work.'
+			},
+			{
+				q: 'Why does my OTF fail with a CFF error?',
+				a: 'The browser build of the subsetter handles TrueType-flavored fonts (TTF, and WOFF/WOFF2 wrapping TrueType outlines) but not PostScript CFF outlines. Converting OTF between formats still works — subsetting it currently does not.'
+			},
+			{ q: 'Am I allowed to subset this font?', a: FONT_LICENSE_SUBSET_A }
+		],
+		guide: [
+			{
+				heading: 'Pick the right character sets',
+				paragraphs: [
+					'Basic Latin covers English text, digits and ASCII punctuation; add Latin-1 accents for Western European languages and Punctuation & symbols for smart quotes, dashes and the euro sign. Building a one-off headline or a logo? Paste the exact text instead — the font shrinks to just those letters. Serve the result as WOFF2 for the web; [TTF to WOFF2](/ttf-to-woff2) handles fonts you are not subsetting.'
+				]
+			},
+			{
+				heading: 'Variable fonts',
+				paragraphs: [
+					'A variable font carries every weight and width in one file. When one style is all you use, pin the axes while subsetting — or use [Variable font to static](/variable-font-to-static) if pinning is the only thing you need. Leaving the axes variable works too; the character set still shrinks.'
+				]
+			}
+		],
+		related: ['/font-converter', '/variable-font-to-static', '/ttf-to-woff2']
+	},
+	{
+		format: 'font',
+		path: '/variable-font-to-static',
+		ogImage: '/og/variable-font-to-static.jpg',
+		label: 'Variable → static',
+		feature: 'Pin variable font axes to a static instance',
+		preset: { kind: 'font-op', op: 'instance' },
+		accept:
+			'font/ttf,font/otf,font/woff,font/woff2,application/vnd.ms-fontobject,.ttf,.otf,.woff,.woff2,.eot',
+		dropSubject: 'variable fonts',
+		dropHint: 'variable TTF/WOFF2 · pinned locally',
+		title: 'Variable Font to Static Converter — Free, Local | Compress Pro',
+		description:
+			'Turn a variable font into a static instance right in your browser — pin weight, width or any axis, or keep the defaults. Free, private, no upload.',
+		h1: 'Variable font to static.',
+		tagline: 'Turn variable fonts into static instances — all locally.',
+		intro:
+			'Variable fonts pack every weight and width into one file — great on the web, awkward in tools that expect one style per file. Drop one, set a value per axis (or keep the defaults), and the axes are pinned into a normal static font, right in your browser.',
+		steps: [
+			'Drop a variable font — its axes (weight, width …) are detected automatically.',
+			'Set a value per axis, like weight 700, or simply keep each axis default.',
+			'Download the pinned static font — smaller, and it works everywhere.'
+		],
+		faq: [
+			{
+				q: 'What happens to the variation axes?',
+				a: 'Each axis is pinned at the value you chose, the outlines are recalculated at that exact position, and the variation tables (fvar, gvar, avar) are removed. The result behaves like a hand-made static font of that one style.'
+			},
+			{
+				q: 'Why make a static instance at all?',
+				a: 'Older design apps and some pipelines cannot load variable fonts, embedded systems often want one small file, and a single pinned style is smaller than the full variable font when one style is genuinely all you use.'
+			},
+			{
+				q: 'Which variable fonts work?',
+				a: 'Fonts with TrueType outlines — which is nearly all of them, every variable Google Font included. Rare PostScript (CFF2) variable fonts are not supported by the browser build of the instancer.'
+			},
+			{ q: 'Am I allowed to modify this font?', a: FONT_LICENSE_SUBSET_A }
+		],
+		guide: [
+			{
+				heading: 'Picking the axis values',
+				paragraphs: [
+					'Weight (wght) runs 100–900 — 400 is regular, 700 bold. Width (wdth) is a percentage of normal. The inputs are pre-filled with each axis default, so downloading without touching anything gives you the designer-intended style. Need several styles? Run the tool once per value. To shrink the character set at the same time, use [Subset font](/subset-font) — it pins axes too.'
+				]
+			}
+		],
+		related: ['/subset-font', '/font-converter', '/woff2-to-ttf']
 	}
 ];
 
@@ -2782,9 +3362,11 @@ export const TOOL_SLUGS: readonly string[] = [...FORMATS, ...CONVERTERS, ...TOOL
 );
 
 export function pathFor(format: FileFormat): string {
-	// EXIF removes and ZIP archives rather than compresses — their slugs say so.
+	// EXIF removes, ZIP archives and fonts convert rather than compress —
+	// their slugs say so.
 	if (format === 'exif') return '/remove-exif';
 	if (format === 'zip') return '/zip-files';
+	if (format === 'font') return '/font-converter';
 	return `/compress-${format}`;
 }
 

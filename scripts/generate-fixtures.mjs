@@ -15,7 +15,7 @@
  * heicAvailable=false and HEIC tests skip.
  */
 import { createHash } from 'node:crypto';
-import { zipSync } from 'fflate';
+import { zipSync, zlibSync } from 'fflate';
 import { crc32 } from 'node:zlib';
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
@@ -23,6 +23,8 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import sharp from 'sharp';
 import pdfLib from 'pdf-lib';
+import * as opentypeNs from 'opentype.js';
+import fonteditorNs from 'fonteditor-core';
 
 const { PDFDocument, PDFName, StandardFonts, rgb } = pdfLib;
 
@@ -1135,6 +1137,251 @@ async function generatePdfs() {
 	}
 }
 
+// -------------------------------------------------------------------- fonts
+
+/**
+ * Deterministic font family: opentype.js authors a tiny CFF (OTF) font from
+ * hand-written glyph paths; fonteditor-core (a FOREIGN implementation — the
+ * app hand-rolls its own WOFF/EOT) derives ttf/woff/eot; the Google woff2
+ * codec (fonteditor-core's node build) derives woff2. Plus two error inputs:
+ * corrupt.ttf (valid magic, lying directory) and mtx.eot (MicroType flag).
+ * Returns false when the node woff2 wasm fails — woff2 e2e tests then skip.
+ */
+async function generateFonts() {
+	const O = opentypeNs.default?.Font ? opentypeNs.default : opentypeNs;
+	const fonteditor = fonteditorNs.Font ? fonteditorNs : fonteditorNs.default;
+	const { Font, woff2 } = fonteditor;
+	const toBuf = (x) => (Buffer.isBuffer(x) ? x : Buffer.from(new Uint8Array(x)));
+	const toAb = (buf) => buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
+	const sfntInfo = (buf) => {
+		const numTables = buf.readUInt16BE(4);
+		const tags = [];
+		for (let i = 0; i < numTables; i++) tags.push(buf.toString('latin1', 12 + i * 16, 16 + i * 16));
+		return { numTables, tags };
+	};
+
+	// 33. font-tiny.otf — authored glyphs (straight-line paths keep it tiny).
+	const glyph = (name, unicode, contours) => {
+		const path = new O.Path();
+		for (const points of contours) {
+			points.forEach(([x, y], i) => (i === 0 ? path.moveTo(x, y) : path.lineTo(x, y)));
+			path.close();
+		}
+		return new O.Glyph({ name, unicode, advanceWidth: 560, path });
+	};
+	const glyphs = [
+		new O.Glyph({ name: '.notdef', advanceWidth: 560, path: new O.Path() }),
+		new O.Glyph({ name: 'space', unicode: 32, advanceWidth: 400, path: new O.Path() }),
+		glyph('A', 65, [
+			[
+				[40, 0],
+				[230, 700],
+				[330, 700],
+				[520, 0],
+				[400, 0],
+				[280, 520],
+				[160, 0]
+			]
+		]),
+		glyph('B', 66, [
+			[
+				[60, 0],
+				[60, 700],
+				[420, 700],
+				[480, 540],
+				[420, 380],
+				[480, 160],
+				[400, 0]
+			],
+			[
+				[180, 420],
+				[180, 580],
+				[340, 580],
+				[340, 420]
+			]
+		]),
+		glyph('C', 67, [
+			[
+				[500, 120],
+				[380, 0],
+				[120, 0],
+				[40, 350],
+				[120, 700],
+				[380, 700],
+				[500, 580],
+				[400, 520],
+				[330, 590],
+				[190, 590],
+				[150, 350],
+				[190, 110],
+				[330, 110],
+				[400, 180]
+			]
+		])
+	];
+	const authored = new O.Font({
+		familyName: 'Fixture Sans',
+		styleName: 'Regular',
+		unitsPerEm: 1000,
+		ascender: 800,
+		descender: -200,
+		glyphs
+	});
+	const otf = toBuf(authored.toArrayBuffer());
+	await write('font-tiny.otf', otf);
+	{
+		const info = sfntInfo(otf);
+		assertEq('font-tiny.otf', 'magic', otf.toString('latin1', 0, 4), 'OTTO');
+		for (const tag of ['CFF ', 'head', 'name', 'OS/2', 'cmap']) {
+			assertEq('font-tiny.otf', `has ${tag}`, info.tags.includes(tag), true);
+		}
+		manifest['font-tiny.otf'] = { flavor: 'cff', ...info, unitsPerEm: 1000, size: otf.length };
+	}
+
+	// 34. font-tiny.ttf — fonteditor-core's CFF→glyf conversion of the same font.
+	const parsed = Font.create(toAb(otf), { type: 'otf', hinting: true });
+	const ttf = toBuf(parsed.write({ type: 'ttf', hinting: true }));
+	await write('font-tiny.ttf', ttf);
+	{
+		const info = sfntInfo(ttf);
+		assertEq('font-tiny.ttf', 'magic', ttf.readUInt32BE(0), 0x00010000);
+		assertEq('font-tiny.ttf', 'has glyf', info.tags.includes('glyf'), true);
+		manifest['font-tiny.ttf'] = { flavor: 'glyf', ...info, size: ttf.length };
+	}
+
+	// 35/36. font-tiny.woff (fonteditor's own WOFF writer, zlib via fflate) and
+	// font-tiny.eot (fonteditor's ttf2eot) — both derived from the ttf.
+	const ttfFont = Font.create(toAb(ttf), { type: 'ttf', hinting: true });
+	const woff = toBuf(
+		ttfFont.write({ type: 'woff', hinting: true, deflate: (u8) => zlibSync(Uint8Array.from(u8)) })
+	);
+	await write('font-tiny.woff', woff);
+	assertEq('font-tiny.woff', 'signature', woff.toString('latin1', 0, 4), 'wOFF');
+	assertEq('font-tiny.woff', 'flavor', woff.readUInt32BE(4), 0x00010000);
+	manifest['font-tiny.woff'] = {
+		flavor: 'glyf',
+		numTables: woff.readUInt16BE(12),
+		size: woff.length
+	};
+
+	const eot = toBuf(ttfFont.write({ type: 'eot', hinting: true }));
+	await write('font-tiny.eot', eot);
+	assertEq('font-tiny.eot', 'magic', eot.readUInt16LE(34), 0x504c);
+	manifest['font-tiny.eot'] = { size: eot.length };
+
+	// 37½. font-var.ttf — font-tiny.ttf with a synthetic 1-axis fvar spliced in.
+	// The glyphs carry no real variation data (gvar) — enough for the axis UI
+	// and the fvar parser; hb instancing is exercised against real VFs only
+	// (tests/fixtures/real, self-skipping).
+	{
+		const numTables = ttf.readUInt16BE(4);
+		const tables = [];
+		for (let i = 0; i < numTables; i++) {
+			const at = 12 + i * 16;
+			tables.push({
+				tag: ttf.toString('latin1', at, at + 4),
+				checksum: ttf.readUInt32BE(at + 4),
+				data: ttf.subarray(
+					ttf.readUInt32BE(at + 8),
+					ttf.readUInt32BE(at + 8) + ttf.readUInt32BE(at + 12)
+				)
+			});
+		}
+		const fvar = Buffer.alloc(16 + 20);
+		fvar.writeUInt16BE(1, 0); // majorVersion
+		fvar.writeUInt16BE(16, 4); // axesArrayOffset
+		fvar.writeUInt16BE(2, 6); // reserved
+		fvar.writeUInt16BE(1, 8); // axisCount
+		fvar.writeUInt16BE(20, 10); // axisSize
+		fvar.write('wght', 16, 'latin1');
+		fvar.writeInt32BE(100 * 65536, 20); // min
+		fvar.writeInt32BE(400 * 65536, 24); // def
+		fvar.writeInt32BE(900 * 65536, 28); // max
+		fvar.writeUInt16BE(0, 32); // flags
+		fvar.writeUInt16BE(256, 34); // axisNameID
+		tables.push({ tag: 'fvar', checksum: 0, data: fvar });
+		tables.sort((a, b) => (a.tag < b.tag ? -1 : 1));
+		const pad4 = (n) => (n + 3) & ~3;
+		const total = 12 + tables.length * 16 + tables.reduce((sum, t) => sum + pad4(t.data.length), 0);
+		const out = Buffer.alloc(total);
+		out.writeUInt32BE(0x00010000, 0);
+		out.writeUInt16BE(tables.length, 4);
+		const entrySelector = Math.floor(Math.log2(tables.length));
+		const searchRange = 2 ** entrySelector * 16;
+		out.writeUInt16BE(searchRange, 6);
+		out.writeUInt16BE(entrySelector, 8);
+		out.writeUInt16BE(tables.length * 16 - searchRange, 10);
+		let offset = 12 + tables.length * 16;
+		tables.forEach((t, i) => {
+			const at = 12 + i * 16;
+			out.write(t.tag, at, 'latin1');
+			out.writeUInt32BE(t.checksum, at + 4);
+			out.writeUInt32BE(offset, at + 8);
+			out.writeUInt32BE(t.data.length, at + 12);
+			t.data.copy(out, offset);
+			offset += pad4(t.data.length);
+		});
+		await write('font-var.ttf', out);
+		const info = sfntInfo(out);
+		assertEq('font-var.ttf', 'has fvar', info.tags.includes('fvar'), true);
+		manifest['font-var.ttf'] = {
+			flavor: 'glyf',
+			...info,
+			axes: [{ tag: 'wght', min: 100, def: 400, max: 900 }]
+		};
+	}
+
+	// 38. corrupt.ttf — valid sfnt magic, absurd table count, truncated body.
+	{
+		const rand = mulberry32(1234);
+		const junk = Buffer.alloc(256);
+		for (let i = 0; i < junk.length; i++) junk[i] = Math.floor(rand() * 256);
+		junk.writeUInt32BE(0x00010000, 0);
+		junk.writeUInt16BE(0xffff, 4); // numTables far beyond any real font
+		await write('corrupt.ttf', junk);
+		manifest['corrupt.ttf'] = { size: 256 };
+	}
+
+	// 39. mtx.eot — structurally valid EOT header with the MicroType Express
+	// flag set (TTEMBED_TTCOMPRESSED) over junk data; the app must reject it
+	// with the MicroType message, not a generic parse error.
+	{
+		const rand = mulberry32(4321);
+		const data = Buffer.alloc(64);
+		for (let i = 0; i < data.length; i++) data[i] = Math.floor(rand() * 256);
+		const headerSize = 80 + 4 * 4 + 4; // fixed + four empty strings + empty root string
+		const mtx = Buffer.alloc(headerSize + data.length);
+		mtx.writeUInt32LE(mtx.length, 0); // EOTSize
+		mtx.writeUInt32LE(data.length, 4); // FontDataSize
+		mtx.writeUInt32LE(0x00020001, 8); // Version
+		mtx.writeUInt32LE(0x00000004, 12); // Flags: TTEMBED_TTCOMPRESSED
+		mtx.writeUInt16LE(0x504c, 34); // MagicNumber
+		data.copy(mtx, headerSize);
+		await write('mtx.eot', mtx);
+		manifest['mtx.eot'] = { size: mtx.length, compression: 'mtx' };
+	}
+
+	// 37. font-tiny.woff2 — Google codec (wasm); node init can fail on exotic
+	// setups, so its absence is recorded rather than fatal (heicAvailable idea).
+	try {
+		await woff2.init();
+		const w2 = toBuf(woff2.encode(toAb(ttf)));
+		if (w2.length < 100) throw new Error('woff2 encode produced a suspiciously small file');
+		await write('font-tiny.woff2', w2);
+		assertEq('font-tiny.woff2', 'signature', w2.toString('latin1', 0, 4), 'wOF2');
+		assertEq('font-tiny.woff2', 'flavor', w2.readUInt32BE(4), 0x00010000);
+		manifest['font-tiny.woff2'] = {
+			flavor: 'glyf',
+			numTables: w2.readUInt16BE(12),
+			size: w2.length
+		};
+		return true;
+	} catch (err) {
+		console.warn(`! node woff2 wasm unavailable (${err.message}) — woff2 font tests will skip`);
+		return false;
+	}
+}
+
 // ------------------------------------------------------------------- errors
 
 // ------------------------------------------------------------- exif fixtures
@@ -1402,6 +1649,8 @@ await generateZip();
 console.log('  pdfs ✓');
 await generateExifFixtures();
 console.log('  exif ✓');
+const fontWoff2Available = await generateFonts();
+console.log('  fonts ✓');
 generateErrorFiles();
 console.log('  error files ✓');
 
@@ -1412,6 +1661,7 @@ writeFileSync(
 			genHash: GEN_HASH,
 			generatedWith: `sharp ${sharp.versions?.sharp ?? '?'}`,
 			heicAvailable,
+			fontWoff2Available,
 			files: manifest
 		},
 		null,

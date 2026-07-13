@@ -2,7 +2,9 @@ onlyBuiltDependencies:
   - esbuild
   - workerd
 
-# kit still pins cookie 0.6; 0.7 fixes GHSA-pxg6-pf52-xh8x (dev-only here,
-# the app is fully prerendered) and is API-compatible.
 overrides:
   cookie: ^0.7.0
+
+patchedDependencies:
+  fonteditor-core@2.6.3: patches/fonteditor-core@2.6.3.patch
+  harfbuzzjs@1.4.0: patches/harfbuzzjs@1.4.0.patch

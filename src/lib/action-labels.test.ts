@@ -49,6 +49,17 @@ const audio = (over: Partial<SettingsMap['audio']> = {}): SettingsMap['audio'] =
 
 const zip = (op: 'create' | 'extract'): SettingsMap['zip'] => ({ op, level: 6 });
 
+const font = (over: Partial<SettingsMap['font']> = {}): SettingsMap['font'] => ({
+	op: 'convert',
+	outputFormat: 'woff2',
+	subsetPresets: ['basic-latin'],
+	subsetText: '',
+	keepHinting: true,
+	variableMode: 'keep',
+	axisValues: {},
+	...over
+});
+
 describe('actionLabel', () => {
 	it('pluralizes the default compress label', () => {
 		expect(actionLabel('jpg', image(), 1)).toBe('Compress 1 file');
@@ -58,6 +69,9 @@ describe('actionLabel', () => {
 	it('labels per-format actions', () => {
 		expect(actionLabel('exif', { removeIcc: false }, 2)).toBe('Remove metadata from 2 files');
 		expect(actionLabel('audio', audio(), 1)).toBe('Convert 1 file');
+		expect(actionLabel('font', font(), 2)).toBe('Convert 2 files');
+		expect(actionLabel('font', font({ op: 'subset' }), 2)).toBe('Subset 2 fonts');
+		expect(actionLabel('font', font({ op: 'subset' }), 1)).toBe('Subset 1 font');
 		expect(actionLabel('zip', zip('create'), 4)).toBe('Create ZIP from 4 files');
 		expect(actionLabel('zip', zip('extract'), 1)).toBe('Extract 1 archive');
 	});
@@ -78,6 +92,8 @@ describe('busyLabel', () => {
 	it('picks the verb per format and PDF op', () => {
 		expect(busyLabel('exif', { removeIcc: false })).toBe('Cleaning…');
 		expect(busyLabel('audio', audio())).toBe('Converting…');
+		expect(busyLabel('font', font({ outputFormat: 'ttf' }))).toBe('Converting…');
+		expect(busyLabel('font', font({ op: 'subset' }))).toBe('Subsetting…');
 		expect(busyLabel('zip', zip('create'))).toBe('Working…');
 		expect(busyLabel('pdf', pdf({ op: 'merge' }))).toBe('Working…');
 		expect(busyLabel('pdf', pdf())).toBe('Compressing…');

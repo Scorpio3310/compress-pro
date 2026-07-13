@@ -1,5 +1,6 @@
 import type {
 	AudioConversionSettings,
+	FontConversionSettings,
 	ZipSettings,
 	ImageCompressionSettings,
 	PdfCompressionSettings,
@@ -7,6 +8,8 @@ import type {
 	SvgCompressionSettings,
 	VideoConversionSettings
 } from '$lib/types';
+import { FONT_FORMATS } from '$lib/types';
+import { SUBSET_PRESET_IDS } from '$lib/codecs/subset-charsets';
 
 /** Single source of the per-tab defaults (previously inline in +page.svelte). */
 export function defaultSettings(): SettingsMap {
@@ -64,6 +67,15 @@ export function defaultSettings(): SettingsMap {
 			mode: 'quality',
 			bitrateKbps: 192,
 			targetMb: 10
+		},
+		font: {
+			op: 'convert',
+			outputFormat: 'woff2',
+			subsetPresets: ['basic-latin'],
+			subsetText: '',
+			keepHinting: true,
+			variableMode: 'keep',
+			axisValues: {}
 		},
 		zip: {
 			op: 'create',
@@ -156,6 +168,23 @@ function mergeAudio(target: AudioConversionSettings, s: Record<string, unknown>)
 	target.targetMb = num(s.targetMb, 0.1, 10_000, target.targetMb);
 }
 
+function mergeFont(target: FontConversionSettings, s: Record<string, unknown>): void {
+	// `axisValues` is deliberately NOT merged — per-font runtime state, not a
+	// preference (the pdf.password treatment).
+	target.op = oneOf(s.op, ['convert', 'subset'] as const, target.op);
+	target.outputFormat = oneOf(s.outputFormat, FONT_FORMATS, target.outputFormat);
+	if (Array.isArray(s.subsetPresets)) {
+		target.subsetPresets = s.subsetPresets.filter(
+			(p): p is string => typeof p === 'string' && SUBSET_PRESET_IDS.has(p)
+		);
+	}
+	if (typeof s.subsetText === 'string' && s.subsetText.length <= 1000) {
+		target.subsetText = s.subsetText;
+	}
+	target.keepHinting = bool(s.keepHinting, target.keepHinting);
+	target.variableMode = oneOf(s.variableMode, ['keep', 'static'] as const, target.variableMode);
+}
+
 function mergeZip(target: ZipSettings, s: Record<string, unknown>): void {
 	target.op = oneOf(s.op, ['create', 'extract'] as const, target.op);
 	target.level = oneOf(s.level, [0, 1, 6, 9] as const, target.level);
@@ -184,12 +213,14 @@ function mergePdf(target: PdfCompressionSettings, s: Record<string, unknown>): v
 }
 
 /**
- * JSON for localStorage — secrets (pdf.password) are stripped so they never
- * touch disk; the load side (mergePdf) refuses to read them anyway.
+ * JSON for localStorage — secrets (pdf.password) and per-font runtime state
+ * (font.axisValues) are stripped so they never touch disk; the load side
+ * (mergePdf / mergeFont) refuses to read them anyway.
  */
 export function serializeSettings(version: number, map: SettingsMap): string {
 	const data = JSON.parse(JSON.stringify(map)) as SettingsMap;
 	data.pdf.password = '';
+	data.font.axisValues = {};
 	return JSON.stringify({ version, data });
 }
 
@@ -215,6 +246,8 @@ export function mergeStoredSettings(target: SettingsMap, stored: unknown): void 
 		mergeVideo(target.video, s.video as Record<string, unknown>);
 	if (typeof s.audio === 'object' && s.audio !== null)
 		mergeAudio(target.audio, s.audio as Record<string, unknown>);
+	if (typeof s.font === 'object' && s.font !== null)
+		mergeFont(target.font, s.font as Record<string, unknown>);
 	if (typeof s.zip === 'object' && s.zip !== null)
 		mergeZip(target.zip, s.zip as Record<string, unknown>);
 	if (typeof s.exif === 'object' && s.exif !== null) {

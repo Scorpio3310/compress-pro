@@ -7,6 +7,14 @@ settings:
 overrides:
   cookie: ^0.7.0
 
+patchedDependencies:
+  fonteditor-core@2.6.3:
+    hash: 285c33c6394d04e542ad672c625fece77289d987c090b4c212a540f52daf4bdc
+    path: patches/fonteditor-core@2.6.3.patch
+  harfbuzzjs@1.4.0:
+    hash: 22da4d9fc862790869d96ad4397d773cc9332e85592edb3c24a401de9df345de
+    path: patches/harfbuzzjs@1.4.0.patch
+
 importers:
 
   .:
@@ -41,12 +49,18 @@ importers:
       fflate:
         specifier: ^0.8.3
         version: 0.8.3
+      fonteditor-core:
+        specifier: ^2.6.3
+        version: 2.6.3(patch_hash=285c33c6394d04e542ad672c625fece77289d987c090b4c212a540f52daf4bdc)
       gifenc:
         specifier: ^1.0.3
         version: 1.0.3
       gifsicle-wasm-browser:
         specifier: ^1.5.19
         version: 1.5.19
+      harfbuzzjs:
+        specifier: ^1.4.0
+        version: 1.4.0(patch_hash=22da4d9fc862790869d96ad4397d773cc9332e85592edb3c24a401de9df345de)
       icodec:
         specifier: ^0.6.0
         version: 0.6.0
@@ -111,6 +125,9 @@ importers:
       globals:
         specifier: ^17.7.0
         version: 17.7.0
+      opentype.js:
+        specifier: ^2.0.0
+        version: 2.0.0
       pixelmatch:
         specifier: ^7.2.0
         version: 7.2.0
@@ -1227,6 +1244,10 @@ packages:
   '@vitest/utils@4.1.10':
     resolution: {integrity: sha512-fy9am/HWxbaGt/Sawrp90vt6Y6jQwf1RX77cz3uwoJwJVMli/e1IEwRPnMNJ7vKfPTwo0diXifkpPvwH9v7nGA==}
 
+  '@xmldom/xmldom@0.8.13':
+    resolution: {integrity: sha512-KRYzxepc14G/CEpEGc3Yn+JKaAeT63smlDr+vjB8jRfgTBBI9wRj/nkQEO+ucV8p8I9bfKLWp37uHgFrbntPvw==}
+    engines: {node: '>=10.0.0'}
+
   acorn-jsx@5.3.2:
     resolution: {integrity: sha512-rq9s+JNhf0IChjtDXxllJ7g41oZk5SlXtp0LHwyA5cejwn7vKmKp4pPri6YEePv2PU65sAsegbXtIinmDFDXgQ==}
     peerDependencies:
@@ -1500,6 +1521,9 @@ packages:
   flatted@3.4.2:
     resolution: {integrity: sha512-PjDse7RzhcPkIJwy5t7KPWQSZ9cAbzQXcafsetQoD7sOJRQlGikNbx7yZp2OotDnJyrDcbyRq3Ttb18iYOqkxA==}
 
+  fonteditor-core@2.6.3:
+    resolution: {integrity: sha512-YUryIKjkenjZ41E7JvM3V+02Ak4mTHDDTwBWgs9KBzypzHqLZHuua1UDRevZNTKawmnq1dbBAa70Jddl2+F4FQ==}
+
   framer-motion@12.42.2:
     resolution: {integrity: sha512-5XY9luDiu0oHfHBjpDthFMh0ES+122w6p/papSJBweMkO8Sn+PW2QaEgRblQBpWFnuvZS5qvarpt/hO2pjGmnw==}
     peerDependencies:
@@ -1544,6 +1568,9 @@ packages:
 
   graceful-fs@4.2.11:
     resolution: {integrity: sha512-RbJ5/jmFcNNCcDV5o9eTnBLJ/HszWV0P73bc+Ff4nS/rJj+YaS6IGyiOL0VoBYX+l1Wrl3k63h/KrH+nhJ0XvQ==}
+
+  harfbuzzjs@1.4.0:
+    resolution: {integrity: sha512-3KrygnLb4ESsntxvxZA7RhJy2Ci47GdXWC8fl9HwPHNEOUDXUNv5M+x/TiBkXKjUz6jz/CRJOL2Ksgq8V3UdKw==}
 
   icodec@0.6.0:
     resolution: {integrity: sha512-m9ptjNaqBTmnTOc7CkNgTXFrAY6QBjiyri6Ba66AGfGN1+OWPBej8cKgeZ+LwKH53zwDu36zukX2PaO8NTUMbw==}
@@ -1747,6 +1774,10 @@ packages:
 
   obug@2.1.1:
     resolution: {integrity: sha512-uTqF9MuPraAQ+IsnPf366RG4cP9RtUi7MLO1N3KEc+wb0a6yKpeL0lmk2IB1jY5KHPAlTc6T/JRdC/YqxHNwkQ==}
+
+  opentype.js@2.0.0:
+    resolution: {integrity: sha512-kCyjv6xdDY1W/jLWZ/L3QhhTlKUqDZMQ5+Jdlw12b3dXkKNpYBqqlMMj0YDQPShWFTMwgZI1hG14kN3XUDSg/A==}
+    hasBin: true
 
   optionator@0.9.4:
     resolution: {integrity: sha512-6IpQ7mKUxRcZNLIObR0hz7lxsapSSIYNZJwXPGeF0mTVqGKFIXj1DQcMoT22S3ROcLyY/rz0PWaWZ9ayWmad9g==}
@@ -3102,6 +3133,8 @@ snapshots:
       convert-source-map: 2.0.0
       tinyrainbow: 3.1.0
 
+  '@xmldom/xmldom@0.8.13': {}
+
   acorn-jsx@5.3.2(acorn@8.16.0):
     dependencies:
       acorn: 8.16.0
@@ -3392,6 +3425,10 @@ snapshots:
 
   flatted@3.4.2: {}
 
+  fonteditor-core@2.6.3(patch_hash=285c33c6394d04e542ad672c625fece77289d987c090b4c212a540f52daf4bdc):
+    dependencies:
+      '@xmldom/xmldom': 0.8.13
+
   framer-motion@12.42.2:
     dependencies:
       motion-dom: 12.42.2
@@ -3417,6 +3454,8 @@ snapshots:
   globals@17.7.0: {}
 
   graceful-fs@4.2.11: {}
+
+  harfbuzzjs@1.4.0(patch_hash=22da4d9fc862790869d96ad4397d773cc9332e85592edb3c24a401de9df345de): {}
 
   icodec@0.6.0: {}
 
@@ -3571,6 +3610,8 @@ snapshots:
       boolbase: 1.0.0
 
   obug@2.1.1: {}
+
+  opentype.js@2.0.0: {}
 
   optionator@0.9.4:
     dependencies:

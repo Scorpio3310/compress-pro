@@ -113,7 +113,22 @@ const config = {
 				'/compress-jpg-to-100kb',
 				'/jpg-to-ico',
 				'/svg-to-png',
-				'/svg-to-ico'
+				'/svg-to-ico',
+				'/font-converter',
+				'/ttf-to-woff2',
+				'/ttf-to-woff',
+				'/otf-to-woff2',
+				'/otf-to-woff',
+				'/woff-to-ttf',
+				'/woff-to-otf',
+				'/woff-to-woff2',
+				'/woff2-to-ttf',
+				'/woff2-to-otf',
+				'/woff2-to-woff',
+				'/ttf-to-eot',
+				'/eot-to-ttf',
+				'/subset-font',
+				'/variable-font-to-static'
 			]
 		}
 	}

@@ -38,15 +38,26 @@ describe('seo entries', () => {
 			expect(e.ogImage, e.path).toBe(`/og${e.path}.jpg`);
 		}
 	});
+
+	it('every font page overrides the generic how-it-works steps', () => {
+		// The generic trio talks quality/target-size/compare — none of which
+		// the font pipeline has; shipping it there would be dishonest copy.
+		for (const e of [...FORMATS, ...CONVERTERS, ...TOOLS]) {
+			if (e.format !== 'font') continue;
+			expect(e.steps, e.path).toBeDefined();
+			expect(e.steps, e.path).toHaveLength(3);
+		}
+	});
 });
 
 describe('converter entries', () => {
-	it('presets live on their hosting tab (image/svg/video/pdf)', () => {
+	it('presets live on their hosting tab (image/svg/video/pdf/font)', () => {
 		for (const c of CONVERTERS) {
 			if (c.preset.kind === 'image') expect(c.preset.tab, c.path).toBe(c.format);
 			else if (c.preset.kind === 'svg') expect(c.format, c.path).toBe('svg');
 			else if (c.preset.kind === 'video') expect(c.format, c.path).toBe('video');
 			else if (c.preset.kind === 'audio') expect(c.format, c.path).toBe('audio');
+			else if (c.preset.kind === 'font') expect(c.format, c.path).toBe('font');
 			else expect(c.format, c.path).toBe('pdf');
 		}
 	});
@@ -58,8 +69,8 @@ describe('converter entries', () => {
 		}
 	});
 
-	it('curates exactly sixteen converters into the footer', () => {
-		expect(CONVERTERS.filter((c) => c.inFooter)).toHaveLength(16);
+	it('curates exactly twenty converters into the footer', () => {
+		expect(CONVERTERS.filter((c) => c.inFooter)).toHaveLength(20);
 	});
 
 	it('uses "-to-" slugs that never collide with compress slugs', () => {
@@ -76,6 +87,7 @@ describe('tool entries (standalone pages)', () => {
 				expect(imageTabs.has(t.format), t.path).toBe(true);
 			else if (t.preset.kind === 'video') expect(t.format, t.path).toBe('video');
 			else if (t.preset.kind === 'audio') expect(t.format, t.path).toBe('audio');
+			else if (t.preset.kind === 'font-op') expect(t.format, t.path).toBe('font');
 			else expect(t.format, t.path).toBe('pdf');
 			expect(t.feature.length, t.path).toBeGreaterThan(0);
 			expect(t.accept?.length ?? 0, t.path).toBeGreaterThan(0);
@@ -128,6 +140,7 @@ describe('guide links', () => {
 				e.description,
 				e.tagline,
 				e.intro,
+				...(e.steps ?? []),
 				...e.faq.flatMap((f) => [f.q, f.a]),
 				...(e.guide ?? []).flatMap((s) => [
 					s.heading,

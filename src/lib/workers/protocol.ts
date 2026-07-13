@@ -1,4 +1,4 @@
-import type { ImageFormat, SvgCompressionSettings } from '$lib/types';
+import type { FontFormat, ImageFormat, SvgCompressionSettings } from '$lib/types';
 
 export interface WorkerRequest {
 	id: number;
@@ -163,6 +163,57 @@ export interface AudioConvertPayload {
 	bitrate: number;
 }
 
+// --- Font (raw sfnt repackaging; WOFF2 via the Google codec wasm) ---
+
+export interface FontConvertPayload {
+	bytes: ArrayBuffer;
+	to: FontFormat;
+}
+
+export interface FontConvertResult {
+	bytes: ArrayBuffer;
+	/** Container actually written — a 'ttf'/'otf' request follows the sfnt
+	 *  flavor instead of converting outlines (the flavor rule). */
+	outputFormat: FontFormat;
+	/** Sniffed source container (extensions/MIMEs lie). */
+	sourceFormat: FontFormat;
+	/** Neutral per-file note (flavor rule, DSIG drop) — not a warning. */
+	note: string | null;
+}
+
+export interface FontSubsetPayload {
+	bytes: ArrayBuffer;
+	to: FontFormat;
+	/** Sorted unique codepoints to keep; null = keep every glyph. */
+	codepoints: Uint32Array | null;
+	keepHinting: boolean;
+	/** tag → user-coords pin. Non-null asks for a static instance (unlisted
+	 *  axes pin to their defaults); tags absent from the font are ignored. */
+	pinAxes: Record<string, number> | null;
+}
+
+export interface FontSubsetResult extends FontConvertResult {
+	glyphsBefore: number | null;
+	glyphsAfter: number | null;
+	/** Whether axes were actually pinned (false on non-variable fonts). */
+	instanced: boolean;
+}
+
+export interface FontAxisInfo {
+	tag: string;
+	min: number;
+	def: number;
+	max: number;
+	hidden: boolean;
+}
+
+export interface FontProbeResult {
+	container: FontFormat;
+	/** fvar axes in user coordinates; [] for static fonts. */
+	axes: FontAxisInfo[];
+	glyphCount: number | null;
+}
+
 /**
  * Action → payload/result/progress map per worker kind. `callWorker` (rpc.ts)
  * and `expose` (host.ts) are both typed against this, so a wrong action name
@@ -177,6 +228,12 @@ export interface WorkerContracts {
 	};
 	svg: {
 		optimize: { payload: SvgPayload; result: string; progress: never };
+	};
+	font: {
+		convert: { payload: FontConvertPayload; result: FontConvertResult; progress: never };
+		subset: { payload: FontSubsetPayload; result: FontSubsetResult; progress: never };
+		/** Upload-time metadata (variable axes for the UI, glyph count). */
+		probe: { payload: { bytes: ArrayBuffer }; result: FontProbeResult; progress: never };
 	};
 	video: {
 		/** maxDimension feeds the encodability check — see VideoProbeResult.encodable. */

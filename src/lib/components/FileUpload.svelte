@@ -48,11 +48,12 @@
 	let inputEl: HTMLInputElement | undefined = $state();
 	let rootEl: HTMLDivElement | undefined = $state();
 
-	// WEBP/VIDEO/AUDIO are not acronyms — the subject sits mid-sentence ("Drop … here").
+	// WEBP/VIDEO/AUDIO/FONT are not acronyms — the subject sits mid-sentence ("Drop … here").
 	const SUBJECT_LABEL: Partial<Record<FileFormat, string>> = {
 		webp: 'WebP',
 		video: 'video',
-		audio: 'audio'
+		audio: 'audio',
+		font: 'font'
 	};
 
 	// The accept override means "this dropzone takes images", not the tab's format.

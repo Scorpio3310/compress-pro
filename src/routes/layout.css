@@ -131,6 +131,7 @@
 	--color-file-audio: #39c800;
 	--color-file-archive: #e18f00;
 	--color-file-pdf: #e92323;
+	--color-file-font: #8b5cf6;
 
 	--text-display: clamp(1.75rem, 1.2rem + 2.8vw, 2.875rem);
 	--text-display--line-height: 1.05;
@@ -749,6 +750,16 @@ button:hover .icon-shrink {
 .icon-activate-audio path:nth-child(4) {
 	animation: tab-icon-eq 0.35s ease-in-out 0.15s;
 }
+/* Fonts "T": the stem drops in like a fresh keystroke, baseline draws under it. */
+.icon-activate-font path:nth-child(2),
+.icon-activate-font path:nth-child(3) {
+	stroke-dasharray: 1;
+	stroke-dashoffset: 1;
+	animation: icon-draw 0.3s var(--ease-swift) 0.05s forwards;
+}
+.icon-activate-font path:nth-child(3) {
+	animation-delay: 0.18s;
+}
 @keyframes tab-icon-lid {
 	35% {
 		translate: 0 -2px;
@@ -921,7 +932,9 @@ button:hover .icon-theme path:only-child {
 	/* draw-in variants also park the dash at "fully drawn" */
 	.icon-activate-images path:nth-child(2),
 	.icon-activate-pdf path:nth-child(2),
-	.icon-activate-pdf path:nth-child(3) {
+	.icon-activate-pdf path:nth-child(3),
+	.icon-activate-font path:nth-child(2),
+	.icon-activate-font path:nth-child(3) {
 		animation: none;
 		stroke-dashoffset: 0;
 	}

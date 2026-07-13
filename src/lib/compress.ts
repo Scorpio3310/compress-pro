@@ -8,6 +8,7 @@ import type {
 	PdfCompressionSettings,
 	VideoConversionSettings,
 	AudioConversionSettings,
+	FontConversionSettings,
 	ZipSettings,
 	ExifSettings,
 	ProgressInfo
@@ -19,6 +20,7 @@ import { compressSvg } from '$lib/codecs/svg';
 import { compressPdf, protectPdf, unlockPdf, type PdfProgress } from '$lib/codecs/pdf';
 import { convertVideo } from '$lib/codecs/video';
 import { convertAudio } from '$lib/codecs/audio';
+import { convertFont, subsetFont } from '$lib/codecs/font';
 import { stripImageMetadata } from '$lib/codecs/exif';
 import { imageLaneCap } from '$lib/workers/rpc';
 import { formatBytes } from '$lib/utils';
@@ -37,7 +39,12 @@ const extMap: Record<string, string> = {
 	mp3: '.mp3',
 	m4a: '.m4a',
 	wav: '.wav',
-	ogg: '.ogg'
+	ogg: '.ogg',
+	ttf: '.ttf',
+	otf: '.otf',
+	woff: '.woff',
+	woff2: '.woff2',
+	eot: '.eot'
 };
 
 function replaceExtension(filename: string, newExt: string | undefined): string {
@@ -66,6 +73,7 @@ type Settings =
 	| PdfCompressionSettings
 	| VideoConversionSettings
 	| AudioConversionSettings
+	| FontConversionSettings
 	| ZipSettings
 	| ExifSettings;
 
@@ -571,6 +579,21 @@ export async function compressFiles(
 			warning = out.warning;
 			formatChanged = out.formatChanged;
 			outName = replaceExtension(file.name, extMap[out.outputFormat]);
+		} else if (format === 'font') {
+			const fontSettings = settings as FontConversionSettings;
+			const out =
+				fontSettings.op === 'subset'
+					? await subsetFont(file.file, fontSettings, signal)
+					: await convertFont(file.file, fontSettings, signal);
+			blob = out.blob;
+			info = out.info;
+			// The flavor rule means the real output can equal the source (ttf→ttf
+			// passthrough) — then the guard below returns the original bytes.
+			formatChanged = out.formatChanged;
+			// Subset/instance changes content — the guard must not undo it even
+			// when the output happens to be larger (video's `transformed` seam).
+			resized = out.transformed;
+			outName = replaceExtension(file.name, out.nameSuffix + extMap[out.outputFormat]);
 		} else {
 			const out = await compressPdf(
 				file.file,

@@ -1,5 +1,5 @@
 <script module lang="ts">
-	import type { FileFormat, PdfOp, ZipSettings } from '$lib/types';
+	import type { FileFormat, FontOp, PdfOp, ZipSettings } from '$lib/types';
 	import { IMAGE_FORMATS } from '$lib/types';
 
 	// The Images rail = the raster pipeline tabs plus SVG (a UI grouping, not a
@@ -11,10 +11,10 @@
 		return (IMAGE_TABS as readonly string[]).includes(f);
 	}
 
-	type RailGroup = 'images' | 'pdf' | 'zip';
+	type RailGroup = 'images' | 'pdf' | 'zip' | 'font';
 
 	function groupOf(f: FileFormat): RailGroup | null {
-		return isImageTab(f) ? 'images' : f === 'pdf' || f === 'zip' ? f : null;
+		return isImageTab(f) ? 'images' : f === 'pdf' || f === 'zip' || f === 'font' ? f : null;
 	}
 
 	/** Per-tab compression state, shown as a colored count badge (traffic-light):
@@ -33,6 +33,10 @@
 	const ZIP_OPS: { id: ZipSettings['op']; label: string }[] = [
 		{ id: 'create', label: 'Create ZIP' },
 		{ id: 'extract', label: 'Extract' }
+	];
+	const FONT_OPS: { id: FontOp; label: string }[] = [
+		{ id: 'convert', label: 'Convert' },
+		{ id: 'subset', label: 'Subset' }
 	];
 
 	// Where the Images pill points when the active tab isn't an image format.
@@ -60,8 +64,10 @@
 		status?: Partial<Record<FileFormat, TabBadgeStatus | null>>;
 		pdfOp: PdfOp;
 		zipOp: ZipSettings['op'];
+		fontOp: FontOp;
 		onpdfop: (op: PdfOp) => void;
 		onzipop: (op: ZipSettings['op']) => void;
+		onfontop: (op: FontOp) => void;
 		/** Freeze the op rail while a job runs (op changes clear results). */
 		opsDisabled?: boolean;
 	}
@@ -73,8 +79,10 @@
 		status = {},
 		pdfOp,
 		zipOp,
+		fontOp,
 		onpdfop,
 		onzipop,
+		onfontop,
 		opsDisabled = false
 	}: Props = $props();
 
@@ -92,6 +100,7 @@
 		pdf: 'document',
 		video: 'video',
 		audio: 'audio',
+		font: 'font',
 		zip: 'archive',
 		exif: 'tag'
 	};
@@ -136,9 +145,11 @@
 			? pdfOp
 			: railGroup === 'zip'
 				? zipOp
-				: isImageTab(activeTab)
-					? activeTab
-					: lastImage
+				: railGroup === 'font'
+					? fontOp
+					: isImageTab(activeTab)
+						? activeTab
+						: lastImage
 	);
 </script>
 
@@ -273,7 +284,9 @@
 								? 'Image format'
 								: railGroup === 'pdf'
 									? 'PDF tool'
-									: 'ZIP mode'}
+									: railGroup === 'font'
+										? 'Font tool'
+										: 'ZIP mode'}
 							class="relative flex w-fit max-w-full items-stretch gap-1 overflow-x-auto rounded-full bg-card-2 p-1 scrollbar-none"
 							{@attach slideIndicator(() => railKey)}
 						>
@@ -303,6 +316,10 @@
 							{:else if railGroup === 'pdf'}
 								{#each PDF_OPS as o (o.id)}
 									{@render opButton(o.id, o.label, pdfOp === o.id, () => onpdfop(o.id))}
+								{/each}
+							{:else if railGroup === 'font'}
+								{#each FONT_OPS as o (o.id)}
+									{@render opButton(o.id, o.label, fontOp === o.id, () => onfontop(o.id))}
 								{/each}
 							{:else}
 								{#each ZIP_OPS as o (o.id)}

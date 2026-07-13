@@ -76,7 +76,11 @@ export default defineConfig({
 			'fflate',
 			'mediabunny',
 			'@mediabunny/mp3-encoder',
-			'utif2'
+			'utif2',
+			// CJS — needs the esbuild CJS→ESM prebundle to load in a module worker.
+			// The subpath exists via patches/fonteditor-core@2.6.3.patch (upstream
+			// ships the woff2 module but forgot it in the exports map).
+			'fonteditor-core/woff2'
 		]
 	},
 	test: {

@@ -1,0 +1,14 @@
+diff --git a/package.json b/package.json
+index f8bd62d139344e8266cdc6227303f9ccae1d3805..72dbacd88069f1e5d952c3082d35c3c9977667e8 100644
+--- a/package.json
++++ b/package.json
+@@ -9,7 +9,8 @@
+     ".": {
+       "types": "./dist/index.d.mts",
+       "default": "./dist/index.mjs"
+-    }
++    },
++    "./dist/harfbuzz-subset.wasm": "./dist/harfbuzz-subset.wasm"
+   },
+   "files": [
+     "dist"

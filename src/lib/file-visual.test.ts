@@ -39,6 +39,11 @@ describe('fileVisual', () => {
 			icon: 'document',
 			tint: 'text-file-pdf'
 		});
+		expect(fileVisual('Inter.woff2')).toEqual({
+			kind: 'icon',
+			icon: 'font',
+			tint: 'text-file-font'
+		});
 		// Non-displayable images fall back to the image glyph, not a broken <img>.
 		expect(fileVisual('IMG_0001.HEIC')).toEqual({
 			kind: 'icon',
