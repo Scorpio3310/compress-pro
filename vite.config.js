@@ -76,6 +76,8 @@ export default defineConfig({
 			'fflate',
 			'mediabunny',
 			'@mediabunny/mp3-encoder',
+			'@mediabunny/flac-encoder',
+			'@mediabunny/aac-encoder',
 			'utif2',
 			// CJS — needs the esbuild CJS→ESM prebundle to load in a module worker.
 			// The subpath exists via patches/fonteditor-core@2.6.3.patch (upstream

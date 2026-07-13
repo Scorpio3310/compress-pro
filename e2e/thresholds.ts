@@ -122,6 +122,41 @@ export const AUDIO = {
 } as const;
 
 /**
+ * Real-audio input↔output comparison (RF-05..08, RF-17..21): both sides decode
+ * through the same OfflineAudioContext(48 kHz) path, so decoder/resampler bias
+ * cancels out of every ratio. Spectral bands are 5-bin pools at 300/1000/3000
+ * Hz, asserted only when the input clears bandGateAmp — single ~0.02 Hz bins
+ * on real music are unstable in spectral valleys.
+ *
+ * LOCKED 2026-07-13 from the E2E_CALIBRATE real-file run: lossy RMS ratios
+ * observed 0.969-1.000 (mp3 ~0.97, aac/opus ~1.00), lossless 1.0000; in-gate
+ * band ratios 0.969-1.004 (comfortably inside the [0.6, 1.6] demotion rule —
+ * spectral asserts stay); LAME CBR effective kbps 192.01-192.05; flac/wav
+ * size 0.259 on real music (0.216 synthetic tones). Ranges sit 3-5× beyond
+ * the observed spread so future content/encoder drift fits, while real damage
+ * (silence, half-volume, wrong bitrate, killed band) still fails hard.
+ */
+export const AUDIO_REAL = {
+	/** hard non-silence floor (max-channel RMS) — the old standalone check */
+	rmsFloor: 0.02,
+	/** per-channel RMS out/in, lossy codecs (observed 0.969-1.000) */
+	rmsRatioLossy: [0.85, 1.15] as const,
+	/** per-channel RMS out/in, wav→flac (observed exactly 1.0000) */
+	rmsRatioLossless: [0.99, 1.01] as const,
+	/** input band amplitude below which the band ratio is metric-only */
+	bandGateAmp: 2e-4,
+	/** gated band-amplitude out/in ratio (observed 0.969-1.004) */
+	bandRatioRange: [0.6, 1.6] as const,
+	/** LAME CBR at the default 192 pill (observed 192.01-192.05) */
+	mp3EffectiveKbps: [180, 205] as const,
+	/** flac(bytes)/wav(bytes) — observed 0.259 real music; noise approaches 1
+	 *  but the hard `bytes < input` assert covers that end */
+	flacSizeRatio: [0.15, 0.9] as const,
+	/** node-side audioInfo |out − in| duration ceiling (opus pre-skip incl.) */
+	durationDeltaSec: 0.3
+} as const;
+
+/**
  * Video frame checks: band-color sampling tolerance (V-16 precedent, ±40 per
  * channel) and the source-vs-output frame PSNR floor over the stable band
  * region. LOCKED 2026-07-11: V-21 observed 62.1 dB (solid bands compress

@@ -1,9 +1,10 @@
 /**
- * RF-01…07: Nik's real-world samples from tests/fixtures/real/ — each test
+ * RF-01…22: Nik's real-world samples from tests/fixtures/real/ — each test
  * self-skips when its file is absent, so the spec adapts to whatever is
- * dropped in. Assertions stay structural (real content varies); audio adds a
- * browser-decoded non-silence floor; every case lands in the visual report
- * with playable before/after media.
+ * dropped in. Assertions stay structural for video/PDF (real content varies);
+ * audio decodes BOTH sides in the browser and compares loudness + gated
+ * spectral bands (AUDIO_REAL); images compare pixels (REAL_PHOTO). Every case
+ * lands in the visual report with playable before/after media.
  */
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { basename, join } from 'node:path';
@@ -12,7 +13,9 @@ import {
 	REAL,
 	assertDiffBudget,
 	assertFloor,
+	assertRange,
 	expect,
+	fx,
 	realFile,
 	test,
 	type CaseRecorder
@@ -28,9 +31,10 @@ import {
 	setOutputFormat,
 	setQuality,
 	setTargetMb,
-	upload
+	upload,
+	type AudioMetrics
 } from '../helpers';
-import { DIFF_BUDGET, PSNR_FLOOR, REAL_PHOTO } from '../thresholds';
+import { AUDIO_REAL, DIFF_BUDGET, PSNR_FLOOR, REAL_PHOTO } from '../thresholds';
 import {
 	audioInfo,
 	decodeRaw,
@@ -198,12 +202,58 @@ test('RF-04: real WebM converts to MP4', async ({ page, rec }) => {
 	});
 });
 
-/** Shared body for the real-audio conversions: structural + non-silence. */
-async function realAudioCase(
-	page: Page,
-	rec: CaseRecorder,
-	opts: { id: string; src: string; pill: string | null; outMime: string }
-) {
+/** Spectral probes: 5 sub-bins pooled per band — single ~0.02 Hz bins on real
+ *  music are unstable in spectral valleys; pooling plus the input-amplitude
+ *  gate keep the input↔output comparison honest. */
+const BANDS = [300, 1000, 3000] as const;
+const PROBES = BANDS.flatMap((f) => [f - 2, f - 1, f, f + 1, f + 2]);
+
+/** RMS-pooled band amplitude across the 5 sub-bins of every channel. */
+function bandAmp(m: AudioMetrics, center: number): number {
+	const amps: number[] = [];
+	for (const ch of m.channels) {
+		for (let off = -2; off <= 2; off++) amps.push(ch.freqAmp[String(center + off)] ?? 0);
+	}
+	return Math.sqrt(amps.reduce((s, a) => s + a * a, 0) / Math.max(1, amps.length));
+}
+
+/** Input decodes memoized per path — several RF cases share a source, and the
+ *  spec runs serially in one worker (fullyParallel: false). */
+const inputMetricsCache = new Map<string, AudioMetrics>();
+async function inputMetrics(page: Page, src: string): Promise<AudioMetrics> {
+	const hit = inputMetricsCache.get(src);
+	if (hit) return hit;
+	// decodeAudioData sniffs the container — the data-URL mime is inert.
+	const m = await audioMetricsInPage(page, readFileSync(src), 'application/octet-stream', {
+		probeHz: PROBES
+	});
+	inputMetricsCache.set(src, m);
+	return m;
+}
+
+interface RealAudioCaseOpts {
+	id: string;
+	src: string;
+	/** Output pill by exact label; null = MP3 tab default. */
+	pill: 'M4A' | 'WAV' | 'FLAC' | 'OGG' | 'OPUS' | 'WEBA' | null;
+	/** Mime for the output's in-page decode and the report asset typing. */
+	outMime: string;
+	expectCodec: 'mp3' | 'aac' | 'opus' | 'flac';
+	/** e.g. '.opus', '.weba' — extMap download-naming assert. */
+	expectExt?: string;
+	/** e.g. /ogg/, /webm|matroska/ — container proof via audioInfo formatMime. */
+	expectFormatMime?: RegExp;
+	/** wav→flac: tight RMS ratio + hard size-shrink asserts. */
+	lossless?: boolean;
+	/** LAME CBR outputs at the default 192 pill: effectiveKbps range assert. */
+	mp3Cbr?: boolean;
+}
+
+/** Shared body for the real-audio conversions: hard structure + genuine
+ *  quality — input and output both decode in the browser and must agree on
+ *  loudness (per-channel RMS ratio) and gated spectral band energy. */
+async function realAudioCase(page: Page, rec: CaseRecorder, opts: RealAudioCaseOpts) {
+	test.setTimeout(300_000); // two in-page decodes + 15-probe sweeps on multi-minute audio
 	const srcName = basename(opts.src);
 	const input = readFileSync(opts.src);
 	const inputInfo = await audioInfo(input);
@@ -217,17 +267,59 @@ async function realAudioCase(
 	const run = await compress(page, { timeout: 180_000 });
 	const art = await downloadRow(page);
 	const info = await audioInfo(art.bytes);
+
+	// Structure stays hard regardless of calibrate mode.
 	expect(
 		Math.abs(info.durationSec - inputInfo.durationSec),
 		'duration preserved'
-	).toBeLessThanOrEqual(0.3);
+	).toBeLessThanOrEqual(AUDIO_REAL.durationDeltaSec);
 	expect(info.numberOfChannels, 'channel count preserved').toBe(inputInfo.numberOfChannels);
-	// Browser-decoded PCM: real content varies, so only prove it isn't silence.
-	const m = await audioMetricsInPage(page, art.bytes, opts.outMime, { probeHz: [440] });
+	expect(info.audioCodec, 'output codec').toBe(opts.expectCodec);
+	if (opts.expectExt) {
+		expect(art.name.endsWith(opts.expectExt), `named *${opts.expectExt}`).toBe(true);
+	}
+	if (opts.expectFormatMime) expect(info.formatMime).toMatch(opts.expectFormatMime);
+	if (opts.lossless) {
+		expect(art.bytes.length, 'lossless pack must shrink').toBeLessThan(input.length);
+		assertRange(
+			art.bytes.length / input.length,
+			AUDIO_REAL.flacSizeRatio,
+			`${opts.id} flac/wav size ratio`
+		);
+	}
+
+	// Both sides through the identical decode+48 kHz-resample path, so decoder
+	// bias cancels out of every ratio.
+	const mOut = await audioMetricsInPage(page, art.bytes, opts.outMime, { probeHz: PROBES });
+	const mIn = await inputMetrics(page, opts.src);
 	expect(
-		Math.max(...m.channels.map((c) => c.rms)),
+		Math.max(...mOut.channels.map((c) => c.rms)),
 		'output must not be silence'
-	).toBeGreaterThanOrEqual(0.02);
+	).toBeGreaterThanOrEqual(AUDIO_REAL.rmsFloor);
+	const rmsRange = opts.lossless ? AUDIO_REAL.rmsRatioLossless : AUDIO_REAL.rmsRatioLossy;
+	const rmsRatios = mOut.channels.map((c, i) => c.rms / Math.max(mIn.channels[i]?.rms ?? 0, 1e-9));
+	rmsRatios.forEach((r, i) => assertRange(r, rmsRange, `${opts.id} ch${i} rms out/in`));
+	const bands: Record<string, number | null> = {};
+	for (const f of BANDS) {
+		const aIn = bandAmp(mIn, f);
+		const ratio = bandAmp(mOut, f) / Math.max(aIn, 1e-9);
+		if (aIn >= AUDIO_REAL.bandGateAmp) {
+			assertRange(ratio, AUDIO_REAL.bandRatioRange, `${opts.id} band ${f} Hz out/in`);
+			bands[`band${f}`] = Number(ratio.toFixed(2));
+		} else {
+			bands[`band${f}`] = null; // input too quiet there — metric suppressed
+		}
+	}
+	const effectiveKbps = (art.bytes.length * 8) / info.durationSec / 1000;
+	if (opts.mp3Cbr) {
+		assertRange(effectiveKbps, AUDIO_REAL.mp3EffectiveKbps, `${opts.id} mp3 effective kbps @192`);
+	}
+
+	// Worst-deviation channel drives the report chip.
+	const rmsRatio = rmsRatios.reduce(
+		(worst, r) => (Math.abs(r - 1) > Math.abs(worst - 1) ? r : worst),
+		1
+	);
 	rec.record({
 		id: opts.id,
 		settings: { tab: 'audio', realWorld: true },
@@ -236,8 +328,11 @@ async function realAudioCase(
 		warnings: run.warnings,
 		metrics: {
 			durationSec: Number(info.durationSec.toFixed(2)),
-			rms: Number(Math.max(...m.channels.map((c) => c.rms)).toFixed(3)),
-			savingsPct: Number((((input.length - art.bytes.length) / input.length) * 100).toFixed(1))
+			savingsPct: Number((((input.length - art.bytes.length) / input.length) * 100).toFixed(1)),
+			effectiveKbps: Number(effectiveKbps.toFixed(1)),
+			rms: Number(Math.max(...mOut.channels.map((c) => c.rms)).toFixed(3)),
+			rmsRatio: Number(rmsRatio.toFixed(3)),
+			...bands
 		},
 		assets: {
 			original: rec.saveAsset(opts.id, 'original', srcName, opts.src),
@@ -250,50 +345,53 @@ async function realAudioCase(
 test('RF-05: real mp3 (ID3 tags) converts to m4a', async ({ page, rec }) => {
 	const src = realFile(/\.mp3$/i);
 	test.skip(!src, 'drop a real .mp3 into tests/fixtures/real to enable');
-	const { info } = await realAudioCase(page, rec, {
+	await realAudioCase(page, rec, {
 		id: 'RF-05',
 		src: src!,
 		pill: 'M4A',
-		outMime: 'audio/mp4'
+		outMime: 'audio/mp4',
+		expectCodec: 'aac' // WebCodecs VBR — bitrate honesty is AU-15's job
 	});
-	expect(info.audioCodec).toBe('aac');
 });
 
 test('RF-06: real m4a (AAC) converts to mp3', async ({ page, rec }) => {
 	const src = realFile(/\.m4a$/i);
 	test.skip(!src, 'drop a real .m4a into tests/fixtures/real to enable');
-	const { info } = await realAudioCase(page, rec, {
+	await realAudioCase(page, rec, {
 		id: 'RF-06',
 		src: src!,
 		pill: null, // mp3 is the default output
-		outMime: 'audio/mpeg'
+		outMime: 'audio/mpeg',
+		expectCodec: 'mp3',
+		mp3Cbr: true
 	});
-	expect(info.audioCodec).toBe('mp3');
 });
 
 test('RF-07: real flac converts to mp3 (decode-only path)', async ({ page, rec }) => {
 	const src = realFile(/\.flac$/i);
 	test.skip(!src, 'drop a real .flac into tests/fixtures/real to enable');
-	const { info } = await realAudioCase(page, rec, {
+	await realAudioCase(page, rec, {
 		id: 'RF-07',
 		src: src!,
 		pill: null,
-		outMime: 'audio/mpeg'
+		outMime: 'audio/mpeg',
+		expectCodec: 'mp3',
+		mp3Cbr: true
 	});
-	expect(info.audioCodec).toBe('mp3');
 });
 
 test('RF-08: real WAV converts to mp3 (~7× smaller)', async ({ page, rec }) => {
 	const src = realFile(/\.wav$/i);
 	test.skip(!src, 'drop a real .wav into tests/fixtures/real to enable');
 	const input = readFileSync(src!);
-	const { info, outBytes } = await realAudioCase(page, rec, {
+	const { outBytes } = await realAudioCase(page, rec, {
 		id: 'RF-08',
 		src: src!,
 		pill: null,
-		outMime: 'audio/mpeg'
+		outMime: 'audio/mpeg',
+		expectCodec: 'mp3',
+		mp3Cbr: true
 	});
-	expect(info.audioCodec).toBe('mp3');
 	expect(outBytes.length, 'PCM → 192 kbps must shrink decisively').toBeLessThan(input.length / 5);
 });
 
@@ -581,4 +679,94 @@ test('RF-16: 48 MP iPhone HEIC converts through the max-dimension cap', async ({
 		output: { name: art.name, bytes: art.bytes.length, width: m.width, height: m.height },
 		assets: { output: rec.saveAsset('RF-16', 'output', art.name, art.bytes) }
 	});
+});
+
+test('RF-17: real ogg (Vorbis) converts to mp3', async ({ page, rec }) => {
+	// The sample-*.ogg files carry Vorbis — the only Vorbis-decode coverage in
+	// the suite (every generated ogg fixture is Opus).
+	const src = realFile(/\.ogg$/i);
+	test.skip(!src, 'drop a real .ogg into tests/fixtures/real to enable');
+	await realAudioCase(page, rec, {
+		id: 'RF-17',
+		src: src!,
+		pill: null,
+		outMime: 'audio/mpeg',
+		expectCodec: 'mp3',
+		mp3Cbr: true
+	});
+});
+
+test('RF-18: real opus converts to mp3', async ({ page, rec }) => {
+	const src = realFile(/\.opus$/i);
+	test.skip(!src, 'drop a real .opus into tests/fixtures/real to enable');
+	await realAudioCase(page, rec, {
+		id: 'RF-18',
+		src: src!,
+		pill: null,
+		outMime: 'audio/mpeg',
+		expectCodec: 'mp3',
+		mp3Cbr: true
+	});
+});
+
+test('RF-19: real WAV packs into FLAC losslessly (libFLAC wasm)', async ({ page, rec }) => {
+	const src = realFile(/\.wav$/i);
+	test.skip(!src, 'drop a real .wav into tests/fixtures/real to enable');
+	await realAudioCase(page, rec, {
+		id: 'RF-19',
+		src: src!,
+		pill: 'FLAC',
+		outMime: 'audio/flac',
+		expectCodec: 'flac',
+		expectExt: '.flac',
+		lossless: true
+	});
+});
+
+test('RF-20: real flac converts to opus (.opus, Ogg container)', async ({ page, rec }) => {
+	// Current pick sample-1.flac is 32 kHz — exercises Opus's forced 48 kHz
+	// resample on a real source.
+	const src = realFile(/\.flac$/i);
+	test.skip(!src, 'drop a real .flac into tests/fixtures/real to enable');
+	await realAudioCase(page, rec, {
+		id: 'RF-20',
+		src: src!,
+		pill: 'OPUS',
+		outMime: 'audio/ogg',
+		expectCodec: 'opus',
+		expectExt: '.opus',
+		expectFormatMime: /ogg/
+	});
+});
+
+test('RF-21: real mp3 converts to weba (audio-only WebM/Opus)', async ({ page, rec }) => {
+	const src = realFile(/\.mp3$/i);
+	test.skip(!src, 'drop a real .mp3 into tests/fixtures/real to enable');
+	const { info } = await realAudioCase(page, rec, {
+		id: 'RF-21',
+		src: src!,
+		pill: 'WEBA',
+		outMime: 'audio/webm',
+		expectCodec: 'opus',
+		expectExt: '.weba',
+		expectFormatMime: /webm|matroska/
+	});
+	expect(info.hasVideo, 'audio-only WebM').toBe(false);
+});
+
+test('RF-22: real AIFF (unsupported format) fails cleanly, batch survives', async ({ page }) => {
+	// AIFF is deliberately unsupported (mediabunny has no reader) — what we owe
+	// the user is a clean row-level error, not a crash or a stack trace.
+	const aif = realFile(/\.aiff?$/i);
+	test.skip(!aif, 'drop a real .aif into tests/fixtures/real to enable');
+	await gotoTab(page, 'audio');
+	// The generated wav rides along as the healthy survivor (AU-12 symmetry).
+	await upload(page, aif!, fx('tone-3s.wav'));
+	const run = await compress(page, { expectError: true });
+	expect(run.error).toContain(basename(aif!));
+	// mediabunny's UnsupportedInputFormatError wording — kept loose on purpose.
+	expect(run.error).toMatch(/unsupported|unrecognizable/i);
+	expect(run.error).not.toMatch(/exit code|\bat\b.*\.ts/);
+	await expect(page.getByTestId('row-error')).toBeVisible();
+	await expect(rows(page).getByRole('button', { name: 'Download' })).toHaveCount(1);
 });

@@ -1,4 +1,9 @@
-import type { FontFormat, ImageFormat, SvgCompressionSettings } from '$lib/types';
+import type {
+	AudioConversionSettings,
+	FontFormat,
+	ImageFormat,
+	SvgCompressionSettings
+} from '$lib/types';
 
 export interface WorkerRequest {
 	id: number;
@@ -158,8 +163,8 @@ export interface AudioProbeResult {
 export interface AudioConvertPayload {
 	jobId: number;
 	file: File;
-	output: 'mp3' | 'm4a' | 'wav' | 'ogg';
-	/** bps for lossy outputs — WAV (PCM) ignores it. */
+	output: AudioConversionSettings['outputFormat'];
+	/** bps for lossy outputs — lossless ones (WAV/FLAC) ignore it. */
 	bitrate: number;
 }
 

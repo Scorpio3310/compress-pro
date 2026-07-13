@@ -140,15 +140,28 @@ export interface VideoConversionSettings {
 }
 
 export interface AudioConversionSettings {
-	outputFormat: 'mp3' | 'm4a' | 'wav' | 'ogg';
+	/** 'opus' and 'ogg' are both Ogg/Opus under the hood — they differ only in
+	 *  the extension users ask for; 'weba' is Opus in an audio-only WebM. */
+	outputFormat: 'mp3' | 'm4a' | 'wav' | 'ogg' | 'flac' | 'opus' | 'weba';
 	mode: 'quality' | 'target';
-	/** Requested bitrate in kbps for lossy outputs (WAV is PCM — ignored).
+	/** Requested bitrate in kbps for lossy outputs (WAV/FLAC are lossless — ignored).
 	 *  MP3 encodes true CBR; AAC/Opus run the encoder's VBR targeting this
 	 *  rate — real content lands within ~10% (measured 2026-07-11), trivial
 	 *  content (tones/silence) legitimately undershoots. */
 	bitrateKbps: 320 | 256 | 192 | 128 | 96 | 64;
 	/** Target size in MB (SI, 1 MB = 1,000,000 B — the safe reading of upload limits). */
 	targetMb: number;
+}
+
+/** Lossless audio outputs — no bitrate to steer, so the bitrate/target knobs,
+ *  size estimate and target-mode CTA gate all switch off for these. */
+export const LOSSLESS_AUDIO_FORMATS: readonly AudioConversionSettings['outputFormat'][] = [
+	'wav',
+	'flac'
+];
+
+export function isLosslessAudioFormat(format: AudioConversionSettings['outputFormat']): boolean {
+	return LOSSLESS_AUDIO_FORMATS.includes(format);
 }
 
 /** Font containers the font tab converts between. 'ttf'/'otf' are the two

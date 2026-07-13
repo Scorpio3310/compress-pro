@@ -34,6 +34,17 @@ Received (2026-07-11 late):
 | IMG_0884.HEIC (48.8 MP portrait via irot, Display P3) | RF-16 (max-dimension cap on a 48 MP still; sort never picks it, targeted explicitly)                                                                                          |
 | IMG_0885.MOV (4K HEVC, BT.2020 + **HLG = HDR**, APAC) | V-13 — either-or: branded Chrome converts with the HDR warning; the bundled test Chromium has no HEVC decoder, so the guiding refusal is asserted instead                     |
 
+Received (2026-07-13 — audio-format expansion):
+
+| File(s)                   | Covers                                                                                                                          |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| sample-1/2/5.ogg (Vorbis) | RF-17 ogg→mp3 — the suite's only real Vorbis decode (generated ogg fixtures are Opus)                                           |
+| sample-1/3/5.opus         | RF-18 opus→mp3                                                                                                                  |
+| file_example_WAV_5MG.wav  | also RF-19 wav→FLAC (lossless pack via libFLAC wasm)                                                                            |
+| sample-1/2/5.flac         | also RF-20 flac→opus (.opus). NOTE: `realFile` sort now picks **sample-1.flac** (96 s, **32 kHz**) for RF-07/RF-20, not sample1 |
+| file_example_MP3_5MG.mp3  | also RF-21 mp3→weba (audio-only WebM/Opus)                                                                                      |
+| sample-1/3/5.aif (AIFF)   | RF-22 — deliberately UNSUPPORTED format (mediabunny has no AIFF reader); asserts the clean row-level rejection                  |
+
 Still wanted:
 
 | File                            | Used for                                                                                                                                     |

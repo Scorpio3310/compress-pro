@@ -8,7 +8,7 @@
 		PdfOp,
 		ProgressInfo
 	} from '$lib/types';
-	import { IMAGE_FORMATS } from '$lib/types';
+	import { IMAGE_FORMATS, isLosslessAudioFormat } from '$lib/types';
 	import { compressFiles, runPdfTool, runZipTool } from '$lib/compress';
 	import { settings } from '$lib/stores/settings.svelte';
 	import { abortAll } from '$lib/workers/rpc';
@@ -165,7 +165,7 @@
 		if (
 			activeTab === 'audio' &&
 			settings.audio.mode === 'quality' &&
-			settings.audio.outputFormat !== 'wav'
+			!isLosslessAudioFormat(settings.audio.outputFormat)
 		) {
 			const durations = [];
 			for (const f of tabStates.audio.files) {

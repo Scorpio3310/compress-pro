@@ -38,7 +38,7 @@ each entry in `src/lib/seo.ts` — pages without one fall back to `/og.jpg`.
 | `/webm-to-mp4`             | WebM → MP4          | For Apple devices, TVs and editors.                            |
 | `/mkv-to-mp4`              | MKV → MP4           | Universal playback, converted on-device.                       |
 | `/mp4-to-webm`             | MP4 → WebM          | Smaller video for the web. Converted locally.                  |
-| `/compress-audio`          | Compress audio.     | MP3, M4A, WAV & OGG — encoded on your device.                  |
+| `/compress-audio`          | Compress audio.     | MP3, FLAC, M4A, WAV & OGG — encoded on your device.            |
 | `/zip-files`               | Zip & Unzip.        | Archives created and opened locally. No upload.                |
 | `/unlock-pdf`              | Unlock PDFs.        | Your password never leaves your device.                        |
 | `/protect-pdf`             | Protect PDFs.       | Set a password — encrypted on your device.                     |
@@ -61,6 +61,13 @@ each entry in `src/lib/seo.ts` — pages without one fall back to `/og.jpg`.
 | `/pdf-to-png`              | PDF → PNG           | Lossless page renders — made in your browser.                  |
 | `/heic-to-png`             | HEIC → PNG          | iPhone photos, converted lossless. Locally.                    |
 | `/m4a-to-mp3`              | M4A → MP3           | Voice memos that play anywhere. No upload.                     |
+| `/flac-to-mp3`             | FLAC → MP3          | Lossless archives, played anywhere. Locally.                   |
+| `/wav-to-flac`             | WAV → FLAC          | Same audio, half the bytes — lossless.                         |
+| `/opus-to-mp3`             | OPUS → MP3          | WhatsApp voice notes, made universal.                          |
+| `/ogg-to-mp3`              | OGG → MP3           | Open audio for every player. No uploads.                       |
+| `/aac-to-mp3`              | AAC → MP3           | Raw AAC streams, playable everywhere.                          |
+| `/mp3-to-wav`              | MP3 → WAV           | Clean PCM for editors and samplers.                            |
+| `/mp4-to-wav`              | MP4 → WAV           | The audio track, ready for any editor.                         |
 | `/compress-image`          | Compress any image. | JPG, PNG, WebP, HEIC & more — smaller on your device.          |
 | `/compress-jpg-to-100kb`   | JPG under 100 KB.   | Type the cap — the best quality that fits, locally.            |
 | `/font-converter`          | Convert fonts.      | TTF, OTF, WOFF & WOFF2 — lossless, in your browser.            |

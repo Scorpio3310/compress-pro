@@ -1,10 +1,11 @@
 /**
- * AU-01…14: the audio tab — WAV→MP3 (LAME wasm), MP4→MP3 extraction, M4A/OGG/
- * WAV outputs, encoded inputs (mp3/m4a/ogg fixtures made in Chromium), target
- * bitrate math, corrupt/non-audio rejection — plus SAMPLE-LEVEL verification:
- * node can't decode mp3/aac/opus, so outputs are decoded in the test browser
- * (OfflineAudioContext) and probed with Goertzel at the fixture's known tones
- * (L 440 Hz / R 554.37+330 Hz / 3 kHz silence control).
+ * AU-01…21: the audio tab — WAV→MP3 (LAME wasm), MP4→MP3 extraction,
+ * M4A/OGG/WAV/FLAC/OPUS/WEBA outputs (FLAC via the bundled libFLAC wasm),
+ * encoded inputs (mp3/m4a/ogg/opus/weba/flac fixtures made in Chromium),
+ * target bitrate math, corrupt/non-audio rejection — plus SAMPLE-LEVEL
+ * verification: node can't decode mp3/aac/opus, so outputs are decoded in the
+ * test browser (OfflineAudioContext) and probed with Goertzel at the fixture's
+ * known tones (L 440 Hz / R 554.37+330 Hz / 3 kHz silence control).
  */
 import { readFileSync } from 'node:fs';
 import {
@@ -382,13 +383,10 @@ test('AU-12: corrupt mp3 fails its row with a clean message, batch survives', as
 	await expect(rows(page).getByRole('button', { name: 'Download' })).toHaveCount(1);
 });
 
-test('AU-13: flac → mp3 (real fixture wanted — Chromium cannot encode flac)', async ({
-	page,
-	rec
-}) => {
+test('AU-13: flac → mp3 (decode via WebCodecs, encode via LAME)', async ({ page, rec }) => {
 	test.skip(
 		!audioFixtures().files['tone-3s.flac'],
-		'no FLAC encoder in this Chromium — drop a real sample.flac into tests/fixtures/real instead (RF-07)'
+		'flac fixture missing — the bundled libFLAC encoder should always produce it'
 	);
 	await gotoTab(page, 'audio');
 	await upload(page, fxAudio('tone-3s.flac'));
@@ -455,5 +453,146 @@ test('AU-15: AAC spends the requested bitrate on dense content (pills are honest
 		input: { name: 'noise-10s.wav', bytes: readFileSync(fx('noise-10s.wav')).length },
 		output: { name: art.name, bytes: art.bytes.length },
 		metrics: { effectiveKbps: Number(effectiveKbps.toFixed(1)) }
+	});
+});
+
+test('AU-16: wav → flac (libFLAC wasm) — lossless, bitrate knobs hidden', async ({ page, rec }) => {
+	const input = readFileSync(fx('tone-3s.wav'));
+	await gotoTab(page, 'audio');
+	await upload(page, fx('tone-3s.wav'));
+	await setAudioOutput(page, 'FLAC');
+	// FLAC is lossless — the bitrate/target controls disappear, like WAV.
+	await expect(page.getByRole('button', { name: '192', exact: true })).toHaveCount(0);
+	await compress(page);
+	const art = await downloadRow(page);
+	expect(art.name).toBe('tone-3s.flac');
+	const info = await audioInfo(art.bytes);
+	expect(info.audioCodec).toBe('flac');
+	expect(info.hasVideo).toBe(false);
+	// Lossless pack of PCM: clearly smaller than the WAV, nowhere near lossy-tier.
+	assertRange(art.bytes.length / input.length, [0.05, 0.95], 'AU-16 flac/wav size ratio');
+	const m = await audioMetricsInPage(page, art.bytes, 'audio/flac', { probeHz: STEREO_PROBES });
+	const tones = expectStereoTones(m, 'AU-16');
+	rec.record({
+		id: 'AU-16',
+		settings: { tab: 'audio', output: 'flac' },
+		input: { name: 'tone-3s.wav', bytes: input.length },
+		output: { name: art.name, bytes: art.bytes.length },
+		metrics: {
+			savingsPct: Number((((input.length - art.bytes.length) / input.length) * 100).toFixed(1)),
+			...tones
+		},
+		assets: { output: rec.saveAsset('AU-16', 'output', art.name, art.bytes) }
+	});
+});
+
+test('AU-17: wav → opus writes Ogg/Opus under the .opus name', async ({ page, rec }) => {
+	await gotoTab(page, 'audio');
+	await upload(page, fx('tone-3s.wav'));
+	await setAudioOutput(page, 'OPUS');
+	await compress(page);
+	const art = await downloadRow(page);
+	expect(art.name).toBe('tone-3s.opus');
+	const info = await audioInfo(art.bytes);
+	expect(info.audioCodec).toBe('opus');
+	expect(info.formatMime, 'Ogg container, not WebM').toMatch(/ogg/);
+	const m = await audioMetricsInPage(page, art.bytes, 'audio/ogg', { probeHz: STEREO_PROBES });
+	const tones = expectStereoTones(m, 'AU-17');
+	rec.record({
+		id: 'AU-17',
+		settings: { tab: 'audio', output: 'opus' },
+		input: { name: 'tone-3s.wav', bytes: readFileSync(fx('tone-3s.wav')).length },
+		output: { name: art.name, bytes: art.bytes.length },
+		metrics: tones,
+		assets: { output: rec.saveAsset('AU-17', 'output', art.name, art.bytes) }
+	});
+});
+
+test('AU-18: wav → weba writes audio-only WebM/Opus', async ({ page, rec }) => {
+	await gotoTab(page, 'audio');
+	await upload(page, fx('tone-3s.wav'));
+	await setAudioOutput(page, 'WEBA');
+	await compress(page);
+	const art = await downloadRow(page);
+	expect(art.name).toBe('tone-3s.weba');
+	const info = await audioInfo(art.bytes);
+	expect(info.audioCodec).toBe('opus');
+	expect(info.hasVideo, 'audio-only WebM').toBe(false);
+	expect(info.formatMime, 'WebM container, not Ogg').toMatch(/webm|matroska/);
+	const m = await audioMetricsInPage(page, art.bytes, 'audio/webm', { probeHz: STEREO_PROBES });
+	const tones = expectStereoTones(m, 'AU-18');
+	rec.record({
+		id: 'AU-18',
+		settings: { tab: 'audio', output: 'weba' },
+		input: { name: 'tone-3s.wav', bytes: readFileSync(fx('tone-3s.wav')).length },
+		output: { name: art.name, bytes: art.bytes.length },
+		metrics: tones,
+		assets: { output: rec.saveAsset('AU-18', 'output', art.name, art.bytes) }
+	});
+});
+
+test('AU-19: weba → mp3 (WebM-audio input path)', async ({ page, rec }) => {
+	test.skip(!audioFixtures().files['tone-3s.weba'], 'no Opus encoder in this Chromium');
+	const input = readFileSync(fxAudio('tone-3s.weba'));
+	await gotoTab(page, 'audio');
+	await upload(page, fxAudio('tone-3s.weba'));
+	await compress(page); // mp3 default
+	const art = await downloadRow(page);
+	expect(art.name).toBe('tone-3s.mp3');
+	expect((await audioInfo(art.bytes)).audioCodec).toBe('mp3');
+	const m = await audioMetricsInPage(page, art.bytes, 'audio/mpeg', { probeHz: STEREO_PROBES });
+	const tones = expectStereoTones(m, 'AU-19');
+	rec.record({
+		id: 'AU-19',
+		settings: { tab: 'audio', output: 'mp3', source: 'weba opus' },
+		input: { name: 'tone-3s.weba', bytes: input.length },
+		output: { name: art.name, bytes: art.bytes.length },
+		metrics: tones,
+		assets: { output: rec.saveAsset('AU-19', 'output', art.name, art.bytes) }
+	});
+});
+
+test('AU-20: .opus input + OGG output re-encodes and renames to .ogg', async ({ page, rec }) => {
+	// The deliberate EXT-split behavior: OPUS is its own output now, so an
+	// .opus file sent to OGG counts as a format change — a real re-encode and
+	// a rename, never the keep-original guard.
+	test.skip(!audioFixtures().files['tone-3s.opus'], 'no Opus encoder in this Chromium');
+	await gotoTab(page, 'audio');
+	await upload(page, fxAudio('tone-3s.opus'));
+	await setAudioOutput(page, 'OGG');
+	await compress(page);
+	const art = await downloadRow(page);
+	expect(art.name, 'renamed — not keep-original').toBe('tone-3s.ogg');
+	expect((await audioInfo(art.bytes)).audioCodec).toBe('opus');
+	rec.record({
+		id: 'AU-20',
+		title: '.opus → OGG crosses the format split (re-encode + rename)',
+		settings: { tab: 'audio', output: 'ogg', source: 'opus' },
+		input: { name: 'tone-3s.opus', bytes: readFileSync(fxAudio('tone-3s.opus')).length },
+		output: { name: art.name, bytes: art.bytes.length }
+	});
+});
+
+test('AU-21: FLAC output in target mode says the target does not apply', async ({ page, rec }) => {
+	const input = readFileSync(fx('tone-3s.wav'));
+	await gotoTab(page, 'audio');
+	await upload(page, fx('tone-3s.wav'));
+	// Arm target mode while MP3 is selected, then switch the output to FLAC —
+	// the persisted mode stays 'target' even though its controls hide (AU-14
+	// covers the WAV twin).
+	await setTargetMb(page, 0.05);
+	await setAudioOutput(page, 'FLAC');
+	const run = await compress(page);
+	expect(run.warnings.join(' — ')).toMatch(/lossless/i);
+	const art = await downloadRow(page);
+	expect(art.name).toBe('tone-3s.flac');
+	expect(art.bytes.length, 'FLAC ignores the 50 KB target').toBeGreaterThan(50_000);
+	rec.record({
+		id: 'AU-21',
+		title: 'FLAC + persisted target mode warns instead of silently overshooting',
+		settings: { tab: 'audio', output: 'flac', mode: 'target', targetMb: 0.05 },
+		input: { name: 'tone-3s.wav', bytes: input.length },
+		output: { name: art.name, bytes: art.bytes.length },
+		warnings: run.warnings
 	});
 });

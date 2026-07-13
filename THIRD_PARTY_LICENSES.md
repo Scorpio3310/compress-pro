@@ -21,6 +21,7 @@ apply to you directly:
 | Ghostscript / GhostPDL                | AGPL-3.0                                | `@okathira/ghostpdl-wasm` |
 | gifsicle                              | GPL-2.0                                 | `gifsicle-wasm-browser`   |
 | LAME MP3 encoder                      | LGPL                                    | `@mediabunny/mp3-encoder` |
+| FFmpeg native AAC encoder             | LGPL-2.1-or-later                       | `@mediabunny/aac-encoder` |
 | HEIC codecs (libheif + libde265/x265) | LGPL/GPL family — see upstream projects | `icodec`                  |
 | libimagequant / pngquant (lossy PNG)  | GPL-3.0-or-later (commercial dual-lic.) | `icodec`                  |
 
@@ -39,6 +40,8 @@ apply to you directly:
 | `gifsicle-wasm-browser`                  | 1.5.19  | MIT             | [gifsicle](https://www.lcdf.org/gifsicle/) → GPL-2.0 (per upstream; not restated in package)                                                                                 |
 | `mediabunny`                             | 1.50.8  | MPL-2.0         | — (pure TypeScript, no bundled engine)                                                                                                                                       |
 | `@mediabunny/mp3-encoder`                | 1.50.8  | MPL-2.0         | [LAME](https://lame.sourceforge.io) → LGPL (per upstream; not restated in package)                                                                                           |
+| `@mediabunny/flac-encoder`               | 1.50.8  | MPL-2.0         | [libFLAC](https://xiph.org/flac/) → BSD-3-Clause (per upstream; not restated in package)                                                                                     |
+| `@mediabunny/aac-encoder`                | 1.50.8  | MPL-2.0         | [FFmpeg](https://ffmpeg.org) native AAC encoder (libavcodec) → LGPL-2.1-or-later (per upstream; not restated in package)                                                     |
 | `gifenc`                                 | 1.0.3   | MIT             | —                                                                                                                                                                            |
 | `fflate`                                 | 0.8.3   | MIT             | —                                                                                                                                                                            |
 | `fonteditor-core`                        | 2.6.3   | MIT             | [Google woff2](https://github.com/google/woff2) → MIT; [Brotli](https://github.com/google/brotli) → MIT (compiled into its `woff2.wasm`)                                     |

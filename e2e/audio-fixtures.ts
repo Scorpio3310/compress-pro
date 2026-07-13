@@ -1,7 +1,8 @@
 /**
  * Deterministic audio fixtures, generated INSIDE Chromium (WebCodecs
- * AudioEncoder + mediabunny + the LAME wasm mp3 encoder) — node has no
- * aac/opus/mp3 encoder. Same architecture as video-fixtures.ts: runs from
+ * AudioEncoder + mediabunny + the LAME mp3 and libFLAC wasm encoders — the
+ * same ones the app bundles) — node has no aac/opus/mp3 encoder. Same
+ * architecture as video-fixtures.ts: runs from
  * Playwright global-setup, fake https origin (WebCodecs needs a secure
  * context), bundles injected via Blob imports, manifest records what THIS
  * run's encoders produced.
@@ -32,10 +33,19 @@ const MP3_BUNDLE = join(
 	'bundles',
 	'mediabunny-mp3-encoder.mjs'
 );
+const FLAC_BUNDLE = join(
+	ROOT,
+	'node_modules',
+	'@mediabunny',
+	'flac-encoder',
+	'dist',
+	'bundles',
+	'mediabunny-flac-encoder.mjs'
+);
 
 interface AudioSpec {
 	name: string;
-	container: 'mp3' | 'mp4' | 'ogg' | 'flac';
+	container: 'mp3' | 'mp4' | 'ogg' | 'flac' | 'webm' | 'adts';
 	codec: 'mp3' | 'aac' | 'opus' | 'flac';
 	/** null = lossless codec, no bitrate knob */
 	bitrate: number | null;
@@ -53,9 +63,14 @@ const SPECS: AudioSpec[] = [
 	{ name: 'tone-3s.m4a', container: 'mp4', codec: 'aac', bitrate: 192_000, sampleRate: 44_100 },
 	// Opus is 48 kHz-native; asking for 44.1 k would just resample inside the codec.
 	{ name: 'tone-3s.ogg', container: 'ogg', codec: 'opus', bitrate: 128_000, sampleRate: 48_000 },
-	// Chromium's AudioEncoder can DECODE flac but (as of now) not encode it —
-	// expected to land in `failures`, where AU/RF specs skip. A real .flac
-	// lives on the real-fixtures wanted list instead.
+	// Same Ogg/Opus stream under the .opus name (input + EXT-split specs).
+	{ name: 'tone-3s.opus', container: 'ogg', codec: 'opus', bitrate: 128_000, sampleRate: 48_000 },
+	// WebM audio (.weba) — Opus in an audio-only WebM.
+	{ name: 'tone-3s.weba', container: 'webm', codec: 'opus', bitrate: 128_000, sampleRate: 48_000 },
+	// Bare ADTS stream for /aac-to-mp3 — skip-gated on the aac capability.
+	{ name: 'tone-3s.aac', container: 'adts', codec: 'aac', bitrate: 128_000, sampleRate: 44_100 },
+	// FLAC encodes via the bundled libFLAC wasm (registered below, like LAME) —
+	// WebCodecs still can't encode it in any browser.
 	{ name: 'tone-3s.flac', container: 'flac', codec: 'flac', bitrate: null, sampleRate: 44_100 }
 ];
 
@@ -73,10 +88,12 @@ const TONES = {
 export async function generateAudioFixtures(): Promise<void> {
 	const mbSource = readFileSync(MB_BUNDLE, 'utf8');
 	const mp3Source = readFileSync(MP3_BUNDLE, 'utf8');
+	const flacSource = readFileSync(FLAC_BUNDLE, 'utf8');
 	const genHash = createHash('sha256')
 		.update(readFileSync(fileURLToPath(import.meta.url)))
 		.update(mbSource)
 		.update(mp3Source)
+		.update(flacSource)
 		.digest('hex')
 		.slice(0, 16);
 
@@ -98,19 +115,24 @@ export async function generateAudioFixtures(): Promise<void> {
 		);
 		await page.goto('https://fixtures.local/');
 		const generated = await page.evaluate(
-			async ({ mbSource, mp3Source, specs, seconds }) => {
+			async ({ mbSource, mp3Source, flacSource, specs, seconds }) => {
 				const mbUrl = URL.createObjectURL(new Blob([mbSource], { type: 'text/javascript' }));
 				const mod = await import(/* @vite-ignore */ mbUrl);
-				// The mp3-encoder bundle bare-imports "mediabunny", which a Blob
+				// The encoder bundles bare-import "mediabunny", which a Blob
 				// module can't resolve — rewrite the specifier to the Blob URL so
-				// both share one mediabunny instance.
-				const mp3Rewritten = mp3Source.replaceAll('"mediabunny"', JSON.stringify(mbUrl));
-				const mp3Mod = await import(
-					/* @vite-ignore */ URL.createObjectURL(
-						new Blob([mp3Rewritten], { type: 'text/javascript' })
-					)
-				);
+				// all of them share one mediabunny instance.
+				const importRewritten = (source: string) =>
+					import(
+						/* @vite-ignore */ URL.createObjectURL(
+							new Blob([source.replaceAll('"mediabunny"', JSON.stringify(mbUrl))], {
+								type: 'text/javascript'
+							})
+						)
+					);
+				const mp3Mod = await importRewritten(mp3Source);
 				if (!(await mod.canEncodeAudio('mp3'))) mp3Mod.registerMp3Encoder();
+				const flacMod = await importRewritten(flacSource);
+				if (!(await mod.canEncodeAudio('flac'))) flacMod.registerFlacEncoder();
 
 				const capabilities: Record<string, boolean> = {
 					mp3: await mod.canEncodeAudio('mp3'),
@@ -151,7 +173,11 @@ export async function generateAudioFixtures(): Promise<void> {
 									? new mod.Mp4OutputFormat()
 									: spec.container === 'ogg'
 										? new mod.OggOutputFormat()
-										: new mod.FlacOutputFormat();
+										: spec.container === 'webm'
+											? new mod.WebMOutputFormat()
+											: spec.container === 'adts'
+												? new mod.AdtsOutputFormat()
+												: new mod.FlacOutputFormat();
 						const target = new mod.BufferTarget();
 						const output = new mod.Output({ format, target });
 						const source = new mod.AudioBufferSource({
@@ -175,7 +201,7 @@ export async function generateAudioFixtures(): Promise<void> {
 				}
 				return { capabilities, files };
 			},
-			{ mbSource, mp3Source, specs: SPECS, seconds: SECONDS }
+			{ mbSource, mp3Source, flacSource, specs: SPECS, seconds: SECONDS }
 		);
 
 		const manifestFiles: Record<string, object> = {};
@@ -220,9 +246,12 @@ export async function generateAudioFixtures(): Promise<void> {
 			)
 		);
 
-		// The custom LAME encoder is bundled — mp3 MUST work. aac/opus/flac come
-		// from the platform; their absence degrades to capability-gated skips.
-		const critical = failures.filter((f) => f.startsWith('tone-3s.mp3'));
+		// The LAME and libFLAC encoders are bundled — mp3 and flac MUST work.
+		// aac/opus come from the platform; their absence degrades to
+		// capability-gated skips.
+		const critical = failures.filter(
+			(f) => f.startsWith('tone-3s.mp3') || f.startsWith('tone-3s.flac')
+		);
 		if (critical.length) {
 			throw new Error(`audio fixture generation failed:\n${critical.join('\n')}`);
 		}

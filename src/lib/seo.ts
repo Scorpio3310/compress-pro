@@ -1,4 +1,4 @@
-import type { FileFormat, FontFormat, ImageFormat } from '$lib/types';
+import type { AudioConversionSettings, FileFormat, FontFormat, ImageFormat } from '$lib/types';
 import * as publicEnv from '$env/static/public';
 
 // NOTE: this module is imported by the `tool` param matcher (src/params/tool.ts),
@@ -68,7 +68,7 @@ export type ConverterPreset =
 	// SVG tab raster export — 'svg' output itself is the tab default.
 	| { kind: 'svg'; to: 'png' | 'ico' }
 	| { kind: 'video'; container: 'mp4' | 'webm' | 'mov' | 'gif' }
-	| { kind: 'audio'; output: 'mp3' | 'm4a' | 'wav' | 'ogg' }
+	| { kind: 'audio'; output: AudioConversionSettings['outputFormat'] }
 	| { kind: 'font'; to: FontFormat }
 	// Font-tab tools: 'subset' arrives on the Subset op with its defaults;
 	// 'instance' additionally flips to a static-instance, keep-all-glyphs run.
@@ -600,13 +600,13 @@ export const FORMATS: (SeoEntry & { format: FileFormat })[] = [
 		ogImage: '/og/compress-audio.jpg',
 		label: 'Audio',
 		feature: 'Compress & Convert audio',
-		title: 'Compress Audio Online — MP3, M4A, WAV | Compress Pro',
+		title: 'Compress Audio Online — MP3, FLAC, M4A, WAV | Compress Pro',
 		description:
-			'Compress MP3 and convert audio between MP3, M4A, WAV and OGG in your browser. Extract audio from video too — private, free, files never uploaded.',
+			'Compress MP3 and convert audio between MP3, M4A, WAV, FLAC, OGG and OPUS in your browser. Extract audio from video too — private, free, never uploaded.',
 		h1: 'Compress & Convert audio.',
-		tagline: 'Shrink or convert audio locally — MP3, M4A, WAV and OGG.',
+		tagline: 'Shrink or convert audio locally — MP3, FLAC, OGG and more.',
 		intro:
-			'Compress audio files or convert them between MP3, M4A, WAV and OGG — everything encodes in your browser, and nothing is uploaded. Drop any audio file, or a video to have its audio track extracted, then pick a format and a bitrate or a target size. Free, with no ads and no length limits.',
+			'Compress audio files or convert them between MP3, M4A, WAV, FLAC, OGG, OPUS and WEBA — everything encodes in your browser, and nothing is uploaded. Drop any audio file, or a video to have its audio track extracted, then pick a format and a bitrate or a target size. Free, with no ads and no length limits.',
 		faq: [
 			{
 				q: 'Which bitrate should I pick?',
@@ -618,7 +618,7 @@ export const FORMATS: (SeoEntry & { format: FileFormat })[] = [
 			},
 			{
 				q: 'Why is WAV so large?',
-				a: 'WAV stores raw uncompressed samples — roughly 10 MB per stereo minute. Use it when a tool insists on WAV input or for editing; for listening and sharing, MP3/M4A/OGG sound identical at a tenth of the size.'
+				a: 'WAV stores raw uncompressed samples — roughly 10 MB per stereo minute. Use it when a tool insists on WAV input or for editing; FLAC keeps it lossless at about half the size, and MP3/M4A/OGG sound identical at a tenth of it.'
 			},
 			{ q: 'Is it private?', a: PRIVACY_A }
 		],
@@ -638,9 +638,9 @@ export const FORMATS: (SeoEntry & { format: FileFormat })[] = [
 				}
 			},
 			{
-				heading: 'MP3, M4A, OGG or WAV?',
+				heading: 'MP3, M4A, OGG, FLAC or WAV?',
 				paragraphs: [
-					'MP3 plays absolutely everywhere and is the safe default. M4A (AAC) sounds slightly better at the same bitrate and suits Apple ecosystems. OGG squeezes best at low bitrates but some players still shrug at it. WAV is uncompressed — a format for editing, not sharing, at roughly 10 MB per minute of stereo. Starting from a video instead? [MP4 to MP3](/mp4-to-mp3) pulls the audio track out directly.'
+					'MP3 plays absolutely everywhere and is the safe default. M4A (AAC) sounds slightly better at the same bitrate and suits Apple ecosystems. OGG squeezes best at low bitrates but some players still shrug at it — OPUS and WEBA write the same modern Opus audio under the names voice apps and web players expect. WAV is uncompressed — a format for editing, not sharing, at roughly 10 MB per minute of stereo; [FLAC](/wav-to-flac) packs the same samples losslessly into about half that. Starting from a video instead? [MP4 to MP3](/mp4-to-mp3) pulls the audio track out directly.'
 				]
 			},
 			{
@@ -650,7 +650,7 @@ export const FORMATS: (SeoEntry & { format: FileFormat })[] = [
 				]
 			}
 		],
-		related: ['/mp4-to-mp3', '/wav-to-mp3', '/compress-video']
+		related: ['/mp4-to-mp3', '/flac-to-mp3', '/wav-to-mp3', '/compress-video']
 	},
 	{
 		format: 'font',
@@ -889,7 +889,7 @@ export const HOME: SeoEntry = {
 		},
 		{
 			q: 'What can I compress or convert?',
-			a: 'Images (JPG, PNG, WebP, GIF, HEIC, AVIF, SVG), PDFs, MP4/WebM/MOV video and MP3/WAV/M4A/OGG audio — plus ZIP archives, converters between formats like HEIC to JPG or MOV to MP4, and a lossless EXIF remover for photo metadata.'
+			a: 'Images (JPG, PNG, WebP, GIF, HEIC, AVIF, SVG), PDFs, MP4/WebM/MOV video and MP3/WAV/M4A/FLAC/OGG/OPUS audio — plus ZIP archives, converters between formats like HEIC to JPG or MOV to MP4, and a lossless EXIF remover for photo metadata.'
 		},
 		{
 			q: 'Will compression make my files look worse?',
@@ -1917,7 +1917,7 @@ export const CONVERTERS: ConverterEntry[] = [
 			{
 				heading: 'What the MP3 can and cannot contain',
 				paragraphs: [
-					'Extraction re-encodes the sound that is already in the video — it cannot add fidelity that was never recorded. For talks and interviews filmed on a phone, 96–128 kbps captures everything there is; for concert or music footage, go 192 kbps or higher. To convert audio you already have as files, the [audio tool](/compress-audio) handles MP3, M4A, WAV and OGG directly.'
+					'Extraction re-encodes the sound that is already in the video — it cannot add fidelity that was never recorded. For talks and interviews filmed on a phone, 96–128 kbps captures everything there is; for concert or music footage, go 192 kbps or higher. To convert audio you already have as files, the [audio tool](/compress-audio) handles MP3, M4A, WAV, FLAC, OGG and more directly.'
 				]
 			},
 			{
@@ -1990,7 +1990,7 @@ export const CONVERTERS: ConverterEntry[] = [
 				]
 			}
 		],
-		related: ['/compress-audio', '/mp4-to-mp3', '/m4a-to-mp3']
+		related: ['/compress-audio', '/mp4-to-mp3', '/m4a-to-mp3', '/mp3-to-wav']
 	},
 	{
 		format: 'audio',
@@ -2050,7 +2050,301 @@ export const CONVERTERS: ConverterEntry[] = [
 				]
 			}
 		],
-		related: ['/compress-audio', '/mp4-to-mp3', '/wav-to-mp3']
+		related: ['/compress-audio', '/mp4-to-mp3', '/aac-to-mp3', '/wav-to-mp3']
+	},
+	{
+		format: 'audio',
+		path: '/flac-to-mp3',
+		ogImage: '/og/flac-to-mp3.jpg',
+		label: 'FLAC → MP3',
+		feature: 'Convert FLAC to MP3',
+		preset: { kind: 'audio', output: 'mp3' },
+		accept: 'audio/flac,audio/x-flac,.flac',
+		dropSubject: 'FLAC files',
+		dropHint: 'FLAC audio · encoded to MP3 locally',
+		title: 'FLAC to MP3 Converter — Play It Anywhere | Compress Pro',
+		description:
+			'Convert FLAC to MP3 in your browser — files that play anywhere at a tenth of the size. Pick a bitrate, keep everything on your device. Free forever.',
+		h1: 'Convert FLAC to MP3.',
+		tagline: 'Lossless FLAC in, small MP3 out — encoded on your device.',
+		intro:
+			'FLAC keeps every bit of the original; MP3 keeps what you can hear. Convert lossless archives into files that play on anything — the decoding and encoding run in your browser, so your library never leaves your machine. Drop FLAC files, pick a bitrate, download MP3s.',
+		faq: [
+			{
+				q: 'Does converting FLAC to MP3 lose quality?',
+				a: 'Technically yes — MP3 is lossy. At 192 kbps and above the difference is inaudible for almost everyone; keep the FLAC as your archival master and use the MP3 for phones, cars and players that refuse FLAC.'
+			},
+			{
+				q: 'Why convert FLAC at all?',
+				a: 'Compatibility and size. FLAC is perfect for archiving, but plenty of car stereos, older players and apps refuse it — and it runs 5–10× larger than a 192 kbps MP3 that sounds the same on most gear.'
+			},
+			{
+				q: 'Can I convert a whole album at once?',
+				a: 'Yes — drop any number of FLAC files and each becomes its own MP3, downloadable individually or as one ZIP. There are no file limits and no daily caps.'
+			},
+			{ q: 'Is it private?', a: PRIVACY_A }
+		],
+		guide: [
+			{
+				heading: 'Archive in FLAC, share in MP3',
+				paragraphs: [
+					'FLAC is the master copy — keep it. MP3 is the travel copy: 192 kbps for music sounds identical on most gear, 128 kbps if space is tight. Going the other way, WAV masters shrink losslessly with [WAV to FLAC](/wav-to-flac); to aim at an exact file size instead of a bitrate, the [audio tool](/compress-audio) has a target-size mode.'
+				]
+			}
+		],
+		related: ['/wav-to-flac', '/compress-audio', '/mp3-to-wav']
+	},
+	{
+		format: 'audio',
+		path: '/wav-to-flac',
+		ogImage: '/og/wav-to-flac.jpg',
+		label: 'WAV → FLAC',
+		feature: 'Convert WAV to FLAC',
+		preset: { kind: 'audio', output: 'flac' },
+		accept: 'audio/wav,audio/x-wav,.wav',
+		dropSubject: 'WAV files',
+		dropHint: 'WAV masters · packed into lossless FLAC',
+		title: 'WAV to FLAC — Lossless Audio Compression | Compress Pro',
+		description:
+			'Convert WAV to FLAC in your browser — mathematically lossless, typically half the size. No upload, no sign-up, no length limits. Free and private.',
+		h1: 'Convert WAV to FLAC.',
+		tagline: 'Same audio, about half the bytes — WAV to FLAC, locally.',
+		intro:
+			'FLAC stores exactly the same samples as WAV in roughly half the bytes — compression with no quality question at all. Drop WAV masters, download FLACs that decode back bit-for-bit; everything runs in your browser and nothing is uploaded.',
+		faq: [
+			{
+				q: 'Is FLAC really lossless?',
+				a: 'Yes — decode a FLAC and you get the identical samples the WAV held, bit for bit. It is a zip-style pack for audio, not a lossy encoder; that is why there is no bitrate to choose.'
+			},
+			{
+				q: 'How much space does it save?',
+				a: 'Typically 40–60% for music and up to 70% for speech or quiet recordings. Dense, loud material compresses least — the savings depend on the audio itself, not on a setting.'
+			},
+			{
+				q: 'Why is there no bitrate slider?',
+				a: 'Lossless formats have nothing to trade away — FLAC packs the samples as small as they go and always decodes to the exact original. For a smaller file you would switch to a lossy format like MP3 or Opus instead.'
+			},
+			{ q: 'Is it private?', a: PRIVACY_A }
+		],
+		guide: [
+			{
+				heading: 'When FLAC beats WAV',
+				paragraphs: [
+					'Every archival or editing reason to keep WAV applies to FLAC at half the disk — DAWs and editors widely accept it, and it even carries tags WAV cannot. Use it for masters and libraries; for sharing and phones, [FLAC to MP3](/flac-to-mp3) makes the small copy, and plain [WAV to MP3](/wav-to-mp3) skips the archival step entirely.'
+				]
+			}
+		],
+		related: ['/flac-to-mp3', '/wav-to-mp3', '/compress-audio']
+	},
+	{
+		format: 'audio',
+		path: '/opus-to-mp3',
+		ogImage: '/og/opus-to-mp3.jpg',
+		label: 'OPUS → MP3',
+		feature: 'Convert OPUS to MP3',
+		preset: { kind: 'audio', output: 'mp3' },
+		accept: 'audio/opus,audio/ogg,.opus',
+		dropSubject: 'OPUS files',
+		dropHint: 'OPUS voice notes · encoded to MP3 locally',
+		title: 'OPUS to MP3 Converter — Voice Messages | Compress Pro',
+		description:
+			'Convert OPUS voice messages and recordings to MP3 in your browser — WhatsApp and Telegram audio that plays anywhere. No upload, free, no limits.',
+		h1: 'Convert OPUS to MP3.',
+		tagline: 'Turn WhatsApp voice notes into MP3s that play anywhere.',
+		intro:
+			'OPUS is what messaging apps use for voice — tiny and great-sounding, until a car stereo, portal or editor refuses it. Convert .opus files to MP3 entirely in your browser: drop the notes, pick a bitrate, download audio that plays on everything.',
+		faq: [
+			{
+				q: 'Where do OPUS files come from?',
+				a: 'Mostly voice messages — WhatsApp, Telegram and Signal exports all use Opus, and so do many voice recorders and game clips. It is a modern, efficient codec that older software simply never learned.'
+			},
+			{
+				q: 'Which bitrate for voice notes?',
+				a: '96–128 kbps MP3 captures everything a phone microphone recorded. Go 192 kbps only when the source is music; higher bitrates than the source just spend bytes.'
+			},
+			{
+				q: 'Can I batch-convert exported chats?',
+				a: 'Yes — drop every .opus file from the export at once; each becomes its own MP3 and the lot downloads as one ZIP. Nothing is uploaded, which matters for private conversations.'
+			},
+			{ q: 'Is it private?', a: PRIVACY_A }
+		],
+		guide: [
+			{
+				heading: 'From chat export to playable MP3',
+				paragraphs: [
+					'Export the conversation (WhatsApp: chat → Export, including media), pull out the .opus attachments, and drop them here in one batch. MP3 at 96–128 kbps is transparent for speech and opens in every transcription portal and player. Files already named .ogg convert the same way via [OGG to MP3](/ogg-to-mp3); to keep Opus but hit a size cap, use the [audio tool](/compress-audio).'
+				]
+			}
+		],
+		related: ['/ogg-to-mp3', '/m4a-to-mp3', '/compress-audio']
+	},
+	{
+		format: 'audio',
+		path: '/ogg-to-mp3',
+		ogImage: '/og/ogg-to-mp3.jpg',
+		label: 'OGG → MP3',
+		feature: 'Convert OGG to MP3',
+		preset: { kind: 'audio', output: 'mp3' },
+		accept: 'audio/ogg,.ogg,.oga',
+		dropSubject: 'OGG files',
+		dropHint: 'OGG/OGA audio · encoded to MP3 locally',
+		title: 'OGG to MP3 Converter — Free, No Upload | Compress Pro',
+		description:
+			'Convert OGG and OGA files to MP3 right in your browser — game audio, podcasts and rips that play on any device. Free, private, no length limits.',
+		h1: 'Convert OGG to MP3.',
+		tagline: 'OGG audio in, universal MP3 out — nothing ever uploaded.',
+		intro:
+			'OGG carries Vorbis or Opus audio — efficient, open, and still refused by plenty of players and editors. Convert it to MP3 without uploading anything: drop .ogg or .oga files, pick a bitrate, download audio that works everywhere.',
+		faq: [
+			{
+				q: 'What is inside an OGG file?',
+				a: 'Usually Vorbis or Opus audio — game soundtracks, podcast feeds and open-source rips ship this way. Both decode here in the browser and re-encode straight to MP3.'
+			},
+			{
+				q: 'What about .oga files?',
+				a: 'Same container, different label — .oga is the “audio-only Ogg” extension. Drop them exactly like .ogg files; the conversion is identical.'
+			},
+			{
+				q: 'Does quality survive the conversion?',
+				a: 'Both directions are lossy, so match or exceed the source: 192 kbps MP3 for music keeps the difference inaudible, 128 kbps is plenty for speech. Batches convert in one go and download as a ZIP.'
+			},
+			{ q: 'Is it private?', a: PRIVACY_A }
+		],
+		guide: [
+			{
+				heading: 'OGG, OGA, OPUS — which page?',
+				paragraphs: [
+					'They are siblings: .ogg and .oga are the same Ogg container, and .opus is Ogg carrying Opus under its own extension — voice messages usually arrive that way, and [OPUS to MP3](/opus-to-mp3) handles them. All of them convert here too; for bitrate advice and target-size mode, see the [audio tool](/compress-audio).'
+				]
+			}
+		],
+		related: ['/opus-to-mp3', '/wav-to-mp3', '/compress-audio']
+	},
+	{
+		format: 'audio',
+		path: '/aac-to-mp3',
+		ogImage: '/og/aac-to-mp3.jpg',
+		label: 'AAC → MP3',
+		feature: 'Convert AAC to MP3',
+		preset: { kind: 'audio', output: 'mp3' },
+		accept: 'audio/aac,.aac',
+		dropSubject: 'AAC files',
+		dropHint: 'AAC audio · encoded to MP3 locally',
+		title: 'AAC to MP3 Converter — Free, Private | Compress Pro',
+		description:
+			'Convert raw AAC audio files to MP3 in your browser — recorder output and stream rips that any device accepts. No upload, no sign-up, free forever.',
+		h1: 'Convert AAC to MP3.',
+		tagline: 'AAC recordings become MP3s that play absolutely anywhere.',
+		intro:
+			'Raw .aac files — ADTS streams from voice recorders, broadcast rips and old phones — play in fewer places than they should. Convert them to MP3 entirely in your browser: drop the files, pick a bitrate, download audio that opens anywhere.',
+		faq: [
+			{
+				q: 'Is AAC the same as M4A?',
+				a: 'Same codec, different wrapper. M4A is AAC inside an MP4 container; a raw .aac file is the bare ADTS stream. Both convert here — drop whichever you have.'
+			},
+			{
+				q: 'Does AAC to MP3 cost quality?',
+				a: 'Both are lossy, so a little — inaudible when you pick 128 kbps or more for speech and 192 kbps for music. Choosing a bitrate above the source cannot add quality back, it only spends bytes.'
+			},
+			{
+				q: 'Why do some players refuse .aac?',
+				a: 'Bare ADTS streams carry no tags and no index, and plenty of software only accepts wrapped, seekable audio. MP3 — or M4A — solves that instantly.'
+			},
+			{ q: 'Is it private?', a: PRIVACY_A }
+		],
+		guide: [
+			{
+				heading: 'Bare streams vs wrapped audio',
+				paragraphs: [
+					'Recorders and broadcast tools often write bare ADTS .aac because it needs no finalization — but players want wrapped, tagged files. MP3 is the universal answer; [M4A to MP3](/m4a-to-mp3) covers the wrapped Apple flavor, and the [audio tool](/compress-audio) converts either into M4A, OGG, FLAC and more.'
+				]
+			}
+		],
+		related: ['/m4a-to-mp3', '/mp4-to-mp3', '/compress-audio']
+	},
+	{
+		format: 'audio',
+		path: '/mp3-to-wav',
+		ogImage: '/og/mp3-to-wav.jpg',
+		label: 'MP3 → WAV',
+		feature: 'Convert MP3 to WAV',
+		preset: { kind: 'audio', output: 'wav' },
+		accept: 'audio/mpeg,audio/mp3,.mp3',
+		dropSubject: 'MP3 files',
+		dropHint: 'MP3 audio · decoded to WAV PCM locally',
+		title: 'MP3 to WAV Converter — For Editors & DAWs | Compress Pro',
+		description:
+			'Convert MP3 to WAV in your browser — uncompressed PCM that samplers, DAWs and legacy tools accept without complaint. Free, private, no uploads ever.',
+		h1: 'Convert MP3 to WAV.',
+		tagline: 'Decode MP3s into clean WAV PCM for editors and samplers.',
+		intro:
+			'Some tools simply insist on WAV — hardware samplers, transcription suites, old editors. This decodes your MP3s to standard 16-bit PCM WAV entirely in the browser: drop the files, download WAVs, feed the tool that was complaining.',
+		faq: [
+			{
+				q: 'Does WAV sound better than the MP3?',
+				a: 'No — decoding cannot restore what MP3 encoding removed. The WAV holds exactly what the MP3 contained, just unpacked into raw samples that picky software accepts.'
+			},
+			{
+				q: 'How much larger will it be?',
+				a: 'Roughly 10 MB per stereo minute at 16-bit/44.1 kHz — about ten times a 192 kbps MP3. That is the price of raw samples; delete the WAV when the tool is done with it.'
+			},
+			{
+				q: 'Why do editors want WAV at all?',
+				a: 'Editing decodes audio anyway, and working from WAV avoids generation loss when saving: cut and mix in WAV, then export a lossy copy once at the end.'
+			},
+			{ q: 'Is it private?', a: PRIVACY_A }
+		],
+		guide: [
+			{
+				heading: 'A decode, not an upgrade',
+				paragraphs: [
+					'Treat this as unpacking: the WAV is the MP3’s content in a form every tool accepts, no better and no worse. Archiving losslessly only works from lossless sources — [WAV to FLAC](/wav-to-flac) halves master sizes; going back the other way, [WAV to MP3](/wav-to-mp3) makes the small share copy.'
+				]
+			}
+		],
+		related: ['/wav-to-mp3', '/mp4-to-wav', '/compress-audio']
+	},
+	{
+		format: 'audio',
+		path: '/mp4-to-wav',
+		ogImage: '/og/mp4-to-wav.jpg',
+		label: 'MP4 → WAV',
+		feature: 'Convert MP4 to WAV',
+		preset: { kind: 'audio', output: 'wav' },
+		accept: 'video/mp4,video/quicktime,.mp4,.m4v,.mov',
+		dropSubject: 'video files',
+		dropHint: 'MP4/MOV video · audio extracted as WAV',
+		title: 'MP4 to WAV Converter — Extract PCM Audio | Compress Pro',
+		description:
+			'Extract the audio track from MP4 or MOV video as uncompressed WAV — in your browser, nothing uploaded. For editing, transcription and sampling. Free.',
+		h1: 'Convert MP4 to WAV.',
+		tagline: 'Pull the audio out of video as WAV — ready for any editor.',
+		intro:
+			'Editors, transcription suites and samplers want WAV, not video. Drop an MP4 or MOV and the audio track comes out as standard 16-bit PCM WAV — decoded entirely in your browser, with no upload and no length limit.',
+		faq: [
+			{
+				q: 'Why WAV instead of MP3?',
+				a: 'WAV skips a lossy re-encode — the video’s audio is decoded straight to raw samples, so nothing is lost on the way into your editor. If small and shareable is the goal instead, extract to MP3.'
+			},
+			{
+				q: 'How big will the WAV be?',
+				a: 'About 10 MB per stereo minute regardless of the video’s size — the picture is discarded and the sound is unpacked to raw PCM. An hour of footage yields roughly 600 MB of WAV.'
+			},
+			{
+				q: 'Which video formats work?',
+				a: 'MP4, M4V and MOV — phone footage, screen recordings, camera clips. Drop several at once and each video produces its own WAV, downloadable individually or as one ZIP.'
+			},
+			{ q: 'Is it private?', a: PRIVACY_A }
+		],
+		guide: [
+			{
+				heading: 'Straight into the editing chain',
+				paragraphs: [
+					'Extracting WAV is the cleanest handoff into an edit: one decode, zero re-encodes, and every DAW and transcription tool accepts the result. When the deliverable is the recording itself, [MP4 to MP3](/mp4-to-mp3) makes the small copy instead — and the [audio tool](/compress-audio) offers M4A, OGG, FLAC and target-size mode for everything in between.'
+				]
+			}
+		],
+		related: ['/mp4-to-mp3', '/mp3-to-wav', '/compress-audio']
 	},
 	{
 		format: 'jpg',

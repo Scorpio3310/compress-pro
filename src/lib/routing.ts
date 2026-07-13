@@ -35,6 +35,7 @@ const MIME_TO_FORMAT: Record<string, FileFormat> = {
 	'audio/opus': 'audio',
 	'audio/flac': 'audio',
 	'audio/x-flac': 'audio',
+	'audio/webm': 'audio',
 	'font/ttf': 'font',
 	'font/otf': 'font',
 	'font/sfnt': 'font',
@@ -78,6 +79,7 @@ const EXT_TO_FORMAT: Record<string, FileFormat> = {
 	oga: 'audio',
 	flac: 'audio',
 	opus: 'audio',
+	weba: 'audio',
 	// Load-bearing: pickers/drops report a blank MIME for most font files.
 	ttf: 'font',
 	otf: 'font',
@@ -144,8 +146,9 @@ export const TAB_ACCEPT: Record<FileFormat, string> = {
 	pdf: 'application/pdf',
 	// Extensions again load-bearing: pickers often blank the MIME for .mkv.
 	video: 'video/mp4,video/quicktime,video/webm,video/x-matroska,.mp4,.m4v,.mov,.webm,.mkv',
-	// Video is accepted too — the audio tab extracts the audio track.
-	audio: 'audio/*,video/mp4,video/quicktime,.mp3,.wav,.m4a,.aac,.ogg,.oga,.flac,.opus,.mp4,.mov',
+	// Video is accepted too (MP4/MOV/WebM) — the audio tab extracts the audio track.
+	audio:
+		'audio/*,video/mp4,video/quicktime,video/webm,.mp3,.wav,.m4a,.aac,.ogg,.oga,.flac,.opus,.weba,.mp4,.mov,.webm',
 	// Extensions load-bearing (blank MIMEs, see EXT_TO_FORMAT).
 	font: 'font/ttf,font/otf,font/woff,font/woff2,application/vnd.ms-fontobject,.ttf,.otf,.woff,.woff2,.eot',
 	// Extract default; the create op overrides accept to '' (anything) in-page.

@@ -64,7 +64,11 @@ const PAGES = [
 	['og/webm-to-mp4.jpg', 'WebM → MP4', 'For Apple devices, TVs and editors.'],
 	['og/mkv-to-mp4.jpg', 'MKV → MP4', 'Universal playback, converted on-device.'],
 	['og/mp4-to-webm.jpg', 'MP4 → WebM', 'Smaller video for the web. Converted locally.'],
-	['og/compress-audio.jpg', 'Compress audio.', 'MP3, M4A, WAV & OGG — encoded on your device.'],
+	[
+		'og/compress-audio.jpg',
+		'Compress audio.',
+		'MP3, FLAC, M4A, WAV & OGG — encoded on your device.'
+	],
 	['og/zip-files.jpg', 'Zip & Unzip.', 'Archives created and opened locally. No upload.'],
 	['og/unlock-pdf.jpg', 'Unlock PDFs.', 'Your password never leaves your device.'],
 	['og/protect-pdf.jpg', 'Protect PDFs.', 'Set a password — encrypted on your device.'],
@@ -85,6 +89,13 @@ const PAGES = [
 	['og/pdf-to-png.jpg', 'PDF → PNG', 'Lossless page renders — made in your browser.'],
 	['og/heic-to-png.jpg', 'HEIC → PNG', 'iPhone photos, converted lossless. Locally.'],
 	['og/m4a-to-mp3.jpg', 'M4A → MP3', 'Voice memos that play anywhere. No upload.'],
+	['og/flac-to-mp3.jpg', 'FLAC → MP3', 'Lossless archives, played anywhere. Locally.'],
+	['og/wav-to-flac.jpg', 'WAV → FLAC', 'Same audio, half the bytes — lossless.'],
+	['og/opus-to-mp3.jpg', 'OPUS → MP3', 'WhatsApp voice notes, made universal.'],
+	['og/ogg-to-mp3.jpg', 'OGG → MP3', 'Open audio for every player. No uploads.'],
+	['og/aac-to-mp3.jpg', 'AAC → MP3', 'Raw AAC streams, playable everywhere.'],
+	['og/mp3-to-wav.jpg', 'MP3 → WAV', 'Clean PCM for editors and samplers.'],
+	['og/mp4-to-wav.jpg', 'MP4 → WAV', 'The audio track, ready for any editor.'],
 	[
 		'og/compress-image.jpg',
 		'Compress any image.',

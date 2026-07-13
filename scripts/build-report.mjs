@@ -119,7 +119,7 @@ footer { color: var(--muted); font-size: 12px; text-align: center; padding: 24px
 const DATA = JSON.parse(document.getElementById('data').textContent);
 const IMG_EXT = /\\.(png|jpe?g|webp|gif|avif|svg)$/i;
 const VID_EXT = /\\.(mp4|webm|mov|mkv)$/i;
-const AUD_EXT = /\\.(mp3|m4a|aac|ogg|oga|opus|wav|flac)$/i;
+const AUD_EXT = /\\.(mp3|m4a|aac|ogg|oga|opus|wav|flac|weba)$/i;
 
 const fmtBytes = (n) => {
   if (n == null || n === 0) return '—';

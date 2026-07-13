@@ -1,4 +1,4 @@
-import type { AudioConversionSettings } from '$lib/types';
+import { isLosslessAudioFormat, type AudioConversionSettings } from '$lib/types';
 import { callWorker } from '$lib/workers/rpc';
 import { runCancellableVideoJob } from './graceful-cancel';
 import { targetNotReachableWarning } from './target-search';
@@ -21,7 +21,12 @@ const EXT: Record<AudioConversionSettings['outputFormat'], string[]> = {
 	mp3: ['.mp3'],
 	m4a: ['.m4a', '.aac'],
 	wav: ['.wav'],
-	ogg: ['.ogg', '.oga', '.opus']
+	// .opus is its own output now — an .opus file sent to OGG re-encodes and
+	// renames to .ogg instead of tripping the keep-original guard.
+	ogg: ['.ogg', '.oga'],
+	flac: ['.flac'],
+	opus: ['.opus'],
+	weba: ['.weba']
 };
 
 export async function convertAudio(
@@ -34,7 +39,8 @@ export async function convertAudio(
 	signal?.throwIfAborted();
 
 	const targetBytes = Math.max(1, Math.round(settings.targetMb * 1_000_000));
-	const useTarget = settings.mode === 'target' && settings.outputFormat !== 'wav';
+	const lossless = isLosslessAudioFormat(settings.outputFormat);
+	const useTarget = settings.mode === 'target' && !lossless;
 	const bitrate = useTarget
 		? audioTargetBitrate(targetBytes, probe.durationSec)
 		: settings.bitrateKbps * 1000;
@@ -49,15 +55,17 @@ export async function convertAudio(
 		);
 
 		const blob = new Blob([out.bytes], { type: out.mimeType });
-		// WAV is PCM — there is no bitrate to steer, so target mode is ignored for
-		// it (useTarget above). When that overshoots, say so instead of shipping a
-		// silently oversized "target" result (persisted target mode + WAV output).
-		const wavTargetIgnored = settings.mode === 'target' && settings.outputFormat === 'wav';
+		// Lossless outputs have no bitrate to steer, so target mode is ignored
+		// for them (useTarget above). When that overshoots, say so instead of
+		// shipping a silently oversized "target" result (persisted target mode).
+		const losslessTargetIgnored = settings.mode === 'target' && lossless;
 		const warning =
 			useTarget && blob.size > targetBytes
 				? targetNotReachableWarning(targetBytes, blob.size)
-				: wavTargetIgnored && blob.size > targetBytes
-					? 'WAV is uncompressed — the target size doesn’t apply to WAV output'
+				: losslessTargetIgnored && blob.size > targetBytes
+					? settings.outputFormat === 'wav'
+						? 'WAV is uncompressed — the target size doesn’t apply to WAV output'
+						: 'FLAC is lossless — the target size doesn’t apply to FLAC output'
 					: null;
 		const name = file.name.toLowerCase();
 		return {

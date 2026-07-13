@@ -437,6 +437,9 @@ export interface AudioFileInfo {
 	sampleRate: number;
 	hasVideo: boolean;
 	trackCount: number;
+	/** Demuxed container MIME, e.g. 'application/ogg' vs 'video/webm' — proves
+	 *  the wrapper for outputs that share the opus codec (.ogg/.opus vs .weba). */
+	formatMime: string;
 }
 
 /** Audio-first parse — works for audio-only files videoInfo would reject. */
@@ -451,7 +454,8 @@ export async function audioInfo(buf: Buffer): Promise<AudioFileInfo> {
 		numberOfChannels: audio.numberOfChannels,
 		sampleRate: audio.sampleRate,
 		hasVideo: !!(await input.getPrimaryVideoTrack()),
-		trackCount: (await input.getTracks()).length
+		trackCount: (await input.getTracks()).length,
+		formatMime: (await input.getFormat()).mimeType
 	};
 }
 

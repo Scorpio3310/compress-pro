@@ -27,7 +27,7 @@ The whole app is prerendered and served as static assets, so files never leave t
 - **🖼️ Images** — JPG, PNG, WebP, GIF, HEIC, SVG. Squoosh codecs ([jSquash](https://github.com/jamsinclair/jSquash)): MozJPEG **with trellis quantization** (3–30% smaller at the same quality), libwebp (effort 6), libavif, oxipng; lossy PNG via libimagequant ([icodec](https://github.com/Kaciras/icodec), quality 100 stays lossless). Optional max-dimension downscale (Lanczos3) and **target-size** mode ("fit under 500 KB", binary search).
 - **📄 PDF** — Ghostscript 10 in wasm ([`@okathira/ghostpdl-wasm`](https://github.com/okathira/ghostpdl-wasm)): explicit DPI + JPEG-quality control, bicubic downsampling, duplicate-image detection, font subsetting, metadata stripping. 5 preset levels or **target size** ("fit under 2 MB") via binary search over a quality ladder. Before/after page-1 comparison via pdf.js.
 - **🎬 Video** — compress and convert MP4/MOV/WebM/MKV via **WebCodecs** (the browser's hardware encoders) orchestrated by [mediabunny](https://mediabunny.dev) — no ffmpeg, ~realtime encodes. H.264 (MP4/MOV), VP9 (WebM) or **animated GIF** output, quality or **target-size** mode, longest-side downscale, fps cap, remove-audio; audio otherwise transmuxes losslessly when container-legal. GIFs convert back to silent MP4/MOV/WebM too.
-- **🎵 Audio** — compress and convert MP3/M4A/WAV/OGG — FLAC as input (LAME wasm for MP3), extract audio from video (MP4 → MP3), bitrate or target-size mode.
+- **🎵 Audio** — compress and convert MP3/M4A/WAV/FLAC/OGG/OPUS/WEBA (LAME wasm for MP3, libFLAC wasm for FLAC, FFmpeg-AAC wasm fallback where WebCodecs lacks AAC), extract audio from video (MP4 → MP3/WAV), bitrate or target-size mode.
 - **🔤 Fonts** — convert between TTF, OTF, WOFF, WOFF2 (and legacy EOT) as **lossless repackaging** of the raw font tables (Google's woff2 codec in wasm — glyphs, kerning and hinting survive byte-for-byte); **subset** fonts to chosen character sets or exact text via **HarfBuzz** (kerning/ligatures among kept glyphs preserved), and pin **variable fonts** to static instances per axis. Outlines are never converted lossily — a CFF font asked to become TTF keeps its honest `.otf` extension.
 - **🔐 PDF unlock & protect** — remove a known password or add one (128-bit encryption) — the password never leaves the device.
 - **📦 ZIP** — create archives from any files (deflate level knob) and extract existing ones, entirely client-side (fflate).
@@ -59,7 +59,7 @@ Every tool is its own real, prerendered page.
 | [Compress MOV](https://compress-pro.com/compress-mov)                      | WebCodecs + mediabunny         |
 | [Compress any image](https://compress-pro.com/compress-image)              | Auto format race               |
 | [Compress JPG to 100 KB](https://compress-pro.com/compress-jpg-to-100kb)   | target-size search             |
-| [Compress Audio](https://compress-pro.com/compress-audio)                  | mediabunny + LAME MP3          |
+| [Compress Audio](https://compress-pro.com/compress-audio)                  | mediabunny + LAME / libFLAC    |
 | [Convert fonts](https://compress-pro.com/font-converter)                   | raw sfnt repack + Google woff2 |
 | [Subset font](https://compress-pro.com/subset-font)                        | HarfBuzz subsetter             |
 | [Variable font → static](https://compress-pro.com/variable-font-to-static) | HarfBuzz instancer             |
@@ -74,7 +74,7 @@ Every tool is its own real, prerendered page.
 - **To PNG** — [WebP → PNG](https://compress-pro.com/webp-to-png) · [HEIC → PNG](https://compress-pro.com/heic-to-png)
 - **PDF** — [JPG → PDF](https://compress-pro.com/jpg-to-pdf) · [PNG → PDF](https://compress-pro.com/png-to-pdf) · [PDF → JPG](https://compress-pro.com/pdf-to-jpg) · [PDF → PNG](https://compress-pro.com/pdf-to-png)
 - **Video** — [MOV → MP4](https://compress-pro.com/mov-to-mp4) · [WebM → MP4](https://compress-pro.com/webm-to-mp4) · [MKV → MP4](https://compress-pro.com/mkv-to-mp4) · [MP4 → WebM](https://compress-pro.com/mp4-to-webm) · [Video → GIF](https://compress-pro.com/video-to-gif) · [MP4 → GIF](https://compress-pro.com/mp4-to-gif) · [GIF → MP4](https://compress-pro.com/gif-to-mp4)
-- **Audio** — [MP4 → MP3](https://compress-pro.com/mp4-to-mp3) · [WAV → MP3](https://compress-pro.com/wav-to-mp3) · [M4A → MP3](https://compress-pro.com/m4a-to-mp3)
+- **Audio** — [MP4 → MP3](https://compress-pro.com/mp4-to-mp3) · [WAV → MP3](https://compress-pro.com/wav-to-mp3) · [M4A → MP3](https://compress-pro.com/m4a-to-mp3) · [FLAC → MP3](https://compress-pro.com/flac-to-mp3) · [WAV → FLAC](https://compress-pro.com/wav-to-flac) · [OPUS → MP3](https://compress-pro.com/opus-to-mp3) · [OGG → MP3](https://compress-pro.com/ogg-to-mp3) · [AAC → MP3](https://compress-pro.com/aac-to-mp3) · [MP3 → WAV](https://compress-pro.com/mp3-to-wav) · [MP4 → WAV](https://compress-pro.com/mp4-to-wav)
 - **Images** — [BMP → JPG](https://compress-pro.com/bmp-to-jpg) · [TIFF → JPG](https://compress-pro.com/tiff-to-jpg) · [PNG → ICO](https://compress-pro.com/png-to-ico) · [JPG → ICO](https://compress-pro.com/jpg-to-ico) · [SVG → PNG](https://compress-pro.com/svg-to-png) · [SVG → ICO](https://compress-pro.com/svg-to-ico)
 - **PDF tools** — [Merge PDF](https://compress-pro.com/merge-pdf) · [Split PDF](https://compress-pro.com/split-pdf) · [Unlock PDF](https://compress-pro.com/unlock-pdf) · [Protect PDF](https://compress-pro.com/protect-pdf)
 - **Fonts** — [TTF → WOFF2](https://compress-pro.com/ttf-to-woff2) · [TTF → WOFF](https://compress-pro.com/ttf-to-woff) · [OTF → WOFF2](https://compress-pro.com/otf-to-woff2) · [OTF → WOFF](https://compress-pro.com/otf-to-woff) · [WOFF → TTF](https://compress-pro.com/woff-to-ttf) · [WOFF → OTF](https://compress-pro.com/woff-to-otf) · [WOFF → WOFF2](https://compress-pro.com/woff-to-woff2) · [WOFF2 → TTF](https://compress-pro.com/woff2-to-ttf) · [WOFF2 → OTF](https://compress-pro.com/woff2-to-otf) · [WOFF2 → WOFF](https://compress-pro.com/woff2-to-woff) · [TTF → EOT](https://compress-pro.com/ttf-to-eot) · [EOT → TTF](https://compress-pro.com/eot-to-ttf)
@@ -84,7 +84,7 @@ Every tool is its own real, prerendered page.
 - **[SvelteKit](https://svelte.dev/docs/kit)** (Svelte 5 runes) + **[Tailwind CSS v4](https://tailwindcss.com)** on **[Vite 8](https://vite.dev)**
 - **[Cloudflare Workers](https://workers.cloudflare.com)** via `@sveltejs/adapter-cloudflare` — fully prerendered / static
 - **WASM codecs** — [jSquash](https://github.com/jamsinclair/jSquash) (MozJPEG, libwebp, libavif, oxipng), [icodec](https://github.com/Kaciras/icodec) (HEIC, lossy PNG), [`@okathira/ghostpdl-wasm`](https://github.com/okathira/ghostpdl-wasm) (Ghostscript), gifsicle, [svgo](https://github.com/svg/svgo), [pdf-lib](https://github.com/Hopding/pdf-lib) / [pdf.js](https://mozilla.github.io/pdf.js/), [fonteditor-core](https://github.com/kekee000/fonteditor-core)'s Google-woff2 wasm + [harfbuzzjs](https://github.com/harfbuzz/harfbuzzjs) hb-subset (fonts)
-- **[mediabunny](https://mediabunny.dev)** driving **WebCodecs** for video
+- **[mediabunny](https://mediabunny.dev)** driving **WebCodecs** for video & audio, plus its LAME MP3, libFLAC and FFmpeg-AAC wasm encoder extensions
 
 ## 🏗️ Architecture
 
@@ -167,7 +167,7 @@ Production is built automatically from this repository, so the footer hash links
 [MIT](LICENSE) © [Nik Klemenc](https://klemenc.si)
 
 > [!NOTE]
-> The app code is MIT, but several bundled WASM engines are copyleft: **Ghostscript (AGPL-3.0)**, **gifsicle (GPL-2.0)**, **LAME (LGPL)**, and the HEIC / lossy-PNG codecs inside icodec (GPL/LGPL family). The permissive rest: MozJPEG / libwebp / libavif (BSD-style), oxipng (MIT), and others. This repository publishes the complete corresponding source, which is what the copyleft licenses require — but if you redistribute a build (especially closed-source or modified), those terms apply to you too. Full per-package breakdown: [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).
+> The app code is MIT, but several bundled WASM engines are copyleft: **Ghostscript (AGPL-3.0)**, **gifsicle (GPL-2.0)**, **LAME and FFmpeg's AAC encoder (LGPL)**, and the HEIC / lossy-PNG codecs inside icodec (GPL/LGPL family). The permissive rest: MozJPEG / libwebp / libavif / libFLAC (BSD-style), oxipng (MIT), and others. This repository publishes the complete corresponding source, which is what the copyleft licenses require — but if you redistribute a build (especially closed-source or modified), those terms apply to you too. Full per-package breakdown: [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).
 
 ## 🙏 Acknowledgments
 

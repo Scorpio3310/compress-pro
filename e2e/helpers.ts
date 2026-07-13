@@ -470,18 +470,32 @@ export async function audioMetricsInPage(
 
 			// Goertzel single-bin DFT with a Hann window: with a ~2.5 s window the
 			// leakage at a probe 100+ Hz away is < -60 dB, so non-integer tone
-			// frequencies (554.37) need no special handling.
-			const goertzelAmp = (x: Float32Array, sampleRate: number, freq: number): number => {
+			// frequencies (554.37) need no special handling. The Hann-weighted
+			// signal is precomputed once per channel — real-file specs sweep 15
+			// probes over multi-minute audio, where a per-probe window dominates.
+			const hannWeigh = (x: Float32Array): { xw: Float32Array; winSum: number } => {
 				const n = x.length;
-				const w = (2 * Math.PI * freq) / sampleRate;
-				const coeff = 2 * Math.cos(w);
-				let s1 = 0;
-				let s2 = 0;
+				const xw = new Float32Array(n);
 				let winSum = 0;
 				for (let i = 0; i < n; i++) {
 					const hann = 0.5 - 0.5 * Math.cos((2 * Math.PI * i) / (n - 1));
 					winSum += hann;
-					const s0 = x[i] * hann + coeff * s1 - s2;
+					xw[i] = x[i] * hann;
+				}
+				return { xw, winSum };
+			};
+			const goertzelAmp = (
+				xw: Float32Array,
+				winSum: number,
+				sampleRate: number,
+				freq: number
+			): number => {
+				const w = (2 * Math.PI * freq) / sampleRate;
+				const coeff = 2 * Math.cos(w);
+				let s1 = 0;
+				let s2 = 0;
+				for (let i = 0; i < xw.length; i++) {
+					const s0 = xw[i] + coeff * s1 - s2;
 					s2 = s1;
 					s1 = s0;
 				}
@@ -503,10 +517,11 @@ export async function audioMetricsInPage(
 					const a = Math.abs(x[i]);
 					if (a > peak) peak = a;
 				}
+				const { xw, winSum } = hannWeigh(x);
 				const freqAmp: Record<string, number> = {};
 				let bestHz = args.probeHz[0] ?? 0;
 				for (const hz of args.probeHz) {
-					const amp = goertzelAmp(x, buf.sampleRate, hz);
+					const amp = goertzelAmp(xw, winSum, buf.sampleRate, hz);
 					freqAmp[String(hz)] = amp;
 					if (amp > (freqAmp[String(bestHz)] ?? 0)) bestHz = hz;
 				}

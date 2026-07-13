@@ -17,9 +17,8 @@ node_modules
 /tests/fixtures/real/*
 !/tests/fixtures/real/README.md
 
-# Claude Code local state
-.claude/settings.local.json
-.claude/scheduled_tasks.lock
+# Claude Code local state/tooling
+/.claude/
 
 # OS
 .DS_Store

@@ -98,6 +98,8 @@
 		"@jsquash/png": "^3.1.1",
 		"@jsquash/resize": "^2.1.1",
 		"@jsquash/webp": "^1.5.0",
+		"@mediabunny/aac-encoder": "1.50.8",
+		"@mediabunny/flac-encoder": "1.50.8",
 		"@mediabunny/mp3-encoder": "1.50.8",
 		"@okathira/ghostpdl-wasm": "^1.1.0",
 		"fflate": "^0.8.3",

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { AudioConversionSettings } from '$lib/types';
+	import { isLosslessAudioFormat, type AudioConversionSettings } from '$lib/types';
 	import SegmentedControl from './SegmentedControl.svelte';
 	import Pill from './Pill.svelte';
 
@@ -15,19 +15,31 @@
 		{ id: 'mp3', label: 'MP3' },
 		{ id: 'm4a', label: 'M4A' },
 		{ id: 'wav', label: 'WAV' },
-		{ id: 'ogg', label: 'OGG' }
+		{ id: 'flac', label: 'FLAC' },
+		{ id: 'ogg', label: 'OGG' },
+		{ id: 'opus', label: 'OPUS' },
+		{ id: 'weba', label: 'WEBA' }
 	];
+	const outputHints: Record<AudioConversionSettings['outputFormat'], string> = {
+		mp3: 'Plays everywhere — the safe default.',
+		m4a: 'AAC — better quality per byte than MP3; Apple-friendly.',
+		wav: 'Uncompressed PCM — lossless; expect roughly 10 MB per minute of stereo audio.',
+		flac: 'Lossless like WAV at roughly half the size — the archival pick.',
+		ogg: 'Opus — best quality per byte; plays in browsers and apps.',
+		opus: 'The same Opus audio under the .opus name voice apps use.',
+		weba: 'Opus in a WebM wrapper — made for web players and embeds.'
+	};
 	const audioModes = [
 		{ id: 'quality', label: 'Bitrate' },
 		{ id: 'target', label: 'Target size' }
 	];
 	const bitrates = [320, 256, 192, 128, 96, 64] as const;
 
-	// WAV is uncompressed PCM — bitrate/target knobs mean nothing there.
-	let isWav = $derived(settings.outputFormat === 'wav');
+	// Lossless outputs (WAV, FLAC) — bitrate/target knobs mean nothing there.
+	let isLossless = $derived(isLosslessAudioFormat(settings.outputFormat));
 </script>
 
-{#if !isWav}
+{#if !isLossless}
 	<div class="panel-span">
 		<SegmentedControl
 			items={audioModes}
@@ -96,13 +108,5 @@
 			</Pill>
 		{/each}
 	</div>
-	<p class="mt-2 hint text-faint">
-		{settings.outputFormat === 'mp3'
-			? 'Plays everywhere — the safe default.'
-			: settings.outputFormat === 'm4a'
-				? 'AAC — better quality per byte than MP3; Apple-friendly.'
-				: settings.outputFormat === 'wav'
-					? 'Uncompressed PCM — lossless; expect roughly 10 MB per minute of stereo audio.'
-					: 'Opus — best quality per byte; plays in browsers and apps.'}
-	</p>
+	<p class="mt-2 hint text-faint">{outputHints[settings.outputFormat]}</p>
 </div>

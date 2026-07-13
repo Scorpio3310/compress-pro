@@ -13,6 +13,7 @@ import {
 	CanvasSink,
 	CanvasSource,
 	Conversion,
+	FlacOutputFormat,
 	Input,
 	MovOutputFormat,
 	Mp3OutputFormat,
@@ -26,6 +27,7 @@ import {
 	type AudioCodec,
 	type OutputFormat
 } from 'mediabunny';
+import { isLosslessAudioFormat, type AudioConversionSettings } from '$lib/types';
 
 function openInput(file: File) {
 	return new Input({ source: new BlobSource(file), formats: ALL_FORMATS });
@@ -58,28 +60,51 @@ const VIDEO_OUTPUT: Record<'mp4' | 'mov' | 'webm', { format: () => OutputFormat;
 
 // --- Audio output plumbing ---
 
+// MIMEs are hardcoded: mediabunny's own mimeType getters report application/ogg
+// and video/webm, which would mislabel audio downloads.
 const AUDIO_OUTPUT: Record<
-	'mp3' | 'm4a' | 'wav' | 'ogg',
+	AudioConversionSettings['outputFormat'],
 	{ format: () => OutputFormat; codec: AudioCodec; mime: string }
 > = {
 	mp3: { format: () => new Mp3OutputFormat(), codec: 'mp3', mime: 'audio/mpeg' },
 	m4a: { format: () => new Mp4OutputFormat(), codec: 'aac', mime: 'audio/mp4' },
 	wav: { format: () => new WavOutputFormat(), codec: 'pcm-s16', mime: 'audio/wav' },
-	ogg: { format: () => new OggOutputFormat(), codec: 'opus', mime: 'audio/ogg' }
+	ogg: { format: () => new OggOutputFormat(), codec: 'opus', mime: 'audio/ogg' },
+	// .opus is the same Ogg/Opus stream, under the extension voice apps use.
+	opus: { format: () => new OggOutputFormat(), codec: 'opus', mime: 'audio/ogg' },
+	weba: { format: () => new WebMOutputFormat(), codec: 'opus', mime: 'audio/webm' },
+	flac: { format: () => new FlacOutputFormat(), codec: 'flac', mime: 'audio/flac' }
 };
 
-let mp3EncoderReady: Promise<void> | null = null;
-
-/** WebCodecs has no MP3 encoder — register the LAME wasm one on first use. */
-function ensureMp3Encoder(): Promise<void> {
-	mp3EncoderReady ??= (async () => {
-		if (!(await canEncodeAudio('mp3'))) {
-			const { registerMp3Encoder } = await import('@mediabunny/mp3-encoder');
-			registerMp3Encoder();
-		}
-	})();
-	return mp3EncoderReady;
+function lazyEncoderRegistration(codec: AudioCodec, load: () => Promise<() => void>) {
+	let ready: Promise<void> | null = null;
+	return (): Promise<void> => {
+		ready ??= (async () => {
+			if (!(await canEncodeAudio(codec))) (await load())();
+		})().catch((error) => {
+			ready = null; // a transient chunk-fetch failure must not brick the session
+			throw error;
+		});
+		return ready;
+	};
 }
+
+/** WebCodecs never encodes MP3/FLAC, and Firefox + desktop-Linux Chromium lack
+ *  AAC — wasm encoders fill in, registered on first use. Registration is
+ *  session-global: mediabunny clears its canEncodeAudio memo, so e.g. a video
+ *  probe after an audio-tab M4A job sees AAC as encodable too (intended). */
+const ensureMp3Encoder = lazyEncoderRegistration(
+	'mp3',
+	async () => (await import('@mediabunny/mp3-encoder')).registerMp3Encoder
+);
+const ensureFlacEncoder = lazyEncoderRegistration(
+	'flac',
+	async () => (await import('@mediabunny/flac-encoder')).registerFlacEncoder
+);
+const ensureAacEncoder = lazyEncoderRegistration(
+	'aac',
+	async () => (await import('@mediabunny/aac-encoder')).registerAacEncoder
+);
 
 /**
  * BT.2020 / PQ / HLG sources render washed out when naively encoded to SDR.
@@ -144,6 +169,7 @@ expose<WorkerContracts['video']>({
 		const [mp4Codec, webmCodec, aacOk] = await Promise.all([
 			getFirstEncodableVideoCodec(['avc', 'hevc'], probeDims),
 			getFirstEncodableVideoCodec(['vp9', 'vp8'], probeDims),
+			// True natively, or once an audio-tab M4A job registered the wasm fallback.
 			canEncodeAudio('aac')
 		]);
 		const isobmffCodec = mp4Codec === 'avc' || mp4Codec === 'hevc' ? mp4Codec : null;
@@ -419,6 +445,8 @@ expose<WorkerContracts['video']>({
 
 	convertAudio: async ({ jobId, file, output, bitrate }, progress) => {
 		if (output === 'mp3') await ensureMp3Encoder();
+		else if (output === 'flac') await ensureFlacEncoder();
+		else if (output === 'm4a') await ensureAacEncoder();
 		const spec = AUDIO_OUTPUT[output];
 		if (!(await canEncodeAudio(spec.codec))) {
 			throw new Error(`This browser can’t encode ${output.toUpperCase()} audio — try WAV instead`);
@@ -440,7 +468,7 @@ expose<WorkerContracts['video']>({
 			video: { discard: true }, // audio-only by contract
 			audio: {
 				codec: spec.codec,
-				...(output === 'wav' ? {} : { bitrate })
+				...(isLosslessAudioFormat(output) ? {} : { bitrate })
 			},
 			showWarnings: false
 		});

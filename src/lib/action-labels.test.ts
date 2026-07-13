@@ -121,9 +121,12 @@ describe('actionInvalid', () => {
 		).toBe(false);
 		expect(actionInvalid('video', video({ mode: 'target', targetMb: 0 }), 1)).toBe(true);
 		expect(actionInvalid('audio', audio({ mode: 'target', targetMb: 0 }), 1)).toBe(true);
-		// WAV is PCM — target mode does not apply.
+		// Lossless outputs (WAV PCM, FLAC) — target mode does not apply.
 		expect(
 			actionInvalid('audio', audio({ outputFormat: 'wav', mode: 'target', targetMb: 0 }), 1)
+		).toBe(false);
+		expect(
+			actionInvalid('audio', audio({ outputFormat: 'flac', mode: 'target', targetMb: 0 }), 1)
 		).toBe(false);
 		expect(actionInvalid('svg', image(), 1)).toBe(false);
 	});

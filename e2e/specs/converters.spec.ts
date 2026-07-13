@@ -3,7 +3,17 @@
  * hosting tab + output format, carries unique SEO copy, and converts for real.
  */
 import { readFileSync } from 'node:fs';
-import { assertDiffBudget, expect, fx, fxMeta, fxVideo, FIXTURES, test } from '../fixtures';
+import {
+	assertDiffBudget,
+	audioFixtures,
+	expect,
+	fx,
+	fxAudio,
+	fxMeta,
+	fxVideo,
+	FIXTURES,
+	test
+} from '../fixtures';
 import {
 	compress,
 	downloadCombined,
@@ -335,4 +345,117 @@ test('CV-22: /jpg-to-ico builds a multi-size favicon from a JPG', async ({ page 
 	let transparent = 0;
 	for (let i = 3; i < raw.data.length; i += 4) if (raw.data[i] === 0) transparent++;
 	expect(transparent, 'square padding is transparent').toBeGreaterThan(0);
+});
+
+test('CV-23: /flac-to-mp3 presets MP3 and converts a FLAC', async ({ page }) => {
+	test.skip(!audioFixtures().files['tone-3s.flac'], 'flac fixture missing');
+	await gotoPath(page, '/flac-to-mp3');
+	await expect(page).toHaveTitle(/FLAC to MP3/);
+	await expect(page.getByText('Drop FLAC files here')).toBeVisible();
+	await upload(page, fxAudio('tone-3s.flac'));
+	await expect(page.getByRole('button', { name: 'MP3', exact: true })).toHaveAttribute(
+		'aria-pressed',
+		'true'
+	);
+	await compress(page, { timeout: 120_000 });
+	const art = await downloadRow(page);
+	expect(art.name).toBe('tone-3s.mp3');
+	expect((await audioInfo(art.bytes)).audioCodec).toBe('mp3');
+});
+
+test('CV-24: /wav-to-flac presets FLAC and packs a WAV losslessly', async ({ page }) => {
+	await gotoPath(page, '/wav-to-flac');
+	await expect(page).toHaveTitle(/WAV to FLAC/);
+	await expect(page.getByText('Drop WAV files here')).toBeVisible();
+	await upload(page, fx('tone-3s.wav'));
+	await expect(page.getByRole('button', { name: 'FLAC', exact: true })).toHaveAttribute(
+		'aria-pressed',
+		'true'
+	);
+	await compress(page, { timeout: 120_000 });
+	const art = await downloadRow(page);
+	expect(art.name).toBe('tone-3s.flac');
+	const info = await audioInfo(art.bytes);
+	expect(info.audioCodec).toBe('flac');
+	expect(art.bytes.length).toBeLessThan(readFileSync(fx('tone-3s.wav')).length);
+});
+
+test('CV-25: /opus-to-mp3 presets MP3 and converts a voice-note .opus', async ({ page }) => {
+	test.skip(!audioFixtures().files['tone-3s.opus'], 'no Opus encoder in this Chromium');
+	await gotoPath(page, '/opus-to-mp3');
+	await expect(page).toHaveTitle(/OPUS to MP3/);
+	await expect(page.getByText('Drop OPUS files here')).toBeVisible();
+	await upload(page, fxAudio('tone-3s.opus'));
+	await expect(page.getByRole('button', { name: 'MP3', exact: true })).toHaveAttribute(
+		'aria-pressed',
+		'true'
+	);
+	await compress(page, { timeout: 120_000 });
+	const art = await downloadRow(page);
+	expect(art.name).toBe('tone-3s.mp3');
+	expect((await audioInfo(art.bytes)).audioCodec).toBe('mp3');
+});
+
+test('CV-26: /ogg-to-mp3 presets MP3 and converts an OGG', async ({ page }) => {
+	test.skip(!audioFixtures().files['tone-3s.ogg'], 'no Opus encoder in this Chromium');
+	await gotoPath(page, '/ogg-to-mp3');
+	await expect(page).toHaveTitle(/OGG to MP3/);
+	await expect(page.getByText('Drop OGG files here')).toBeVisible();
+	await upload(page, fxAudio('tone-3s.ogg'));
+	await expect(page.getByRole('button', { name: 'MP3', exact: true })).toHaveAttribute(
+		'aria-pressed',
+		'true'
+	);
+	await compress(page, { timeout: 120_000 });
+	const art = await downloadRow(page);
+	expect(art.name).toBe('tone-3s.mp3');
+	expect((await audioInfo(art.bytes)).audioCodec).toBe('mp3');
+});
+
+test('CV-27: /aac-to-mp3 presets MP3 and converts a bare ADTS stream', async ({ page }) => {
+	test.skip(!audioFixtures().files['tone-3s.aac'], 'no AAC encoder in this Chromium');
+	await gotoPath(page, '/aac-to-mp3');
+	await expect(page).toHaveTitle(/AAC to MP3/);
+	await expect(page.getByText('Drop AAC files here')).toBeVisible();
+	await upload(page, fxAudio('tone-3s.aac'));
+	await expect(page.getByRole('button', { name: 'MP3', exact: true })).toHaveAttribute(
+		'aria-pressed',
+		'true'
+	);
+	await compress(page, { timeout: 120_000 });
+	const art = await downloadRow(page);
+	expect(art.name).toBe('tone-3s.mp3');
+	expect((await audioInfo(art.bytes)).audioCodec).toBe('mp3');
+});
+
+test('CV-28: /mp3-to-wav presets WAV and decodes to PCM', async ({ page }) => {
+	await gotoPath(page, '/mp3-to-wav');
+	await expect(page).toHaveTitle(/MP3 to WAV/);
+	await expect(page.getByText('Drop MP3 files here')).toBeVisible();
+	await upload(page, fxAudio('tone-3s.mp3'));
+	await expect(page.getByRole('button', { name: 'WAV', exact: true })).toHaveAttribute(
+		'aria-pressed',
+		'true'
+	);
+	await compress(page, { timeout: 120_000 });
+	const art = await downloadRow(page);
+	expect(art.name).toBe('tone-3s.wav');
+	expect((await audioInfo(art.bytes)).audioCodec).toMatch(/^pcm/);
+});
+
+test('CV-29: /mp4-to-wav presets WAV and extracts the audio track', async ({ page }) => {
+	await gotoPath(page, '/mp4-to-wav');
+	await expect(page).toHaveTitle(/MP4 to WAV/);
+	await expect(page.getByText('Drop video files here')).toBeVisible();
+	await upload(page, fxVideo('v-audio-3s.mp4'));
+	await expect(page.getByRole('button', { name: 'WAV', exact: true })).toHaveAttribute(
+		'aria-pressed',
+		'true'
+	);
+	await compress(page, { timeout: 120_000 });
+	const art = await downloadRow(page);
+	expect(art.name).toBe('v-audio-3s.wav');
+	const info = await audioInfo(art.bytes);
+	expect(info.audioCodec).toMatch(/^pcm/);
+	expect(info.hasVideo, 'video track discarded').toBe(false);
 });

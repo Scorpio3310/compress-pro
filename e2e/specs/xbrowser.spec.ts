@@ -1,12 +1,14 @@
 /**
- * XB-01…04 (@xbrowser): capability-degradation smoke for Firefox/WebKit —
+ * XB-01…05 (@xbrowser): capability-degradation smoke for Firefox/WebKit —
  * the app must WORK where the engine allows (wasm image codecs, EXIF byte
- * surgery are engine-agnostic) and DEGRADE GRACEFULLY where it doesn't
- * (WebCodecs video encode). Runs on chromium in every full run; the
- * firefox/webkit projects join under E2E_XBROWSER=1 (see playwright.config).
+ * surgery and the wasm audio encoders are engine-agnostic) and DEGRADE
+ * GRACEFULLY where it doesn't (WebCodecs video encode). Runs on chromium in
+ * every full run; the firefox/webkit projects join under E2E_XBROWSER=1
+ * (see playwright.config).
  */
 import { expect, fx, fxVideo, test } from '../fixtures';
 import { compress, downloadRow, gotoTab, rows, setOutputFormat, upload } from '../helpers';
+import { audioInfo } from '../verify';
 
 function collectPageErrors(page: import('@playwright/test').Page): string[] {
 	const errors: string[] = [];
@@ -68,5 +70,26 @@ test('XB-04: EXIF strip (pure byte surgery) works everywhere @xbrowser', async (
 	await expect(page.getByTestId('row-info')).toHaveText(/Removed:/);
 	const art = await downloadRow(page);
 	expect(art.bytes.length).toBeGreaterThan(1000);
+	expect(errors).toEqual([]);
+});
+
+test('XB-05: m4a (AAC) output works everywhere — native or wasm fallback @xbrowser', async ({
+	page
+}) => {
+	// Chromium and Safari encode AAC natively; Firefox reaches the identical
+	// result through the FFmpeg wasm fallback (~1 MB fetch + init, hence the
+	// generous timeout). Same assertions on every engine — the absence of a
+	// capability skip is the point of this test.
+	test.setTimeout(240_000);
+	const errors = collectPageErrors(page);
+	await gotoTab(page, 'audio');
+	await upload(page, fx('tone-3s.wav'));
+	const pill = page.getByRole('button', { name: 'M4A', exact: true });
+	await pill.click();
+	await expect(pill).toHaveAttribute('aria-pressed', 'true');
+	await compress(page, { timeout: 210_000 });
+	const art = await downloadRow(page);
+	expect(art.name).toBe('tone-3s.m4a');
+	expect((await audioInfo(art.bytes)).audioCodec).toBe('aac');
 	expect(errors).toEqual([]);
 });

@@ -156,7 +156,7 @@ function mergeVideo(target: VideoConversionSettings, s: Record<string, unknown>)
 function mergeAudio(target: AudioConversionSettings, s: Record<string, unknown>): void {
 	target.outputFormat = oneOf(
 		s.outputFormat,
-		['mp3', 'm4a', 'wav', 'ogg'] as const,
+		['mp3', 'm4a', 'wav', 'ogg', 'flac', 'opus', 'weba'] as const,
 		target.outputFormat
 	);
 	target.mode = oneOf(s.mode, ['quality', 'target'] as const, target.mode);

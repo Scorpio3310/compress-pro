@@ -1,5 +1,5 @@
 import type { FileFormat, SettingsMap } from '$lib/types';
-import { isImageFormat } from '$lib/types';
+import { isImageFormat, isLosslessAudioFormat } from '$lib/types';
 import { validatePageRangeSyntax } from '$lib/pdf-range';
 
 /** Any tab's settings — the union of all SettingsMap values. */
@@ -88,7 +88,10 @@ export function actionInvalid(
 	}
 	if (format === 'audio') {
 		const audio = settings as SettingsMap['audio'];
-		return audio.outputFormat !== 'wav' && audio.mode === 'target' && !(audio.targetMb > 0);
+		// Lossless outputs hide the target input, so it must not gate the CTA.
+		return (
+			!isLosslessAudioFormat(audio.outputFormat) && audio.mode === 'target' && !(audio.targetMb > 0)
+		);
 	}
 	return false;
 }

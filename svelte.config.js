@@ -128,7 +128,14 @@ const config = {
 				'/ttf-to-eot',
 				'/eot-to-ttf',
 				'/subset-font',
-				'/variable-font-to-static'
+				'/variable-font-to-static',
+				'/flac-to-mp3',
+				'/wav-to-flac',
+				'/opus-to-mp3',
+				'/ogg-to-mp3',
+				'/aac-to-mp3',
+				'/mp3-to-wav',
+				'/mp4-to-wav'
 			]
 		}
 	}

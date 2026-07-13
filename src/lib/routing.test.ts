@@ -43,6 +43,10 @@ describe('routeFileToFormat', () => {
 		expect(routeFileToFormat(file('memo.m4a', ''))).toBe('audio');
 		expect(routeFileToFormat(file('clip.flac', ''))).toBe('audio');
 		expect(routeFileToFormat(file('voice.OPUS', ''))).toBe('audio');
+		expect(routeFileToFormat(file('stream.weba', 'audio/webm'))).toBe('audio');
+		expect(routeFileToFormat(file('STREAM.WEBA', ''))).toBe('audio');
+		// .webm (the video flavor) still routes to the video tab from home.
+		expect(routeFileToFormat(file('clip.webm', 'video/webm'))).toBe('video');
 	});
 
 	it('routes ZIP archives to the zip tab', () => {
@@ -120,9 +124,10 @@ describe('matchesAccept', () => {
 		}
 	});
 
-	it('audio tab deliberately admits mp4/mov (audio-track extraction)', () => {
+	it('audio tab deliberately admits mp4/mov/webm (audio-track extraction)', () => {
 		expect(matchesAccept(TAB_ACCEPT.audio, 'clip.mp4', 'video/mp4')).toBe(true);
 		expect(matchesAccept(TAB_ACCEPT.audio, 'clip.mov', 'video/quicktime')).toBe(true);
-		expect(matchesAccept(TAB_ACCEPT.audio, 'clip.webm', 'video/webm')).toBe(false);
+		expect(matchesAccept(TAB_ACCEPT.audio, 'clip.webm', 'video/webm')).toBe(true);
+		expect(matchesAccept(TAB_ACCEPT.audio, 'clip.mkv', 'video/x-matroska')).toBe(false);
 	});
 });

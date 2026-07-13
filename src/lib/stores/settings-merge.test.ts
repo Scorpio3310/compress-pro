@@ -173,9 +173,16 @@ describe('mergeStoredSettings', () => {
 			targetMb: 5
 		});
 
+		// Every offered output survives a round-trip through storage.
+		for (const outputFormat of ['flac', 'opus', 'weba'] as const) {
+			const t = defaultSettings();
+			mergeStoredSettings(t, { audio: { outputFormat } });
+			expect(t.audio.outputFormat).toBe(outputFormat);
+		}
+
 		const bad = defaultSettings();
 		mergeStoredSettings(bad, {
-			audio: { outputFormat: 'flac', bitrateKbps: 100, targetMb: 'ten' }
+			audio: { outputFormat: 'aiff', bitrateKbps: 100, targetMb: 'ten' }
 		});
 		expect(bad.audio.outputFormat).toBe('mp3');
 		expect(bad.audio.bitrateKbps).toBe(192);
