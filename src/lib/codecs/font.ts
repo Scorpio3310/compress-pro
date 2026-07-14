@@ -10,6 +10,27 @@ const FONT_MIME: Record<FontFormat, string> = {
 	eot: 'application/vnd.ms-fontobject'
 };
 
+/** Matches IDLE_TIMEOUT_MS.font in rpc.ts — the no-progress default. */
+export const FONT_IDLE_FLOOR_MS = 10 * 60_000;
+export const FONT_IDLE_CEIL_MS = 60 * 60_000;
+// WOFF2 encode is synchronous brotli-q11 with NO progress signal — the whole
+// job is one silent window. Dev-machine wasm throughput is ≥100 KB/s, but a
+// low-end phone runs wasm 3-5x slower and a killed healthy encode loses the
+// user's work while a late-detected stuck one only costs patience (Cancel
+// exists). Budget at 12.5 KB/s (8x dev margin) — same philosophy as
+// sevenzip-args' archiveIdleTimeoutMs.
+const WORST_CASE_BYTES_PER_MS = (12.5 * 1024) / 1000;
+
+/** No-progress watchdog window for font convert/subset, scaled to the input
+ *  size — a 20 MB+ CJK font's legitimate multi-minute encode must not be
+ *  killed as "stuck" by the 10-minute kind default. */
+export function fontIdleTimeoutMs(totalBytes: number): number {
+	return Math.min(
+		FONT_IDLE_CEIL_MS,
+		Math.max(FONT_IDLE_FLOOR_MS, Math.ceil(totalBytes / WORST_CASE_BYTES_PER_MS))
+	);
+}
+
 export interface FontOutput {
 	blob: Blob;
 	/** Container actually written (the flavor rule can override the request). */
@@ -38,7 +59,8 @@ export async function convertFont(
 		[bytes],
 		undefined,
 		{
-			owner: signal
+			owner: signal,
+			idleTimeoutMs: fontIdleTimeoutMs(file.size)
 		}
 	);
 	return {
@@ -73,7 +95,7 @@ export async function subsetFont(
 		},
 		[bytes, ...(codepoints ? [codepoints.buffer] : [])],
 		undefined,
-		{ owner: signal }
+		{ owner: signal, idleTimeoutMs: fontIdleTimeoutMs(file.size) }
 	);
 	const glyphs =
 		out.glyphsBefore !== null && out.glyphsAfter !== null && out.glyphsAfter !== out.glyphsBefore

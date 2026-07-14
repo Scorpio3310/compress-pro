@@ -91,8 +91,9 @@ function lazyEncoderRegistration(codec: AudioCodec, load: () => Promise<() => vo
 
 /** WebCodecs never encodes MP3/FLAC, and Firefox + desktop-Linux Chromium lack
  *  AAC — wasm encoders fill in, registered on first use. Registration is
- *  session-global: mediabunny clears its canEncodeAudio memo, so e.g. a video
- *  probe after an audio-tab M4A job sees AAC as encodable too (intended). */
+ *  per-worker-global (mediabunny clears its canEncodeAudio memo), so every
+ *  path that needs a codec must ensure it itself: the video probe/convert
+ *  can't rely on an audio-tab job having registered AAC first. */
 const ensureMp3Encoder = lazyEncoderRegistration(
 	'mp3',
 	async () => (await import('@mediabunny/mp3-encoder')).registerMp3Encoder
@@ -169,8 +170,12 @@ expose<WorkerContracts['video']>({
 		const [mp4Codec, webmCodec, aacOk] = await Promise.all([
 			getFirstEncodableVideoCodec(['avc', 'hevc'], probeDims),
 			getFirstEncodableVideoCodec(['vp9', 'vp8'], probeDims),
-			// True natively, or once an audio-tab M4A job registered the wasm fallback.
-			canEncodeAudio('aac')
+			// Register the wasm fallback before asking (no-op when AAC encodes
+			// natively) — otherwise Firefox reports false here, decideAudio drops
+			// the track, and the answer flips once an audio-tab M4A job happens
+			// to have registered the encoder. Gated on an audio track existing,
+			// so the ~1 MB encoder chunk is only fetched when the answer matters.
+			audio ? ensureAacEncoder().then(() => canEncodeAudio('aac'), () => false) : false
 		]);
 		const isobmffCodec = mp4Codec === 'avc' || mp4Codec === 'hevc' ? mp4Codec : null;
 
@@ -198,6 +203,9 @@ expose<WorkerContracts['video']>({
 	},
 
 	convert: async ({ jobId, file, container, video, audio }, progress) => {
+		// The probe that promised aacEncodable may have run on a different
+		// pooled instance — registration is per-worker, so re-ensure it here.
+		if (audio.kind === 'encode' && audio.codec === 'aac') await ensureAacEncoder();
 		const input = openInput(file);
 		const target = new BufferTarget();
 		const output = new Output({

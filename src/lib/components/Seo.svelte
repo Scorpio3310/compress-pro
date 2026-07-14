@@ -13,6 +13,9 @@
 	// prerendering the origin is a placeholder, not the real domain.
 	const canonical = $derived(SITE_URL + entry.path);
 	const ogImage = $derived(SITE_URL + (entry.ogImage ?? '/og.jpg'));
+	// The page's markdown twin (src/lib/markdown.ts) — '/' has no `.md` suffix
+	// to append, so the homepage twin lives at /index.md.
+	const markdownTwin = $derived(SITE_URL + (entry.path === '/' ? '/index.md' : entry.path + '.md'));
 
 	const webApplication = $derived({
 		'@type': 'WebApplication',
@@ -82,6 +85,7 @@
 	<title>{title}</title>
 	<meta name="description" content={entry.description} />
 	<link rel="canonical" href={canonical} />
+	<link rel="alternate" type="text/markdown" href={markdownTwin} />
 	<meta property="og:type" content="website" />
 	<meta property="og:locale" content="en_US" />
 	<meta property="og:site_name" content={SITE_NAME} />

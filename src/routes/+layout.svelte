@@ -10,12 +10,15 @@
 	import { logoSqueeze } from '$lib/motion/logo';
 	import { FORMATS, CONVERTERS, TOOLS } from '$lib/seo';
 	import { detectPasteKey } from '$lib/paste-key.svelte';
+	import { registerWebMcpTools } from '$lib/webmcp';
 	import { resolve } from '$app/paths';
 
 	let { children } = $props();
 
 	$effect(() => {
 		detectPasteKey();
+		// Once per page load — the layout survives client-side navigations.
+		registerWebMcpTools();
 	});
 
 	// Footer directory — the same curated data the old flat rows used, grouped

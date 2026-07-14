@@ -262,6 +262,11 @@ async function createArchiveBundle(
 					error ? reject(error) : resolve(out)
 				)
 			);
+			// A cancel during the zip discards the result (fflate's internal blob:
+			// workers can't be aborted mid-flight — it returns a terminator handle
+			// if that CPU burn ever needs reclaiming); the catch below maps this
+			// to the empty cancelled output.
+			signal?.throwIfAborted();
 			onProgress({ ...base, fileFraction: 1, detail: null, stage: 'done' });
 			const blob = new Blob([data as BlobPart], { type: 'application/zip' });
 			return { results: [], failures: [], combined: makeCombined(outName, blob, sum, null) };
@@ -274,7 +279,8 @@ async function createArchiveBundle(
 			settings,
 			'archive',
 			(fraction, detail) => {
-				lastFraction = fraction ?? lastFraction;
+				// Monotonic clamp — see the identical per-file sites below.
+				lastFraction = fraction == null ? lastFraction : Math.max(lastFraction, fraction);
 				onProgress({ ...base, fileFraction: lastFraction, detail, stage: 'processing' });
 			},
 			signal
@@ -307,7 +313,10 @@ async function createArchiveStreams(
 				file,
 				settings,
 				(fraction, detail) => {
-					lastFraction = fraction ?? lastFraction;
+					// Monotonic clamp: chained extraction and two-stage tar.* creates
+					// restart their scale window per pass — hold the peak instead of
+					// rewinding the bar (null = indeterminate pulse, carried forward).
+					lastFraction = fraction == null ? lastFraction : Math.max(lastFraction, fraction);
 					onProgress({ ...base, fileFraction: lastFraction, detail, stage: 'processing' });
 				},
 				signal
@@ -354,7 +363,10 @@ async function convertArchives(
 				file,
 				settings,
 				(fraction, detail) => {
-					lastFraction = fraction ?? lastFraction;
+					// Monotonic clamp: chained extraction and two-stage tar.* creates
+					// restart their scale window per pass — hold the peak instead of
+					// rewinding the bar (null = indeterminate pulse, carried forward).
+					lastFraction = fraction == null ? lastFraction : Math.max(lastFraction, fraction);
 					onProgress({ ...base, fileFraction: lastFraction, detail, stage: 'processing' });
 				},
 				signal
@@ -404,9 +416,13 @@ async function extractArchives(
 				try {
 					const fflate = await import('fflate');
 					const bytes = new Uint8Array(await file.file.arrayBuffer());
+					signal?.throwIfAborted();
 					const entries = await new Promise<Record<string, Uint8Array>>((resolve, reject) =>
 						fflate.unzip(bytes, (error, out) => (error ? reject(error) : resolve(out)))
 					);
+					// A cancel mid-unzip must not commit rows (result discarded; see
+					// the createArchiveBundle note on fflate's internal workers).
+					signal?.throwIfAborted();
 					const names = Object.keys(entries).filter((n) => extractableEntry(n, entries[n].length));
 					if (names.length) {
 						rows = names.map((n, e) => entryRow(file.id, e, n, entries[n], used, null));
@@ -424,7 +440,10 @@ async function extractArchives(
 					file,
 					settings.password,
 					(fraction, detail) => {
-						lastFraction = fraction ?? lastFraction;
+						// Monotonic clamp: chained extraction and two-stage tar.* creates
+						// restart their scale window per pass — hold the peak instead of
+						// rewinding the bar (null = indeterminate pulse, carried forward).
+						lastFraction = fraction == null ? lastFraction : Math.max(lastFraction, fraction);
 						onProgress({ ...base, fileFraction: lastFraction, detail, stage: 'processing' });
 					},
 					signal

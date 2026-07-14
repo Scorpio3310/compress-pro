@@ -39,7 +39,12 @@ function getWoff2(): Promise<Woff2> {
 		const mod = (await import('fonteditor-core/woff2')).default as Woff2;
 		await mod.init(woff2WasmUrl);
 		return mod;
-	})();
+	})().catch((error) => {
+		// A transient chunk/wasm fetch failure must not brick every later
+		// woff2 job in the session (same rule as the video worker's encoders).
+		woff2Promise = null;
+		throw error;
+	});
 	return woff2Promise;
 }
 
@@ -58,12 +63,22 @@ function getHb(): Promise<HbExports> {
 			// Fallback when the server didn't send application/wasm.
 			return WebAssembly.compile(await (await fetch(hbWasmUrl)).arrayBuffer());
 		}
-	})();
-	hbInstancePromise ??= hbModulePromise.then(
-		async (module) =>
-			// Standalone build — instantiates with no imports object.
-			(await WebAssembly.instantiate(module)).exports as unknown as HbExports
-	);
+	})().catch((error) => {
+		// Reset on failure or an offline blip poisons every later subset —
+		// the inner catch above only covers the MIME fallback, not the network.
+		hbModulePromise = null;
+		throw error;
+	});
+	hbInstancePromise ??= hbModulePromise
+		.then(
+			async (module) =>
+				// Standalone build — instantiates with no imports object.
+				(await WebAssembly.instantiate(module)).exports as unknown as HbExports
+		)
+		.catch((error) => {
+			hbInstancePromise = null;
+			throw error;
+		});
 	return hbInstancePromise;
 }
 

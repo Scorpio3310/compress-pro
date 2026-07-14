@@ -1,5 +1,5 @@
 /**
- * XB-01…05 (@xbrowser): capability-degradation smoke for Firefox/WebKit —
+ * XB-01…06 (@xbrowser): capability-degradation smoke for Firefox/WebKit —
  * the app must WORK where the engine allows (wasm image codecs, EXIF byte
  * surgery and the wasm audio encoders are engine-agnostic) and DEGRADE
  * GRACEFULLY where it doesn't (WebCodecs video encode). Runs on chromium in
@@ -8,7 +8,7 @@
  */
 import { expect, fx, fxVideo, test } from '../fixtures';
 import { compress, downloadRow, gotoTab, rows, setOutputFormat, upload } from '../helpers';
-import { audioInfo } from '../verify';
+import { audioInfo, videoInfo } from '../verify';
 
 function collectPageErrors(page: import('@playwright/test').Page): string[] {
 	const errors: string[] = [];
@@ -91,5 +91,38 @@ test('XB-05: m4a (AAC) output works everywhere — native or wasm fallback @xbro
 	const art = await downloadRow(page);
 	expect(art.name).toBe('tone-3s.m4a');
 	expect((await audioInfo(art.bytes)).audioCodec).toBe('aac');
+	expect(errors).toEqual([]);
+});
+
+test('XB-06: a video convert that succeeds must carry AAC audio — never drop it @xbrowser', async ({
+	page
+}) => {
+	// The regression this locks in: without the probe-time wasm registration,
+	// Firefox reported AAC unencodable and the MP4 run SUCCEEDED with the
+	// audio track silently discarded (or opus kept, unplayable in Safari).
+	// VIDEO encode support still varies per engine (XB-03's tolerance), so a
+	// banner is an acceptable outcome — but a download with missing or
+	// non-AAC audio is the failure.
+	test.setTimeout(240_000);
+	const errors = collectPageErrors(page);
+	await gotoTab(page, 'video');
+	await upload(page, fxVideo('v-audio-3s.mp4'));
+	const cta = page.getByTestId('compress-cta');
+	await expect(cta).toBeEnabled();
+	await cta.click();
+	const banner = page.getByTestId('error-banner');
+	const download = rows(page).getByRole('button', { name: 'Download' }).first();
+	const outcome = await Promise.race([
+		banner.waitFor({ state: 'visible', timeout: 210_000 }).then(() => 'banner' as const),
+		download.waitFor({ state: 'visible', timeout: 210_000 }).then(() => 'download' as const)
+	]);
+	if (outcome === 'banner') {
+		await expect(banner, 'a helpful message, not a stack trace').toHaveText(/browser|convert/i);
+	} else {
+		const art = await downloadRow(page);
+		const info = await videoInfo(art.bytes);
+		expect(info.audioCodec, 'opus source re-encoded via native or wasm AAC').toBe('aac');
+		expect(info.trackCount, 'audio track survived the convert').toBe(2);
+	}
 	expect(errors).toEqual([]);
 });

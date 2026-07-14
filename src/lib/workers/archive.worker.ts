@@ -52,11 +52,16 @@ interface RunResult {
 	fs: SevenZipModule['FS'];
 }
 
-/** Input keys may be nested paths ("dir/file.txt") — parents are created. */
+/** Input keys may be nested paths ("dir/file.txt") — parents are created.
+ *  OWNERSHIP: `inputs` is consumed destructively — each entry is deleted as
+ *  soon as MEMFS holds the copy, so callers must pass a fresh record per run.
+ *  `mount` exposes a Blob/File read-only at /src/<name> via WORKERFS (lazy
+ *  FileReaderSync chunk reads — the archive never enters the JS heap whole). */
 async function runSevenZip(
 	args: string[],
 	inputs: Record<string, Uint8Array>,
-	onLine?: (line: string) => void
+	onLine?: (line: string) => void,
+	mount?: { name: string; data: Blob }
 ): Promise<RunResult> {
 	const ring: string[] = [];
 	const push = (line: string) => {
@@ -75,10 +80,17 @@ async function runSevenZip(
 	});
 	sz.FS.mkdir('/in');
 	sz.FS.mkdir('/out');
-	for (const [path, bytes] of Object.entries(inputs)) {
+	if (mount) {
+		sz.FS.mkdir('/src');
+		sz.FS.mount(sz.WORKERFS, { blobs: [mount] }, '/src');
+	}
+	for (const path of Object.keys(inputs)) {
 		const dir = path.split('/').slice(0, -1).join('/');
 		if (dir) mkdirp(sz.FS, `/in/${dir}`);
-		sz.FS.writeFile(`/in/${path}`, bytes);
+		sz.FS.writeFile(`/in/${path}`, inputs[path]);
+		// MEMFS now holds the only copy — drop the caller's reference eagerly
+		// (this is what frees the original inputs during a tar.* second stage).
+		delete inputs[path];
 	}
 	sz.FS.chdir('/in');
 
@@ -92,6 +104,13 @@ async function runSevenZip(
 	} catch (error) {
 		if (error && (error as { name?: string }).name === 'ExitStatus') {
 			exit = (error as { status: number }).status;
+		} else if (error && (error as { name?: string }).name === 'NotReadableError') {
+			// A WORKERFS lazy read failed: the source file changed or vanished
+			// on disk after it was picked. Without this branch the generic
+			// `thrown` path would misreport it as password-protected/damaged.
+			throw new Error(
+				'The file changed on disk after it was added — re-add it and try again.'
+			);
 		} else {
 			// Numeric C++ exception (encrypted-header paths) — instance is dead.
 			thrown = true;
@@ -107,7 +126,8 @@ interface OutEntry {
 }
 
 /** Collects every file under /out, paths relative to it. FS.readFile copies
- *  out of the wasm heap, so the buffers stay valid after the module is GC'd. */
+ *  out of the wasm heap, and each MEMFS node is freed the moment it is copied
+ *  (unlink/rmdir) — so the extracted output exists once in memory, not twice. */
 function walkOut(fs: SevenZipModule['FS'], dir = '/out'): OutEntry[] {
 	const entries: OutEntry[] = [];
 	for (const name of fs.readdir(dir)) {
@@ -115,8 +135,14 @@ function walkOut(fs: SevenZipModule['FS'], dir = '/out'): OutEntry[] {
 		const full = `${dir}/${name}`;
 		if (fs.isDir(fs.stat(full).mode)) {
 			entries.push(...walkOut(fs, full));
+			try {
+				fs.rmdir(full);
+			} catch {
+				// Best-effort — freeing is an optimization, never a failure.
+			}
 		} else {
 			const bytes = fs.readFile(full);
+			fs.unlink(full);
 			entries.push({ path: full.slice('/out/'.length), size: bytes.length, bytes });
 		}
 	}
@@ -181,24 +207,39 @@ function throwIfFailed(run: RunResult, hadPassword: boolean): void {
  * fractions into the caller's progress window.
  */
 async function extractAll(
-	bytes: Uint8Array,
+	source: File | Uint8Array,
 	name: string,
 	password: string,
 	progress: (p: ArchiveProgress) => void,
 	scale: (fraction: number) => number
 ): Promise<{ entries: OutEntry[]; note: string | null }> {
-	let current = { name: sanitizeEntryName(name), bytes };
+	let current: { name: string; source: File | Uint8Array } = {
+		name: sanitizeEntryName(name),
+		source
+	};
 	let note: string | null = null;
 
 	for (let hop = 0; ; hop++) {
+		// The user's File is read through a zero-copy WORKERFS mount; inner
+		// chain payloads (walkOut copies) are plain bytes and go through /in.
+		// Fresh inputs record per run — runSevenZip consumes it destructively,
+		// while `current.source` keeps the bytes alive across list + extract.
+		const viaMount = current.source instanceof Blob;
+		const archivePath = viaMount ? `/src/${current.name}` : `/in/${current.name}`;
+		const mount = viaMount ? { name: current.name, data: current.source as Blob } : undefined;
+		const inputsFor = () => (viaMount ? {} : { [current.name]: current.source as Uint8Array });
+
 		// Listing is best-effort: it feeds the entry-count fraction and nothing
 		// else, so a failure here (encrypted headers throw!) just means
 		// indeterminate progress until the extract itself reports the error.
 		let entryCount: number | null = null;
 		try {
-			const list = await runSevenZip(buildListArgs(`/in/${current.name}`, password), {
-				[current.name]: current.bytes
-			});
+			const list = await runSevenZip(
+				buildListArgs(archivePath, password),
+				inputsFor(),
+				undefined,
+				mount
+			);
 			if (!list.thrown) entryCount = parseListOutput(list.tail.split('\n')).entryCount;
 		} catch {
 			entryCount = null;
@@ -206,8 +247,8 @@ async function extractAll(
 
 		let done = 0;
 		const run = await runSevenZip(
-			buildExtractArgs(`/in/${current.name}`, password, '/out'),
-			{ [current.name]: current.bytes },
+			buildExtractArgs(archivePath, password, '/out'),
+			inputsFor(),
 			(line) => {
 				if (!isEntryLine(line)) return;
 				done++;
@@ -215,7 +256,8 @@ async function extractAll(
 					fraction: entryCount ? scale(Math.min(done / entryCount, 1)) : null,
 					detail: line.slice(2)
 				});
-			}
+			},
+			mount
 		);
 		throwIfFailed(run, password !== '');
 
@@ -236,12 +278,14 @@ async function extractAll(
 		progress({ fraction: null, detail: `unpacking ${inner.path.split('/').pop()}` });
 		current = {
 			name: sanitizeEntryName(inner.path.split('/').pop() ?? inner.path),
-			bytes: inner.bytes
+			source: inner.bytes
 		};
 	}
 }
 
-/** Bundle a set of (possibly nested) paths into `output`, two passes for tar.*. */
+/** Bundle a set of (possibly nested) paths into `output`, two passes for tar.*.
+ *  OWNERSHIP: `files` is consumed destructively at entry — the caller must not
+ *  retain another reference to the array or its byte buffers. */
 async function createArchive(
 	files: { path: string; bytes: Uint8Array }[],
 	output: WorkerContracts['archive']['create']['payload']['output'],
@@ -263,6 +307,11 @@ async function createArchive(
 		topLevel.add(parts[0]);
 		inputs[parts.join('/')] = file.bytes;
 	}
+	// From here `inputs` is the single owner of the byte buffers, and
+	// runSevenZip drops each entry once MEMFS has it — so stage 2 of a tar.*
+	// create no longer pins the original inputs alongside the tar.
+	const total = files.length;
+	files.length = 0;
 
 	let added = 0;
 	const runStage = async (
@@ -278,7 +327,7 @@ async function createArchive(
 				if (!line.startsWith('+ ')) return;
 				added++;
 				progress({
-					fraction: scale(Math.min((added / files.length) * 0.9, 0.9)),
+					fraction: scale(Math.min((added / total) * 0.9, 0.9)),
 					detail: line.slice(2)
 				});
 			}
@@ -303,6 +352,9 @@ expose<WorkerContracts['archive']>({
 	async create(payload, progress) {
 		const names = uniqueInputNames(payload.files.map((f) => f.name));
 		const files = payload.files.map((f, i) => ({ path: names[i], bytes: new Uint8Array(f.bytes) }));
+		// The views above alias the transferred ArrayBuffers; drop the payload's
+		// wrappers so `files` (consumed destructively below) is the only owner.
+		payload.files.length = 0;
 		const result = await createArchive(
 			files,
 			payload.output,
@@ -320,7 +372,7 @@ expose<WorkerContracts['archive']>({
 
 	async extract(payload, progress) {
 		const { entries, note } = await extractAll(
-			new Uint8Array(payload.bytes),
+			payload.file,
 			payload.name,
 			payload.password,
 			progress,
@@ -335,15 +387,23 @@ expose<WorkerContracts['archive']>({
 
 	async convert(payload, progress) {
 		const { entries } = await extractAll(
-			new Uint8Array(payload.bytes),
+			payload.file,
 			payload.name,
 			payload.password,
 			progress,
 			(f) => f * 0.5
 		);
 		progress({ fraction: 0.55, detail: 'repacking' });
+		// Snapshot the count, then make `mapped` the single owner of the
+		// extracted buffers — createArchive consumes it destructively, so the
+		// repack stage doesn't hold the extraction twice. payload.file stays
+		// referenced on purpose: it is a disk-backed handle, dropping it frees
+		// nothing.
+		const entryCount = entries.length;
+		const mapped = entries.map((e) => ({ path: e.path, bytes: e.bytes }));
+		entries.length = 0;
 		const result = await createArchive(
-			entries.map((e) => ({ path: e.path, bytes: e.bytes })),
+			mapped,
 			payload.output,
 			// The repacked archive is intentionally unencrypted — the password
 			// belongs to the SOURCE; encrypt-on-convert would silently produce
@@ -355,24 +415,8 @@ expose<WorkerContracts['archive']>({
 		);
 		const bytes = result.bytes.buffer as ArrayBuffer;
 		return {
-			result: { bytes, name: result.name, mimeType: result.mimeType, entryCount: entries.length },
+			result: { bytes, name: result.name, mimeType: result.mimeType, entryCount },
 			transfer: [bytes]
 		};
-	},
-
-	async probe(payload) {
-		const name = sanitizeEntryName(payload.name);
-		const run = await runSevenZip(buildListArgs(`/in/${name}`, ''), {
-			[name]: new Uint8Array(payload.bytes)
-		});
-		if (run.thrown) {
-			// Encrypted 7z headers throw before printing anything usable.
-			return { result: { format: null, encrypted: true, entryCount: null } };
-		}
-		const info = parseListOutput(run.tail.split('\n'));
-		if (run.exit !== 0 && run.exit !== null && !info.format) {
-			return { result: { format: null, encrypted: /password/i.test(run.tail), entryCount: null } };
-		}
-		return { result: info };
 	}
 });

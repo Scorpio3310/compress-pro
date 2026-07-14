@@ -85,19 +85,31 @@
 		}
 		rendering = true;
 		try {
-			const [before, after] = await Promise.all([
+			// allSettled, not all: renderPage returns a fresh object URL that the
+			// caller owns — a half-failed pair must still revoke the half that
+			// rendered, or it leaks a full page PNG per failed flip.
+			const settled = await Promise.allSettled([
 				handles.before.renderPage(target),
 				handles.after.renderPage(target)
 			]);
-			if (id !== session) {
-				URL.revokeObjectURL(before);
-				URL.revokeObjectURL(after);
+			const before = settled[0].status === 'fulfilled' ? settled[0].value : null;
+			const after = settled[1].status === 'fulfilled' ? settled[1].value : null;
+			if (id !== session || !before || !after) {
+				if (before) URL.revokeObjectURL(before);
+				if (after) URL.revokeObjectURL(after);
+				if (id === session) {
+					const reason = settled.find((s) => s.status === 'rejected')?.reason;
+					renderError = reason instanceof Error ? reason.message : 'Preview failed';
+				}
 				return;
 			}
 			cache.set(target, { before, after });
 			page = target;
 			pageUrls = { before, after };
 		} catch (error) {
+			// allSettled absorbs rejections, so this only sees a SYNCHRONOUS
+			// throw from renderPage — still surface it instead of leaving an
+			// unhandled rejection and a spinner that ends with no message.
 			if (id === session) {
 				renderError = error instanceof Error ? error.message : 'Preview failed';
 			}

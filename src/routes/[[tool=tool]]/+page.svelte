@@ -263,7 +263,13 @@
 
 	function handleFiles(files: UploadedFile[], format: FileFormat = activeTab) {
 		const state = tabStates[format];
-		if (state.isCompressing) return; // additions mid-run would desync files ↔ results
+		if (state.isCompressing) {
+			// Additions mid-run would desync files ↔ results. routeIncomingFiles
+			// gates busy tabs before any object URLs exist; any other caller
+			// reaching here must not leak the eagerly-created ones.
+			for (const f of files) URL.revokeObjectURL(f.objectUrl);
+			return;
+		}
 		state.files = [...state.files, ...files];
 		clearResults(state);
 		state.error = null;
@@ -577,12 +583,30 @@
 			if (group) group.push(file);
 			else groups.set(format, [file]);
 		}
+		// Busy tabs must not take files (mid-run additions would desync files ↔
+		// results) — drop their groups BEFORE toUploadedFiles runs, so no object
+		// URLs are ever created for refused files. This also keeps a busy pdf
+		// tab's op from being switched out from under its run (below).
+		const busyTabs: FileFormat[] = [];
+		let busyCount = 0;
+		for (const [format, group] of [...groups]) {
+			if (!tabStates[format].isCompressing) continue;
+			busyTabs.push(format);
+			busyCount += group.length;
+			groups.delete(format);
+		}
+		const busyMsg = busyTabs.length
+			? `${busyCount === 1 ? '1 file' : `${busyCount} files`} not added — the ${busyTabs.join(', ')} ` +
+				`${busyTabs.length === 1 ? 'tab is' : 'tabs are'} busy compressing. ` +
+				'Cancel the run or wait for it to finish, then add them again.'
+			: null;
+		const unknownMsg = firstUnknown
+			? `Unsupported file type: ${firstUnknown}` +
+				(unknownCount > 1 ? ` (+${unknownCount - 1} more)` : '')
+			: null;
 		if (!groups.size) {
-			if (firstUnknown) {
-				tabStates[activeTab].error =
-					`Unsupported file type: ${firstUnknown}` +
-					(unknownCount > 1 ? ` (+${unknownCount - 1} more)` : '');
-			}
+			const msg = [busyMsg, unknownMsg].filter(Boolean).join(' ');
+			if (msg) tabStates[activeTab].error = msg;
 			return;
 		}
 		// A routed PDF while the pdf tab expects images would be stranded.
@@ -594,14 +618,12 @@
 		// so nothing is lost on the way to the target tab's route.
 		const first = groups.keys().next().value;
 		const navigate = opts.navigate !== false && !!first && first !== activeTab;
-		// Unroutable files in a mixed drop must not vanish silently — banner the
-		// tab the user will actually be looking at. Placed AFTER the handleFiles
-		// loop, which clears each parked tab's error.
-		if (firstUnknown) {
+		// Refused (busy-tab) and unroutable files must not vanish silently —
+		// banner the tab the user will actually be looking at. Placed AFTER the
+		// handleFiles loop, which clears each parked tab's error.
+		if (busyMsg || unknownMsg) {
 			const dest = navigate && first ? first : activeTab;
-			tabStates[dest].error =
-				`Unsupported file type: ${firstUnknown}` +
-				(unknownCount > 1 ? ` (+${unknownCount - 1} more)` : '');
+			tabStates[dest].error = [busyMsg, unknownMsg].filter(Boolean).join(' ');
 		}
 		if (navigate && first) goto(resolve(pathFor(first)), { noScroll: true, keepFocus: true });
 	}

@@ -82,7 +82,14 @@ expose<WorkerContracts['gs']>({
 
 		const out = gs.FS.readFile('/out.pdf');
 		if (out.length === 0) throw new Error('Ghostscript produced empty output');
-		const result = out.buffer.slice(out.byteOffset, out.byteOffset + out.byteLength) as ArrayBuffer;
+		// Binary FS.readFile allocates a fresh exact-size buffer — transfer it
+		// directly instead of duplicating a whole PDF; slice only if a future
+		// emscripten ever hands back an offset view.
+		const result = (
+			out.byteOffset === 0 && out.byteLength === out.buffer.byteLength
+				? out.buffer
+				: out.buffer.slice(out.byteOffset, out.byteOffset + out.byteLength)
+		) as ArrayBuffer;
 		return { result, transfer: [result] };
 	}
 });

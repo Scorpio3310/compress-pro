@@ -5,9 +5,9 @@
  * stop. Worker RPC runs against the same stubbed Worker as rpc.test.ts.
  */
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { compressFiles, wasCancelled } from './compress';
+import { compressFiles, runArchiveTool, wasCancelled } from './compress';
 import { abortAll, CancelledError } from './workers/rpc';
-import type { SvgCompressionSettings, UploadedFile } from './types';
+import type { ProgressInfo, SvgCompressionSettings, UploadedFile, ZipSettings } from './types';
 
 class StubWorker {
 	static instances: StubWorker[] = [];
@@ -103,4 +103,51 @@ it('an own cancel stays silent — no failure rows', async () => {
 	const out = await run;
 	expect(out.results).toEqual([]);
 	expect(out.failures).toEqual([]);
+});
+
+it('archive progress never rewinds across chain hops', async () => {
+	// .7z name skips the fflate fast path, so the worker RPC carries progress.
+	const file = new File(['not really a 7z'], 'a.7z', { type: 'application/x-7z-compressed' });
+	const upload: UploadedFile = {
+		id: 'u1',
+		file,
+		name: file.name,
+		size: file.size,
+		objectUrl: 'blob:test'
+	};
+	const settings: ZipSettings = {
+		op: 'extract',
+		outputFormat: 'zip',
+		level: 6,
+		password: '',
+		encryptNames: false
+	};
+	const fractions: number[] = [];
+	const run = runArchiveTool(
+		[upload],
+		settings,
+		(p: ProgressInfo) => {
+			if (p.stage === 'processing') fractions.push(p.fileFraction);
+		},
+		undefined
+	);
+	await vi.waitFor(() => expect(StubWorker.instances[0]?.posted.length ?? 0).toBeGreaterThan(0));
+	const stub = StubWorker.instances[0];
+	const { id } = stub.posted[0];
+	// A chained extract's second hop restarts its scale window (0.9 → 0.1);
+	// the consumer clamp must hold the peak, and null must carry it forward.
+	stub.onmessage?.({ data: { id, progress: { fraction: 0.9, detail: 'photo.jpg' } } });
+	stub.onmessage?.({ data: { id, progress: { fraction: null, detail: 'unpacking inner.tar' } } });
+	stub.onmessage?.({ data: { id, progress: { fraction: 0.1, detail: 'doc.txt' } } });
+	// Reject rather than resolve: a successful extract would build entry rows
+	// via URL.createObjectURL, which node's test env doesn't provide.
+	stub.onmessage?.({ data: { id, ok: false, error: 'stop' } });
+	const out = await run;
+	expect(out.failures).toHaveLength(1);
+	expect(fractions.length).toBeGreaterThanOrEqual(4);
+	for (let i = 1; i < fractions.length; i++) {
+		expect(fractions[i]).toBeGreaterThanOrEqual(fractions[i - 1]);
+	}
+	// The rewinding 0.1 was clamped at the 0.9 peak.
+	expect(fractions.at(-1)).toBe(0.9);
 });

@@ -16,7 +16,8 @@ const STATIC_HEADERS: Record<string, string | RegExp> = {
 	'referrer-policy': 'strict-origin-when-cross-origin',
 	'x-frame-options': 'DENY',
 	'permissions-policy': /camera=\(\)/,
-	'content-security-policy': /frame-ancestors 'none'/
+	'content-security-policy': /frame-ancestors 'none'/,
+	link: /<\/llms\.txt>; rel="describedby".*<\/\.well-known\/agent-skills\/index\.json>/
 };
 
 test('HD-01: prerendered pages and static assets carry the header set', async ({ request }) => {

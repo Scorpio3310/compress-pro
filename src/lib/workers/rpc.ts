@@ -18,6 +18,9 @@ interface Pending {
 	clearWatchdog?: () => void;
 	/** Identity tag for owner-scoped abortAll(); never settles the call itself. */
 	owner?: AbortSignal;
+	/** Best-effort metadata read (upload-time probes): an owner-scoped abortAll
+	 *  may cancel it rather than let it shield the instance from termination. */
+	probe?: boolean;
 }
 
 interface Instance {
@@ -39,7 +42,9 @@ const IDLE_TIMEOUT_MS: Record<WorkerKind, number> = {
 	gs: 20 * 60_000,
 	video: 10 * 60_000,
 	// WOFF2 encode is synchronous brotli-q11 — sub-second for text fonts but
-	// minutes for 20 MB+ CJK ones; the ceiling catches "stuck", not "slow".
+	// minutes for 20 MB+ CJK ones. This is only the FLOOR: convert/subset
+	// call sites scale the window by input size (fontIdleTimeoutMs), since a
+	// progress-less encode is one silent window from start to finish.
 	font: 10 * 60_000,
 	// 7zz emits a stdout line per entry (-bb1), which re-arms this; a single
 	// huge solid block can legitimately stay silent for a while.
@@ -146,22 +151,39 @@ export class CancelledError extends Error {
  * is orphaned instead: the encode burns out in the background, its late
  * response hits an unknown id and is ignored, and the watchdog stays the
  * backstop.
+ *
+ * Probe-tagged calls (opts.probe) are the exception to the shielding rule:
+ * they are best-effort metadata reads, so when the only other work on an
+ * instance is probes, they are rejected with CancelledError too and the
+ * instance IS terminated — a cancelled run's synchronous encode must not be
+ * kept alive (blocking a size-1 pool for minutes) just to protect a probe the
+ * caller can simply rerun.
  */
 export function abortAll(kinds?: WorkerKind[], owner?: AbortSignal): void {
 	for (const [kind, pool] of pools) {
 		if (kinds && !kinds.includes(kind)) continue;
 		for (const instance of [...pool]) {
 			let hasForeign = false;
+			const foreignProbes: number[] = [];
 			for (const [id, entry] of instance.pending) {
 				if (owner && entry.owner !== owner) {
-					hasForeign = true;
+					if (entry.probe) foreignProbes.push(id);
+					else hasForeign = true;
 					continue;
 				}
 				entry.clearWatchdog?.();
 				entry.reject(new CancelledError());
 				instance.pending.delete(id);
 			}
+			// A real foreign run shields the instance — its probes ride along.
 			if (hasForeign) continue;
+			for (const id of foreignProbes) {
+				const entry = instance.pending.get(id);
+				if (!entry) continue;
+				entry.clearWatchdog?.();
+				entry.reject(new CancelledError());
+				instance.pending.delete(id);
+			}
 			instance.worker.terminate();
 			const at = pool.indexOf(instance);
 			if (at >= 0) pool.splice(at, 1);
@@ -189,7 +211,11 @@ type Spec<
  * per-kind no-progress watchdog (0 disables it). `opts.owner` tags the call
  * with its run's AbortSignal so abortAll(kinds, owner) can cancel just that
  * run — a call without the tag survives every owner-scoped abort, so any new
- * call site on a kind listed in CANCEL_KINDS must pass it.
+ * call site on a kind listed in CANCEL_KINDS must pass it. `opts.probe` marks
+ * an untagged upload-time probe as expendable: an owner-scoped abort may
+ * cancel it (instead of letting it block termination) when it is the only
+ * other work on the instance — probe callers must treat CancelledError as
+ * "rerun me", not as failure.
  */
 export function callWorker<K extends WorkerKind, A extends keyof WorkerContracts[K] & string>(
 	kind: K,
@@ -197,7 +223,7 @@ export function callWorker<K extends WorkerKind, A extends keyof WorkerContracts
 	payload: Spec<K, A>['payload'],
 	transfer: Transferable[] = [],
 	onProgress?: (progress: Spec<K, A>['progress']) => void,
-	opts?: { idleTimeoutMs?: number; owner?: AbortSignal }
+	opts?: { idleTimeoutMs?: number; owner?: AbortSignal; probe?: boolean }
 ): Promise<Spec<K, A>['result']> {
 	const instance = getInstance(kind);
 	const id = ++nextId;
@@ -209,7 +235,8 @@ export function callWorker<K extends WorkerKind, A extends keyof WorkerContracts
 			resolve: resolve as (value: unknown) => void,
 			reject,
 			onProgress: onProgress as ((progress: unknown) => void) | undefined,
-			owner: opts?.owner
+			owner: opts?.owner,
+			probe: opts?.probe
 		};
 		if (timeoutMs > 0) {
 			let timer: ReturnType<typeof setTimeout>;
@@ -219,8 +246,9 @@ export function callWorker<K extends WorkerKind, A extends keyof WorkerContracts
 					// instance; the pool respawns a fresh one on the next call.
 					instance.fail(
 						new Error(
-							`${kind} worker made no progress for ${Math.round(timeoutMs / 60_000)} min — ` +
-								'likely a stuck codec; this file was skipped'
+							`${kind} worker made no progress for ${Math.round(timeoutMs / 60_000)} min ` +
+								'and was stopped — the file may be damaged, or this device may be ' +
+								'too slow for its size; try a smaller file or a lower level'
 						)
 					);
 				}, timeoutMs);

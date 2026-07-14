@@ -249,24 +249,20 @@ test('V-08: Remove audio drops the track', async ({ page, rec }) => {
 
 test('V-09: opus audio in an MP4 run becomes AAC (Safari compat)', async ({ page, rec }) => {
 	// Fixture audio is Opus. Opus-in-MP4 won't play in Safari/QuickTime, so the
-	// app re-encodes to AAC when this browser can — capability-aware assert.
-	const aacEncodable = videoFixtures().capabilities.aac;
+	// app re-encodes to AAC — unconditionally: the probe registers the wasm
+	// AAC fallback where the engine has no native encoder, so the old
+	// capability branch (kept-as-opus + warning) is dead on every engine.
 	await gotoTab(page, 'video');
 	await upload(page, fxVideo('v-audio-3s.mp4'));
 	const run = await compress(page);
 	const art = await downloadRow(page);
 	const info = await videoInfo(art.bytes);
-	if (aacEncodable) {
-		expect(info.audioCodec, 're-encoded for compatibility').toBe('aac');
-		expect(run.warnings).toHaveLength(0);
-	} else {
-		expect(info.audioCodec, 'kept as opus when AAC encode is unavailable').toBe('opus');
-		expect(run.warnings.join(' ')).toMatch(/Safari/i);
-	}
+	expect(info.audioCodec, 're-encoded for compatibility').toBe('aac');
+	expect(run.warnings).toHaveLength(0);
 	expect(info.trackCount).toBe(2);
 	rec.record({
 		id: 'V-09',
-		settings: { tab: 'video', container: 'mp4', audio: aacEncodable ? 'opus→aac' : 'copy' },
+		settings: { tab: 'video', container: 'mp4', audio: 'opus→aac' },
 		input: { name: 'v-audio-3s.mp4', bytes: readFileSync(fxVideo('v-audio-3s.mp4')).length },
 		output: { name: art.name, bytes: art.bytes.length },
 		metrics: { audioCodec: info.audioCodec ?? '' },
@@ -633,8 +629,8 @@ test('V-27: mov → mov at q100 cannot beat keep-original', async ({ page, rec }
 
 test('V-28: opus audio in a MOV run becomes AAC (QuickTime compat)', async ({ page, rec }) => {
 	// Same policy as V-09's MP4 case: Opus is spec-legal in ISOBMFF but
-	// QuickTime won't play it, so the MOV path re-encodes to AAC when it can.
-	const aacEncodable = videoFixtures().capabilities.aac;
+	// QuickTime won't play it, so the MOV path re-encodes to AAC — the wasm
+	// fallback makes that unconditional on every engine (see V-09).
 	await gotoTab(page, 'video');
 	await upload(page, fxVideo('v-audio-3s.mp4'));
 	await setContainer(page, 'mov');
@@ -643,17 +639,12 @@ test('V-28: opus audio in a MOV run becomes AAC (QuickTime compat)', async ({ pa
 	expect(art.name).toBe('v-audio-3s.mov');
 	const info = await videoInfo(art.bytes);
 	expect(info.formatMime).toBe('video/quicktime');
-	if (aacEncodable) {
-		expect(info.audioCodec, 're-encoded for QuickTime compatibility').toBe('aac');
-		expect(run.warnings).toHaveLength(0);
-	} else {
-		expect(info.audioCodec, 'kept as opus when AAC encode is unavailable').toBe('opus');
-		expect(run.warnings.join(' ')).toMatch(/Safari/i);
-	}
+	expect(info.audioCodec, 're-encoded for QuickTime compatibility').toBe('aac');
+	expect(run.warnings).toHaveLength(0);
 	expect(info.trackCount).toBe(2);
 	rec.record({
 		id: 'V-28',
-		settings: { tab: 'video', container: 'mov', audio: aacEncodable ? 'opus→aac' : 'copy' },
+		settings: { tab: 'video', container: 'mov', audio: 'opus→aac' },
 		input: { name: 'v-audio-3s.mp4', bytes: readFileSync(fxVideo('v-audio-3s.mp4')).length },
 		output: { name: art.name, bytes: art.bytes.length },
 		metrics: { audioCodec: info.audioCodec ?? '' },

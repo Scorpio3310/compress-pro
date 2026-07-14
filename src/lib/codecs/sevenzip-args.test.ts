@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
+	ARCHIVE_IDLE_CEIL_MS,
+	ARCHIVE_IDLE_FLOOR_MS,
+	archiveIdleTimeoutMs,
+	CONVERT_EXPANSION_FACTOR,
 	buildCreateArgs,
 	buildExtractArgs,
 	buildListArgs,
@@ -217,5 +221,57 @@ describe('sanitizeEntryName', () => {
 		expect(sanitizeEntryName('')).toBe('file');
 		expect(sanitizeEntryName('..')).toBe('file');
 		expect(sanitizeEntryName('   ')).toBe('file');
+	});
+});
+
+/**
+ * CONTRACT tests, deliberately not exact-ms mirrors of the rate constant:
+ * re-deriving the implementation's arithmetic proves nothing about whether
+ * the constant fits real devices, and it breaks on every honest retune.
+ * The floor and ceiling ARE exact — they are promises to rpc.ts and the UI.
+ */
+describe('archiveIdleTimeoutMs', () => {
+	const MB = 1024 * 1024;
+
+	it('never dips below the kind-default floor', () => {
+		expect(archiveIdleTimeoutMs(0)).toBe(ARCHIVE_IDLE_FLOOR_MS);
+		expect(archiveIdleTimeoutMs(50 * MB)).toBe(ARCHIVE_IDLE_FLOOR_MS);
+	});
+
+	it('gives large inputs strictly more than the floor, bounded by the ceiling', () => {
+		const window = archiveIdleTimeoutMs(600 * MB);
+		expect(window).toBeGreaterThan(ARCHIVE_IDLE_FLOOR_MS);
+		expect(window).toBeLessThan(ARCHIVE_IDLE_CEIL_MS);
+	});
+
+	it('scales linearly on the un-clamped segment', () => {
+		// The RATIO survives any retune of the bytes/s budget; a unit slip
+		// (s vs ms) or an accidental non-linear curve breaks it.
+		const w1 = archiveIdleTimeoutMs(300 * MB);
+		const w2 = archiveIdleTimeoutMs(600 * MB);
+		expect(w1).toBeGreaterThan(ARCHIVE_IDLE_FLOOR_MS);
+		expect(w2).toBeLessThan(ARCHIVE_IDLE_CEIL_MS);
+		expect(w2 / w1).toBeCloseTo(2, 5);
+	});
+
+	it('caps at the one-hour ceiling', () => {
+		expect(archiveIdleTimeoutMs(100 * 1024 * MB)).toBe(ARCHIVE_IDLE_CEIL_MS);
+	});
+
+	it('is monotonic in input size', () => {
+		const sizes = [0, MB, 300 * MB, 600 * MB, 1024 * MB, 4096 * MB];
+		const windows = sizes.map(archiveIdleTimeoutMs);
+		expect([...windows].sort((a, b) => a - b)).toEqual(windows);
+	});
+
+	it('convert expansion buys a floor-level source real extra window', () => {
+		// The user-facing contract: a modest compressed source whose own size
+		// sits at the floor must NOT be watchdogged at the floor during its
+		// repack — the expansion factor has to lift it.
+		const source = 60 * MB;
+		expect(archiveIdleTimeoutMs(source)).toBe(ARCHIVE_IDLE_FLOOR_MS);
+		expect(archiveIdleTimeoutMs(source * CONVERT_EXPANSION_FACTOR)).toBeGreaterThan(
+			ARCHIVE_IDLE_FLOOR_MS
+		);
 	});
 });

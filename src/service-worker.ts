@@ -24,10 +24,14 @@ declare const self: ServiceWorkerGlobalScope;
 
 const CACHE = `app-${version}`;
 const NEVER = new Set(['/robots.txt', '/sitemap.xml']);
+// Agent-facing docs (the ~95 .md page twins, /.well-known/*) are prerendered
+// too, but human visitors rarely fetch them — keep them out of the install
+// precache; the runtime cache still picks them up on first use.
+const isAgentDoc = (path: string) => path.endsWith('.md') || path.startsWith('/.well-known/');
 
 const PRECACHE = [
 	...build.filter((path) => !path.endsWith('.wasm')),
-	...prerendered.filter((path) => !NEVER.has(path)),
+	...prerendered.filter((path) => !NEVER.has(path) && !isAgentDoc(path)),
 	...files
 ];
 

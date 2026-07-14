@@ -12,6 +12,18 @@
 # are enforced as independent policies, and this one must never block what the
 # meta policy allows.
 #
+# GUARD: never add a script-src (or default-src) here without 'unsafe-eval'.
+# Dedicated workers take their CSP from their OWN resource's response headers,
+# not the page's meta CSP — and fonteditor-core's woff2 glue runs the
+# Function() constructor at init (embind dynCall codegen), which
+# 'wasm-unsafe-eval' does NOT cover. A plain script-src on worker chunks would
+# break every woff2 encode/decode while the rest of the app keeps working.
+#
+# The Link header (RFC 8288) advertises the agent-discovery entry points
+# (llms.txt, the agent-skills index) on every response — it must live here
+# because the audit surface is the homepage, a static asset the hook never
+# sees. One site-wide rule: per-page variants would blow the 100-rule cap.
+#
 # These headers cover STATIC ASSETS only (including prerendered HTML); runtime
 # routes (robots.txt, sitemap.xml, llms.txt, 404s) get theirs from
 # src/hooks.server.ts.
@@ -23,3 +35,9 @@
   X-Frame-Options: DENY
   Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=(), midi=(), magnetometer=(), gyroscope=(), accelerometer=()
   Content-Security-Policy: frame-ancestors 'none'; base-uri 'self'; object-src 'none'
+  Link: </llms.txt>; rel="describedby"; type="text/markdown", </.well-known/agent-skills/index.json>; rel="describedby"; type="application/json"
+
+# OG images are referenced by unhashed URLs and change only alongside a page
+# edit — a day of caching saves repeat social-crawler fetches.
+/og/*
+  Cache-Control: public, max-age=86400

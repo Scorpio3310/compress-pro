@@ -65,7 +65,9 @@ it('watchdog rejects a silent call and terminates the worker', async () => {
 	await vi.advanceTimersByTimeAsync(1000);
 	const outcome = await settled;
 	expect(outcome).toBeInstanceOf(Error);
-	expect((outcome as Error).message).toMatch(/no progress .* stuck codec/);
+	// The message must name BOTH hypotheses — damage and a slow device — a
+	// watchdog kill is not proof the codec was stuck.
+	expect((outcome as Error).message).toMatch(/no progress .* damaged, or this device/);
 	expect(StubWorker.instances).toHaveLength(1);
 	expect(StubWorker.instances[0].terminated).toBe(true);
 });
@@ -212,6 +214,68 @@ it('abortAll(kinds, owner) terminates an instance the owner has to itself', asyn
 	const fresh = StubWorker.instances[1];
 	fresh.onmessage?.({ data: { id: fresh.posted[0].id, ok: true, result: 'fresh' } });
 	await expect(second).resolves.toBe('fresh');
+});
+
+it('abortAll(kinds, owner) terminates an instance whose only foreign pendings are probes', async () => {
+	const owner = new AbortController().signal;
+	const owned = callSvgOwned(owner).then(
+		() => 'resolved',
+		(error: Error) => error.name
+	);
+	const probe = callWorker('svg', 'optimize', SVG_PAYLOAD, [], undefined, {
+		idleTimeoutMs: 0,
+		probe: true
+	}).then(
+		() => 'resolved',
+		(error: Error) => error.name
+	);
+	// svg poolCap is 1 — the run and the probe share one instance.
+	expect(StubWorker.instances).toHaveLength(1);
+	const stub = StubWorker.instances[0];
+
+	abortAll(['svg'], owner);
+	// The probe must not shield the instance: both reject, the worker dies.
+	expect(await owned).toBe('CancelledError');
+	expect(await probe).toBe('CancelledError');
+	expect(stub.terminated).toBe(true);
+	// The instance left the pool — the next call spawns a fresh worker.
+	const second = callSvg(0);
+	expect(StubWorker.instances).toHaveLength(2);
+	const fresh = StubWorker.instances[1];
+	fresh.onmessage?.({ data: { id: fresh.posted[0].id, ok: true, result: 'fresh' } });
+	await expect(second).resolves.toBe('fresh');
+});
+
+it('a foreign RUN call still shields the instance — probes stay pending', async () => {
+	const ownerA = new AbortController().signal;
+	const ownerB = new AbortController().signal;
+	const cancelled = callSvgOwned(ownerA).then(
+		() => 'resolved',
+		(error: Error) => error.name
+	);
+	let foreignSettled = false;
+	const foreignRun = callSvgOwned(ownerB).then(
+		() => (foreignSettled = true),
+		() => (foreignSettled = true)
+	);
+	let probeSettled = false;
+	const probe = callWorker('svg', 'optimize', SVG_PAYLOAD, [], undefined, {
+		idleTimeoutMs: 0,
+		probe: true
+	}).then(
+		() => (probeSettled = true),
+		() => (probeSettled = true)
+	);
+	const stub = StubWorker.instances[0];
+
+	abortAll(['svg'], ownerA);
+	expect(await cancelled).toBe('CancelledError');
+	// B's run is in flight, so the instance survives and the probe rides along.
+	expect(stub.terminated).toBe(false);
+	expect(foreignSettled).toBe(false);
+	expect(probeSettled).toBe(false);
+	void foreignRun;
+	void probe; // both settled by afterEach's abortAll
 });
 
 it("an owner-scoped abort clears the owner's watchdog and keeps the survivor alive", async () => {

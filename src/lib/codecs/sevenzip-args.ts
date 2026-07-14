@@ -67,6 +67,41 @@ export function createStages(output: ArchiveOutputFormat): SevenZipType[] {
 	}
 }
 
+/** Matches IDLE_TIMEOUT_MS.archive in rpc.ts — the no-progress default. */
+export const ARCHIVE_IDLE_FLOOR_MS = 10 * 60_000;
+export const ARCHIVE_IDLE_CEIL_MS = 60 * 60_000;
+// Worst-case single-threaded wasm LZMA2 at -mx9 measures ~1-2 MB/s — on the
+// DEV machine. A low-end phone runs wasm 3-5x slower, which would eat a 2-4x
+// margin whole, and the cost asymmetry is stark: a stuck job detected late
+// costs patience (Cancel exists the whole time), a healthy 25-minute job
+// killed at 20 loses the user's work. Budget at 0.25 MB/s (4-8x dev margin).
+// This bounds the SILENT window only, not the job: every -bb1 entry line
+// re-arms the watchdog, so the scaled window matters solely for single-stream
+// passes (gz/bz2/xz, tar.* stage 2, one huge file) that print a single
+// "+ name" line and then compress in silence.
+const WORST_CASE_BYTES_PER_MS = (0.25 * 1024 * 1024) / 1000;
+
+/** No-progress watchdog window for archive create/convert calls, scaled to
+ *  the input size so a legitimately slow single-stream compression isn't
+ *  killed as "stuck". Floor = the kind default; ceiling = deliberate backstop
+ *  (anything needing more input already exceeds practical wasm32 limits).
+ *  Callers must pass the byte count the SILENT stage actually processes:
+ *  create = the input sum (≈ the tar stage 2 compresses), convert = the
+ *  compressed source × CONVERT_EXPANSION_FACTOR (the repack runs over
+ *  EXTRACTED bytes, unknown up front). */
+export function archiveIdleTimeoutMs(totalBytes: number): number {
+	return Math.min(
+		ARCHIVE_IDLE_CEIL_MS,
+		Math.max(ARCHIVE_IDLE_FLOOR_MS, Math.ceil(totalBytes / WORST_CASE_BYTES_PER_MS))
+	);
+}
+
+/** Convert's silent repack stage compresses the EXTRACTED payload, but only
+ *  the compressed source size is known when the watchdog is armed — budget a
+ *  pessimistic 10x expansion (source/text archives commonly reach 5-8x; the
+ *  one-hour ceiling still bounds the window for outliers). */
+export const CONVERT_EXPANSION_FACTOR = 10;
+
 export interface CreateOptions {
 	level: 0 | 1 | 6 | 9;
 	/** '' = unencrypted. Only zip/7z honor it (the stream formats can't). */

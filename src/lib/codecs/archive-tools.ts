@@ -1,6 +1,7 @@
 import type { UploadedFile, ZipSettings } from '$lib/types';
-import type { ArchiveExtractResult, ArchiveProbeResult } from '$lib/workers/protocol';
+import type { ArchiveExtractResult } from '$lib/workers/protocol';
 import { callWorker } from '$lib/workers/rpc';
+import { archiveIdleTimeoutMs, CONVERT_EXPANSION_FACTOR } from '$lib/codecs/sevenzip-args';
 
 /**
  * Main-thread side of the 7z-wasm archive worker: payload assembly, buffer
@@ -52,7 +53,9 @@ export async function createBundle(
 		inputs.map((i) => i.bytes),
 		(p) =>
 			onProgress(p.fraction == null ? null : READ_SHARE + p.fraction * (1 - READ_SHARE), p.detail),
-		{ owner: signal }
+		// tar.* second stages / single-file 7z print one line then compress in
+		// silence — scale the no-progress window so slow-but-healthy jobs live.
+		{ owner: signal, idleTimeoutMs: archiveIdleTimeoutMs(files.reduce((t, f) => t + f.size, 0)) }
 	);
 	return { blob: new Blob([result.bytes], { type: result.mimeType }), name: result.name };
 }
@@ -79,7 +82,8 @@ export async function createStream(
 		},
 		[bytes],
 		(p) => onProgress(p.fraction == null ? null : 0.1 + p.fraction * 0.9, p.detail),
-		{ owner: signal }
+		// Single-stream gz/bz2/xz print one line up front, then silence.
+		{ owner: signal, idleTimeoutMs: archiveIdleTimeoutMs(file.size) }
 	);
 	return { blob: new Blob([result.bytes], { type: result.mimeType }), name: result.name };
 }
@@ -91,15 +95,19 @@ export async function extractArchive(
 	onProgress: ArchiveProgressFn,
 	signal?: AbortSignal
 ): Promise<ArchiveExtractResult> {
-	const bytes = await file.file.arrayBuffer();
 	onProgress(0.05, null);
+	// The File rides in the payload by structured-clone reference (no byte
+	// copy); the worker reads it lazily through a WORKERFS mount.
 	return callWorker(
 		'archive',
 		'extract',
-		{ bytes, name: file.name, password },
-		[bytes],
+		{ file: file.file, name: file.name, password },
+		[],
 		(p) => onProgress(p.fraction, p.detail),
-		{ owner: signal }
+		// An archive holding ONE huge entry prints a single "- name" line and
+		// then decompresses in silence; decompression outpaces compression, so
+		// the create-scale window is a conservative bound here.
+		{ owner: signal, idleTimeoutMs: archiveIdleTimeoutMs(file.size) }
 	);
 }
 
@@ -117,31 +125,32 @@ export async function convertArchive(
 	) {
 		throw new Error('Convert needs a multi-file target format (ZIP, 7Z or TAR)');
 	}
-	const bytes = await file.file.arrayBuffer();
 	onProgress(0.02, null);
+	// File by structured-clone reference (see extractArchive); the repack
+	// stage can be a silent single stream, hence the scaled watchdog window.
+	// That silent stage compresses the EXTRACTED payload, not the source —
+	// scale by the pessimistic expansion budget or a 200 MB zip of source
+	// code (→ ~1 GB extracted) converted to txz dies at the 10-min floor.
 	const result = await callWorker(
 		'archive',
 		'convert',
 		{
-			bytes,
+			file: file.file,
 			name: file.name,
 			password: settings.password,
 			output: settings.outputFormat,
 			level: settings.level
 		},
-		[bytes],
+		[],
 		(p) => onProgress(p.fraction, p.detail),
-		{ owner: signal }
+		{
+			owner: signal,
+			idleTimeoutMs: archiveIdleTimeoutMs(file.size * CONVERT_EXPANSION_FACTOR)
+		}
 	);
 	return {
 		blob: new Blob([result.bytes], { type: result.mimeType }),
 		name: result.name,
 		entryCount: result.entryCount
 	};
-}
-
-/** Upload-time metadata (drives the password field's auto-reveal). */
-export async function probeArchive(file: File): Promise<ArchiveProbeResult> {
-	const bytes = await file.arrayBuffer();
-	return callWorker('archive', 'probe', { bytes, name: file.name }, [bytes]);
 }

@@ -249,7 +249,9 @@ export interface ArchiveCreateResult {
 }
 
 export interface ArchiveExtractPayload {
-	bytes: ArrayBuffer;
+	/** File clones without copying its data; 7zz reads it lazily through a
+	 *  read-only WORKERFS mount, so the archive is never buffered in RAM. */
+	file: File;
 	name: string;
 	password: string;
 }
@@ -261,7 +263,9 @@ export interface ArchiveExtractResult {
 }
 
 export interface ArchiveConvertPayload {
-	bytes: ArrayBuffer;
+	/** File clones without copying its data; 7zz reads it lazily through a
+	 *  read-only WORKERFS mount, so the archive is never buffered in RAM. */
+	file: File;
 	name: string;
 	/** Password of the SOURCE archive — the repacked output is never encrypted. */
 	password: string;
@@ -275,13 +279,6 @@ export interface ArchiveConvertResult {
 	name: string;
 	mimeType: string;
 	entryCount: number;
-}
-
-export interface ArchiveProbeResult {
-	/** Container type 7zz reports ("7z", "Rar5", "Iso", …), null when unknown. */
-	format: string | null;
-	encrypted: boolean;
-	entryCount: number | null;
 }
 
 export interface ArchiveProgress {
@@ -357,12 +354,6 @@ export interface WorkerContracts {
 			payload: ArchiveConvertPayload;
 			result: ArchiveConvertResult;
 			progress: ArchiveProgress;
-		};
-		/** Upload-time metadata (encryption detection drives the password field). */
-		probe: {
-			payload: { bytes: ArrayBuffer; name: string };
-			result: ArchiveProbeResult;
-			progress: never;
 		};
 	};
 }
