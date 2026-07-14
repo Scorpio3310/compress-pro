@@ -108,9 +108,9 @@ async function runSevenZip(
 			// A WORKERFS lazy read failed: the source file changed or vanished
 			// on disk after it was picked. Without this branch the generic
 			// `thrown` path would misreport it as password-protected/damaged.
-			throw new Error(
-				'The file changed on disk after it was added — re-add it and try again.'
-			);
+			throw new Error('The file changed on disk after it was added — re-add it and try again.', {
+				cause: error
+			});
 		} else {
 			// Numeric C++ exception (encrypted-header paths) — instance is dead.
 			thrown = true;

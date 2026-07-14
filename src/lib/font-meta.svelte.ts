@@ -17,6 +17,7 @@ const metas = new SvelteMap<string, FontMeta | null>();
 /** In-flight probes by file id. The token's `live` flag is how removeFontMeta
  *  vetoes a cancel-retry for a file that no longer exists — without it the
  *  retry would re-parse the font and park an orphaned meta until reload. */
+// eslint-disable-next-line svelte/prefer-svelte-reactivity -- internal bookkeeping, never read by UI
 const inFlight = new Map<string, { live: boolean }>();
 
 /** Reactive lookup; undefined = not probed (yet). */

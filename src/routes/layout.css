@@ -710,16 +710,16 @@ button:hover .icon-shrink {
 .icon-activate-images path:nth-child(2) {
 	stroke-dasharray: 1;
 	stroke-dashoffset: 1;
-	animation: icon-draw 0.45s var(--ease-swift) 0.05s forwards;
+	animation: icon-draw 0.65s var(--ease-swift) 0.07s forwards;
 }
 .icon-activate-pdf path:nth-child(2),
 .icon-activate-pdf path:nth-child(3) {
 	stroke-dasharray: 1;
 	stroke-dashoffset: 1;
-	animation: icon-draw 0.3s var(--ease-swift) 0.08s forwards;
+	animation: icon-draw 0.45s var(--ease-swift) 0.12s forwards;
 }
 .icon-activate-pdf path:nth-child(3) {
-	animation-delay: 0.2s;
+	animation-delay: 0.3s;
 }
 @keyframes tab-icon-nudge {
 	40% {
@@ -727,7 +727,7 @@ button:hover .icon-shrink {
 	}
 }
 .icon-activate-video path:last-child {
-	animation: tab-icon-nudge 0.35s var(--ease-pop);
+	animation: tab-icon-nudge 0.5s var(--ease-pop);
 }
 @keyframes tab-icon-eq {
 	45% {
@@ -739,26 +739,26 @@ button:hover .icon-shrink {
 	transform-origin: center;
 }
 .icon-activate-audio path:nth-child(1) {
-	animation: tab-icon-eq 0.35s ease-in-out;
+	animation: tab-icon-eq 0.5s ease-in-out;
 }
 .icon-activate-audio path:nth-child(2) {
-	animation: tab-icon-eq 0.35s ease-in-out 0.05s;
+	animation: tab-icon-eq 0.5s ease-in-out 0.07s;
 }
 .icon-activate-audio path:nth-child(3) {
-	animation: tab-icon-eq 0.35s ease-in-out 0.1s;
+	animation: tab-icon-eq 0.5s ease-in-out 0.14s;
 }
 .icon-activate-audio path:nth-child(4) {
-	animation: tab-icon-eq 0.35s ease-in-out 0.15s;
+	animation: tab-icon-eq 0.5s ease-in-out 0.21s;
 }
 /* Fonts "T": the stem drops in like a fresh keystroke, baseline draws under it. */
 .icon-activate-font path:nth-child(2),
 .icon-activate-font path:nth-child(3) {
 	stroke-dasharray: 1;
 	stroke-dashoffset: 1;
-	animation: icon-draw 0.3s var(--ease-swift) 0.05s forwards;
+	animation: icon-draw 0.45s var(--ease-swift) 0.07s forwards;
 }
 .icon-activate-font path:nth-child(3) {
-	animation-delay: 0.18s;
+	animation-delay: 0.27s;
 }
 @keyframes tab-icon-lid {
 	35% {
@@ -769,7 +769,7 @@ button:hover .icon-shrink {
 	}
 }
 .icon-activate-zip path:first-child {
-	animation: tab-icon-lid 0.4s var(--ease-pop);
+	animation: tab-icon-lid 0.6s var(--ease-pop);
 }
 @keyframes tab-icon-swing {
 	35% {
@@ -781,7 +781,7 @@ button:hover .icon-shrink {
 }
 .icon-activate-exif {
 	transform-origin: 35% 35%;
-	animation: tab-icon-swing 0.45s var(--ease-pop);
+	animation: tab-icon-swing 0.65s var(--ease-pop);
 }
 
 /* Octocat: tail flicks and ears perk up once per hover-in. Pivots are

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { SITE_URL, SITE_NAME, FORMATS, type SeoEntry } from '$lib/seo';
+	import { SITE_URL, SITE_NAME, FORMATS, FEATURED_PATHS, seoFor, type SeoEntry } from '$lib/seo';
 
 	interface Props {
 		entry: SeoEntry;
@@ -52,6 +52,18 @@
 		inLanguage: 'en'
 	};
 
+	// Homepage only — mirrors the visible "Popular tools" grid.
+	const featuredList = {
+		'@type': 'ItemList',
+		name: 'Popular tools',
+		itemListElement: FEATURED_PATHS.map((path, i) => ({
+			'@type': 'ListItem',
+			position: i + 1,
+			name: seoFor(path.slice(1)).h1.replace(/\.$/, ''),
+			url: SITE_URL + path
+		}))
+	};
+
 	const breadcrumbList = $derived({
 		'@type': 'BreadcrumbList',
 		itemListElement: [
@@ -74,7 +86,7 @@
 		'@context': 'https://schema.org',
 		'@graph': [
 			webApplication,
-			entry.path === '/' ? webSite : breadcrumbList,
+			...(entry.path === '/' ? [webSite, featuredList] : [breadcrumbList]),
 			...(entry.faq.length > 0 ? [faqPage] : [])
 		]
 	});

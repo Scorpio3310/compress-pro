@@ -1,6 +1,7 @@
 import type {
 	ArchiveOutputFormat,
 	AudioConversionSettings,
+	DemoKind,
 	FileFormat,
 	FontFormat,
 	ImageFormat
@@ -48,6 +49,11 @@ export interface SeoEntry {
 	related?: string[];
 	/** Per-page OG image path under static/ — falls back to /og.jpg. */
 	ogImage?: string;
+	/** Renders the static before/after demo (DemoCompare) below the intro.
+	 *  Each kind's assets are real output of ONE pipeline, so a page may only
+	 *  carry the kind its own pipeline produced — seo.test.ts pins the
+	 *  kind↔page map, `pnpm demo-assets` regenerates assets + manifest. */
+	demo?: DemoKind;
 }
 
 export interface SeoGuideSection {
@@ -100,8 +106,6 @@ export interface ConverterEntry extends SeoEntry {
 	accept?: string;
 	dropSubject?: string;
 	dropHint?: string;
-	/** Curated subset shown in the footer "Tools:" row (the layout appends TOOLS after it). */
-	inFooter?: boolean;
 }
 
 // The two-step wording is deliberate: engines cache on first use, so only
@@ -141,6 +145,7 @@ export const FORMATS: (SeoEntry & { format: FileFormat })[] = [
 		format: 'jpg',
 		path: '/compress-jpg',
 		ogImage: '/og/compress-jpg.jpg',
+		demo: 'photo',
 		label: 'JPG',
 		title: 'Compress JPG (JPEG) Online — Private, No Upload | Compress Pro',
 		description:
@@ -148,7 +153,7 @@ export const FORMATS: (SeoEntry & { format: FileFormat })[] = [
 		h1: 'Compress JPG images.',
 		tagline: 'Smaller JPG photos in your browser — nothing is uploaded.',
 		intro:
-			'Shrink JPG (JPEG) photos right here in your browser. Pick a quality, or name a target size like 500 KB and let the tool find the best quality that fits. Nothing is uploaded — your photos never leave your device. Free, with no ads, no accounts and no watermarks.',
+			'Shrink JPG (JPEG) photos right here in your browser. Pick a quality, or name a target size like 500 KB and let the tool find the best quality that fits. **Nothing is uploaded — your photos never leave your device.** Free, with no ads, no accounts and no watermarks.',
 		faq: [
 			{
 				q: 'Is it safe to compress private photos here?',
@@ -193,6 +198,12 @@ export const FORMATS: (SeoEntry & { format: FileFormat })[] = [
 				paragraphs: [
 					'Upload forms don’t speak quality, they speak kilobytes — switch to target-size mode and type the limit (say 500 KB). The tool searches quality until the file fits and tells you honestly when it can’t. If “Allow downscaling” is on, dimensions shrink as a last resort, never below 320 px on the longest side. Prefer to control dimensions yourself? The [image resizer](/resize-image) caps the longest side exactly. And for the classic form limit, the [compress JPG to 100 KB](/compress-jpg-to-100kb) page arrives with the cap already typed in.'
 				]
+			},
+			{
+				heading: 'Under the hood',
+				paragraphs: [
+					'Compression on this page runs on MozJPEG — Mozilla’s tuned JPEG encoder, the same library professional image pipelines build on — compiled to WebAssembly so it works entirely on your device. MozJPEG spends extra effort on trellis quantization and progressive scan ordering, which is where the extra quality per kilobyte comes from: slower than a stock encoder, visibly smaller at the same quality.'
+				]
 			}
 		],
 		related: ['/remove-exif', '/jpg-to-webp', '/jpg-to-pdf', '/compress-png']
@@ -201,6 +212,7 @@ export const FORMATS: (SeoEntry & { format: FileFormat })[] = [
 		format: 'png',
 		path: '/compress-png',
 		ogImage: '/og/compress-png.jpg',
+		demo: 'png',
 		label: 'PNG',
 		title: 'Compress PNG Online — Private, No Upload | Compress Pro',
 		description:
@@ -208,7 +220,7 @@ export const FORMATS: (SeoEntry & { format: FileFormat })[] = [
 		h1: 'Compress PNG images.',
 		tagline: 'Lossless or lossy — your PNGs never leave your browser.',
 		intro:
-			'Compress PNG images right in your browser. Keep it fully lossless, or allow smart color reduction for dramatically smaller files that still look sharp. Nothing is uploaded — files stay on your device. Free to use, with no ads, no sign-up and no daily limits.',
+			'Compress PNG images right in your browser. Keep it fully lossless, or allow smart color reduction for dramatically smaller files that still look sharp. **Nothing is uploaded — files stay on your device.** Free to use, with no ads, no sign-up and no daily limits.',
 		faq: [
 			{
 				q: 'Is it safe to compress private images here?',
@@ -253,6 +265,12 @@ export const FORMATS: (SeoEntry & { format: FileFormat })[] = [
 				paragraphs: [
 					'PNG is the right format for pixel-perfect graphics that must stay lossless. But if the image is going on a web page, WebP holds the same picture — transparency included — at a fraction of the size. The [PNG to WebP](/png-to-webp) converter keeps transparency intact; for photos that ended up as PNG by accident, [PNG to JPG](/png-to-jpg) is the bigger win.'
 				]
+			},
+			{
+				heading: 'Under the hood',
+				paragraphs: [
+					'Two engines share the work here. At quality 100, OxiPNG repacks your PNG losslessly — same pixels, tighter bytes. Below that, libimagequant takes over: it is the palette-quantization engine inside pngquant, the tool famous for cutting screenshots 60–80% with no visible change. Both are compiled to WebAssembly, so every pass runs entirely on your device.'
+				]
 			}
 		],
 		related: ['/png-to-webp', '/png-to-jpg', '/compress-jpg', '/compress-svg']
@@ -261,6 +279,7 @@ export const FORMATS: (SeoEntry & { format: FileFormat })[] = [
 		format: 'webp',
 		path: '/compress-webp',
 		ogImage: '/og/compress-webp.jpg',
+		demo: 'webp',
 		label: 'WebP',
 		title: 'Compress WebP Online — Private, No Upload | Compress Pro',
 		description:
@@ -268,7 +287,7 @@ export const FORMATS: (SeoEntry & { format: FileFormat })[] = [
 		h1: 'Compress WebP images.',
 		tagline: 'Still or animated — re-encoded locally, never uploaded.',
 		intro:
-			'Compress WebP images — including animated ones — right here in your browser. Lower the quality, hit a target size, resize, or convert to JPG or PNG. Nothing is uploaded — files never leave your device.',
+			'Compress WebP images — including animated ones — right here in your browser. Lower the quality, hit a target size, resize, or convert to JPG or PNG. **Nothing is uploaded — files never leave your device.**',
 		faq: [
 			{
 				q: 'Is it safe to compress private images here?',
@@ -313,6 +332,12 @@ export const FORMATS: (SeoEntry & { format: FileFormat })[] = [
 				paragraphs: [
 					'WebP typically lands 25–35% under JPG at matched quality and supports transparency and animation, which JPG can’t. AVIF squeezes photos harder still but takes longer and enjoys less support in older software. The Auto format on this tab tries each format per image and keeps the smallest result, so you rarely have to choose by hand. And when a file must open outside the web — older editors, upload forms — [WebP to JPG](/webp-to-jpg) makes it universal.'
 				]
+			},
+			{
+				heading: 'Under the hood',
+				paragraphs: [
+					'Every WebP on this page is encoded by libwebp — Google’s reference encoder, the same code that defines the format — compiled to WebAssembly and running entirely on your device. That matters at the edges: quality 100 engages libwebp’s true lossless mode, not a high-quality approximation, so pixel-perfect graphics come out bit-exact while everything below stays tuned for photos.'
+				]
 			}
 		],
 		related: ['/webp-to-jpg', '/webp-to-png', '/compress-jpg', '/compress-gif']
@@ -321,6 +346,7 @@ export const FORMATS: (SeoEntry & { format: FileFormat })[] = [
 		format: 'gif',
 		path: '/compress-gif',
 		ogImage: '/og/compress-gif.jpg',
+		demo: 'gif',
 		label: 'GIF',
 		title: 'Compress GIF Online — Keep Animation, No Upload | Compress Pro',
 		description:
@@ -328,7 +354,7 @@ export const FORMATS: (SeoEntry & { format: FileFormat })[] = [
 		h1: 'Compress GIFs.',
 		tagline: 'Shrink GIFs in your browser — they stay animated & local.',
 		intro:
-			'Compress animated GIFs entirely in your browser. Animations stay animated — frames are optimized, colors reduced, and you can resize or aim for a target size. Nothing is uploaded — GIFs never leave your device.',
+			'Compress animated GIFs entirely in your browser. Animations stay animated — frames are optimized, colors reduced, and you can resize or aim for a target size. **Nothing is uploaded — GIFs never leave your device.**',
 		faq: [
 			{ q: 'Is it safe to compress private GIFs here?', a: PRIVACY_A },
 			{
@@ -367,6 +393,12 @@ export const FORMATS: (SeoEntry & { format: FileFormat })[] = [
 				paragraphs: [
 					'If the destination plays video, convert instead of compressing: the [GIF to MP4](/gif-to-mp4) converter produces a silent clip that is usually 90% smaller and looks better. Keep GIF for the places that genuinely require it — READMEs, docs and pickers that reject video files.'
 				]
+			},
+			{
+				heading: 'Under the hood',
+				paragraphs: [
+					'GIF optimization here runs on gifsicle — the canonical GIF tool since the 1990s, the one nearly every optimizer wraps — compiled to WebAssembly so it works entirely in your browser. Frame-level tricks are its specialty: dropping duplicate frames, storing only the pixels that change, and tightening color palettes. Decades of GIF-specific engineering, applied without your animation ever leaving your device.'
+				]
 			}
 		],
 		related: ['/compress-webp', '/compress-video']
@@ -375,6 +407,7 @@ export const FORMATS: (SeoEntry & { format: FileFormat })[] = [
 		format: 'heic',
 		path: '/compress-heic',
 		ogImage: '/og/compress-heic.jpg',
+		demo: 'heic',
 		label: 'HEIC',
 		title: 'Compress HEIC Photos — Private, No Upload | Compress Pro',
 		description:
@@ -382,7 +415,7 @@ export const FORMATS: (SeoEntry & { format: FileFormat })[] = [
 		h1: 'Compress HEIC photos.',
 		tagline: 'Shrink iPhone HEIC photos locally — nothing is uploaded.',
 		intro:
-			'Compress iPhone HEIC photos right in your browser. Browsers can open HEIC but not save it, so compressed photos are exported as JPG, PNG, WebP, or AVIF — pick a quality or an exact target size like 500 KB. Nothing is uploaded; your photos never leave your device.',
+			'Compress iPhone HEIC photos right in your browser. Browsers can open HEIC but not save it, so compressed photos are exported as JPG, PNG, WebP, or AVIF — pick a quality or an exact target size like 500 KB. **Nothing is uploaded; your photos never leave your device.**',
 		faq: [
 			{ q: 'Is it safe to compress iPhone photos here?', a: PRIVACY_A },
 			{
@@ -421,6 +454,12 @@ export const FORMATS: (SeoEntry & { format: FileFormat })[] = [
 						['Squeeze a full camera roll', '65 — or set a target size']
 					]
 				}
+			},
+			{
+				heading: 'Under the hood',
+				paragraphs: [
+					'Browsers cannot read HEIC natively, so this page brings its own decoder: libheif with libde265, compiled to WebAssembly, unpacks your iPhone photo entirely on your device. The result is then written by the destination format’s reference encoder — MozJPEG for JPG, libwebp for WebP, and so on. Two proven engines back to back, and the photo never touches a server.'
+				]
 			}
 		],
 		related: ['/heic-to-jpg', '/compress-jpg', '/resize-image']
@@ -429,6 +468,7 @@ export const FORMATS: (SeoEntry & { format: FileFormat })[] = [
 		format: 'svg',
 		path: '/compress-svg',
 		ogImage: '/og/compress-svg.jpg',
+		demo: 'svg',
 		label: 'SVG',
 		title: 'Compress SVG Online — Private, No Upload | Compress Pro',
 		description:
@@ -436,7 +476,7 @@ export const FORMATS: (SeoEntry & { format: FileFormat })[] = [
 		h1: 'Compress SVGs.',
 		tagline: 'Smaller SVG files in your browser — nothing is uploaded.',
 		intro:
-			'Minify SVG files entirely in your browser: strip comments, metadata and editor junk, clean up IDs and round coordinates to fewer decimals. Your artwork is never uploaded — it never leaves your machine. Need pixels instead? The output format switch renders your SVG to PNG at any size, or straight to a multi-size ICO favicon.',
+			'Minify SVG files entirely in your browser: strip comments, metadata and editor junk, clean up IDs and round coordinates to fewer decimals. **Your artwork is never uploaded — it never leaves your machine.** Need pixels instead? The output format switch renders your SVG to PNG at any size, or straight to a multi-size ICO favicon.',
 		faq: [
 			{ q: 'Is it safe to optimize proprietary artwork here?', a: PRIVACY_A },
 			{
@@ -470,6 +510,12 @@ export const FORMATS: (SeoEntry & { format: FileFormat })[] = [
 				paragraphs: [
 					'The default toggles — comments, metadata, ID cleanup, dimension removal with the viewBox kept — are safe for virtually every file. The aggressive pass merges paths and collapses groups: usually fine for static icons, but test SVGs that are styled from CSS or animated through their IDs and classes, because collapsing can rename what your code targets.'
 				]
+			},
+			{
+				heading: 'Under the hood',
+				paragraphs: [
+					'Minification runs on SVGO — the standard SVG optimizer, the same tool front-end build pipelines run before shipping icons — bundled into this page so your artwork never leaves your machine. Every toggle in the panel maps to a documented SVGO plugin, so the output here matches what a professional toolchain would produce, byte for byte.'
+				]
 			}
 		],
 		related: ['/compress-png', '/svg-to-png', '/svg-to-ico']
@@ -479,13 +525,14 @@ export const FORMATS: (SeoEntry & { format: FileFormat })[] = [
 		path: '/compress-pdf',
 		ogImage: '/og/compress-pdf.jpg',
 		label: 'PDF',
+		demo: 'pdf',
 		title: 'Compress PDF Online — No Upload, 100% Private | Compress Pro',
 		description:
 			'Reduce PDF file size right in your browser. Choose a preset or a target size like 2 MB. No uploads — documents never leave your device. Free & private.',
 		h1: 'Compress PDFs.',
 		tagline: 'Shrink PDFs in your browser — files are never uploaded.',
 		intro:
-			'Compress PDF files right in your browser — no upload, no waiting on a server. Pick a compression level or a target size like 2 MB — and merge PDFs, extract or remove pages, or convert between PDFs and images with the same tool. Documents never leave your device.',
+			'Compress PDF files right in your browser — no upload, no waiting on a server. Pick a compression level or a target size like 2 MB — and merge PDFs, extract or remove pages, or convert between PDFs and images with the same tool. **Documents never leave your device.**',
 		faq: [
 			{
 				q: 'Is it safe to compress confidential PDFs here?',
@@ -533,6 +580,12 @@ export const FORMATS: (SeoEntry & { format: FileFormat })[] = [
 				paragraphs: [
 					'Scanned documents shrink dramatically — every page is a photograph, so downsampling and re-encoding routinely cuts 80–90% of the size. Digitally created, text-only PDFs are already compact; if yours barely shrinks, it was efficient to begin with. Image-heavy presentations sit in between and respond very well to the Medium and High presets.'
 				]
+			},
+			{
+				heading: 'Under the hood',
+				paragraphs: [
+					'Compression is done by Ghostscript — the PDF engine that has anchored print and publishing workflows for decades — compiled to WebAssembly and running locally, so a confidential contract gets professional-grade processing without ever touching a server. Merge, split and page extraction run on pdf-lib, and page previews render through pdf.js, the same PDF renderer Firefox uses.'
+				]
 			}
 		],
 		related: ['/pdf-to-jpg', '/jpg-to-pdf', '/merge-pdf', '/zip-files']
@@ -541,6 +594,7 @@ export const FORMATS: (SeoEntry & { format: FileFormat })[] = [
 		format: 'video',
 		path: '/compress-video',
 		ogImage: '/og/compress-video.jpg',
+		demo: 'video',
 		label: 'Video',
 		title: 'Compress Video Online — Private, No Upload | Compress Pro',
 		description:
@@ -548,7 +602,7 @@ export const FORMATS: (SeoEntry & { format: FileFormat })[] = [
 		h1: 'Compress videos.',
 		tagline: 'MP4, MOV & WebM compressed on-device — nothing uploaded.',
 		intro:
-			'Compress and convert videos entirely in your browser — nothing is uploaded, so it’s fast and private. Drop an MP4, MOV, WebM, or MKV, pick a quality or name a target size like 25 MB, and export as MP4 for universal playback or WebM for smaller files. Audio is kept untouched whenever the format allows. Your videos never leave your device — and there is no watermark, no ad break and no premium tier.',
+			'Compress and convert videos entirely in your browser — nothing is uploaded, so it’s fast and private. Drop an MP4, MOV, WebM, or MKV, pick a quality or name a target size like 25 MB, and export as MP4 for universal playback or WebM for smaller files. Audio is kept untouched whenever the format allows. **Your videos never leave your device** — and there is no watermark, no ad break and no premium tier.',
 		feature: 'Compress MP4, MOV and WebM video to a target size',
 		faq: [
 			{
@@ -599,6 +653,12 @@ export const FORMATS: (SeoEntry & { format: FileFormat })[] = [
 				paragraphs: [
 					'Resolution and frame rate move more megabytes than quality sliders. Downscaling 4K to 1080p — or 1080p to 720p — roughly halves the size before compression even starts trying; capping 60 fps screen recordings to 30 fps saves another large slice with no visible cost for talking-head or screen content. Combine both with a modest quality and even long clips fit under email limits. iPhone footage usually arrives as MOV — [MOV to MP4](/mov-to-mp4) converts and shrinks it in one pass, and plain MP4 files have a dedicated [Compress MP4](/compress-mp4) page.'
 				]
+			},
+			{
+				heading: 'Under the hood',
+				paragraphs: [
+					'Encoding runs on WebCodecs — the hardware H.264/VP9 encoder already built into your browser — orchestrated by mediabunny, which handles the container work of reading and writing MP4, MOV and WebM. The same silicon that records your screen does the compression, which is why there is no upload, no queue, and no watermark — and why even long clips convert at full speed.'
+				]
 			}
 		],
 		related: ['/compress-mp4', '/mov-to-mp4', '/webm-to-mp4', '/mp4-to-webm']
@@ -607,6 +667,7 @@ export const FORMATS: (SeoEntry & { format: FileFormat })[] = [
 		format: 'audio',
 		path: '/compress-audio',
 		ogImage: '/og/compress-audio.jpg',
+		demo: 'audio',
 		label: 'Audio',
 		feature: 'Compress & Convert audio',
 		title: 'Compress Audio Online — MP3, FLAC, M4A, WAV | Compress Pro',
@@ -615,7 +676,7 @@ export const FORMATS: (SeoEntry & { format: FileFormat })[] = [
 		h1: 'Compress & Convert audio.',
 		tagline: 'Shrink or convert audio locally — MP3, FLAC, OGG and more.',
 		intro:
-			'Compress audio files or convert them between MP3, M4A, WAV, FLAC, OGG, OPUS and WEBA — everything encodes in your browser, and nothing is uploaded. Drop any audio file, or a video to have its audio track extracted, then pick a format and a bitrate or a target size. Free, with no ads and no length limits.',
+			'Compress audio files or convert them between MP3, M4A, WAV, FLAC, OGG, OPUS and WEBA — **everything encodes in your browser, and nothing is uploaded**. Drop any audio file, or a video to have its audio track extracted, then pick a format and a bitrate or a target size. Free, with no ads and no length limits.',
 		faq: [
 			{
 				q: 'Which bitrate should I pick?',
@@ -657,6 +718,12 @@ export const FORMATS: (SeoEntry & { format: FileFormat })[] = [
 				paragraphs: [
 					'Because audio bitrate is constant, target-size mode can be exact: it divides your cap by the duration and picks the bitrate that fits, between 32 and 320 kbps. A 40-minute recording into 25 MB works out around 80 kbps — fine for speech, rough for music — and the math tells you honestly what’s possible.'
 				]
+			},
+			{
+				heading: 'Under the hood',
+				paragraphs: [
+					'Each format gets the encoder desktop audio tools actually ship: LAME for MP3, FFmpeg’s AAC encoder for M4A, libFLAC for FLAC — all compiled to WebAssembly — while Opus uses WebCodecs, the encoder already built into your browser. The pipeline is orchestrated by mediabunny, so whether you convert a recording or pull a track out of a video, everything encodes on your device.'
+				]
 			}
 		],
 		related: ['/mp4-to-mp3', '/flac-to-mp3', '/wav-to-mp3', '/compress-video']
@@ -666,6 +733,7 @@ export const FORMATS: (SeoEntry & { format: FileFormat })[] = [
 		steps: FONT_STEPS,
 		path: '/font-converter',
 		ogImage: '/og/font-converter.jpg',
+		demo: 'font',
 		label: 'Fonts',
 		feature: 'Convert fonts — TTF, OTF, WOFF & WOFF2',
 		title: 'Font Converter — TTF, OTF, WOFF, WOFF2 Online | Compress Pro',
@@ -674,7 +742,7 @@ export const FORMATS: (SeoEntry & { format: FileFormat })[] = [
 		h1: 'Convert fonts.',
 		tagline: 'TTF, OTF, WOFF & WOFF2 — converted right in your browser.',
 		intro:
-			'Convert fonts between TTF, OTF, WOFF, WOFF2 and even legacy EOT — entirely in your browser. These formats are different wrappers around the same font tables, so the conversion is true repackaging: glyphs, kerning and hinting come through untouched, and your font file never touches a server.',
+			'Convert fonts between TTF, OTF, WOFF, WOFF2 and even legacy EOT — entirely in your browser. These formats are different wrappers around the same font tables, so the conversion is true repackaging: glyphs, kerning and hinting come through untouched, and **your font file never touches a server**.',
 		faq: [
 			{
 				q: 'Is the conversion really lossless?',
@@ -708,6 +776,12 @@ export const FORMATS: (SeoEntry & { format: FileFormat })[] = [
 				paragraphs: [
 					'Fonts are licensed software, and many licenses forbid passing the files to third parties — which is exactly what uploading to a converter site does. Here the conversion runs in your browser: the font never leaves your machine, and there is nothing on a server to leak, cache or crawl.'
 				]
+			},
+			{
+				heading: 'Under the hood',
+				paragraphs: [
+					'WOFF2 files are written by Google’s own woff2 encoder — the reference implementation, with Brotli compression built in — compiled to WebAssembly and running in your browser; WOFF uses classic zlib. Neither touches the letterforms: conversion is a lossless repack of the same glyph tables into a different wrapper, which is why glyphs, kerning and hinting survive every trip byte for byte.'
+				]
 			}
 		],
 		related: ['/ttf-to-woff2', '/woff2-to-ttf', '/subset-font']
@@ -716,6 +790,7 @@ export const FORMATS: (SeoEntry & { format: FileFormat })[] = [
 		format: 'zip',
 		path: '/zip-files',
 		ogImage: '/og/zip-files.jpg',
+		demo: 'archive',
 		label: 'Archive',
 		feature: 'Create & extract ZIP, 7Z, TAR & RAR archives',
 		title: 'Create & Extract ZIP Files Online — Private | Compress Pro',
@@ -724,7 +799,7 @@ export const FORMATS: (SeoEntry & { format: FileFormat })[] = [
 		h1: 'Zip & Unzip files.',
 		tagline: 'Zip and unzip files locally — nothing ever gets uploaded.',
 		intro:
-			'Bundle any files into one archive — ZIP, 7Z, TAR, TAR.GZ and more, with optional AES-256 password protection — or drop an archive (ZIP, RAR, 7Z, TAR, ISO, CAB…) and pull its contents out: each file becomes its own download. Everything runs in your browser, so even huge archives never leave your machine.',
+			'Bundle any files into one archive — ZIP, 7Z, TAR, TAR.GZ and more, with optional AES-256 password protection — or drop an archive (ZIP, RAR, 7Z, TAR, ISO, CAB…) and pull its contents out: each file becomes its own download. Everything runs in your browser, so **even huge archives never leave your machine**.',
 		faq: [
 			{
 				q: 'Why do my photos barely shrink in a ZIP?',
@@ -764,6 +839,12 @@ export const FORMATS: (SeoEntry & { format: FileFormat })[] = [
 				paragraphs: [
 					'Zipping shines when the point is a single attachment: a project folder, a batch of scans, a handoff. Extraction works the other way — drop an archive (ZIP, [RAR](/extract-rar), [7Z](/extract-7z), [tarball](/extract-tar-gz), [ISO](/extract-iso), CAB, DEB, RPM, CPIO, LHA, ARJ or .Z) and every file inside becomes its own row, downloadable individually or all at once, without the archive ever leaving your machine. Convert switches container without touching content — [RAR to ZIP](/rar-to-zip) is the classic trip.'
 				]
+			},
+			{
+				heading: 'Under the hood',
+				paragraphs: [
+					'Archives here are handled by 7-Zip 24.09 itself — the real desktop engine, compiled to WebAssembly — so 7Z creation gets the same LZMA2 ratios and the same AES-256 encryption you would get from the app, and extraction reads every format 7-Zip reads. For everyday ZIP and gzip work, the bundled fflate library takes the fast path. Nothing is ever uploaded.'
+				]
 			}
 		],
 		related: ['/rar-to-zip', '/create-7z', '/extract-rar', '/compress-jpg']
@@ -772,6 +853,7 @@ export const FORMATS: (SeoEntry & { format: FileFormat })[] = [
 		format: 'exif',
 		path: '/remove-exif',
 		ogImage: '/og/remove-exif.jpg',
+		demo: 'exif',
 		label: 'EXIF',
 		title: 'Remove EXIF Data Online — Private, No Upload | Compress Pro',
 		description:
@@ -780,7 +862,7 @@ export const FORMATS: (SeoEntry & { format: FileFormat })[] = [
 		tagline: 'GPS, camera & date wiped locally — pixels stay untouched.',
 		feature: 'Remove EXIF metadata and GPS location from photos',
 		intro:
-			'Photos carry more than pixels: GPS coordinates of where they were taken, the exact time, your camera or phone model. Drop a JPG, PNG, or WebP here to see what your files reveal — then strip it in one click. Removal is lossless byte surgery: metadata segments are cut out without re-encoding, so pixels stay exactly identical. Orientation is preserved so phone photos never turn sideways, and nothing is ever uploaded.',
+			'Photos carry more than pixels: GPS coordinates of where they were taken, the exact time, your camera or phone model. Drop a JPG, PNG, or WebP here to see what your files reveal — then strip it in one click. Removal is lossless byte surgery: metadata segments are cut out without re-encoding, so pixels stay exactly identical. Orientation is preserved so phone photos never turn sideways, and **nothing is ever uploaded**.',
 		faq: [
 			{
 				q: 'What do my photos reveal about me?',
@@ -847,6 +929,12 @@ export const FORMATS: (SeoEntry & { format: FileFormat })[] = [
 				paragraphs: [
 					'Any time a photo leaves your control with the file intact: selling something on a marketplace, posting to a forum or blog, sending originals by email or a cloud link. One honest caveat — big social networks usually strip EXIF on upload themselves, but messengers sending “as document”, email attachments, and most forums and marketplaces do not. The safe assumption is that metadata survives unless you removed it yourself. Photos that also need to be smaller can go through [Compress JPG](/compress-jpg) afterwards — compression writes a brand-new file, so metadata stays gone. iPhone HEIC photos get the same cleanup as a side effect of [converting to JPG](/heic-to-jpg).'
 				]
+			},
+			{
+				heading: 'Under the hood',
+				paragraphs: [
+					'There is no encoder here — deliberately. Metadata removal is hand-written byte surgery: the file’s structure is parsed directly, EXIF, XMP and comment segments are cut out, and everything else is copied verbatim. Because no image engine ever decodes or re-encodes your photo, the lossless guarantee is literal — pixels are byte-identical, and files can only get smaller.'
+				]
 			}
 		],
 		related: ['/compress-jpg', '/compress-png', '/compress-webp']
@@ -861,9 +949,9 @@ export const HOME: SeoEntry = {
 	description:
 		'Compress JPG, PNG, WebP, GIF, HEIC, SVG, PDF, video & audio entirely in your browser. No uploads, no ads, no limits — files never leave your device. Free.',
 	h1: 'Compress anything.',
-	tagline: 'Images, video, audio & PDFs — squeezed in your browser.',
+	tagline: 'Images, video, audio & PDFs — compressed, never uploaded.',
 	intro:
-		'Compress Pro is a free, open-source set of compression tools that run entirely in your browser — no uploads, no ads, no accounts. Compress images, PDFs, video and audio, convert between formats, build ZIP archives, and strip photo metadata with the lossless EXIF remover that shows what your photos reveal. Everything happens right on your own device: there is no upload step, so there is no server to trust — and no upload wait, so even a huge video starts compressing the moment you drop it.',
+		'Compress Pro is a free, open-source set of compression tools that run entirely in your browser — no uploads, no ads, no accounts. Compress images, PDFs, video and audio, convert between formats, build ZIP archives, and strip photo metadata with the lossless EXIF remover that shows what your photos reveal. Everything happens right on your own device: **there is no upload step, so there is no server to trust** — and no upload wait, so even a huge video starts compressing the moment you drop it.',
 	guide: [
 		{
 			heading: 'What makes this different',
@@ -878,6 +966,30 @@ export const HOME: SeoEntry = {
 					['Price & limits', 'Daily caps, premium tiers', 'Free, no limits'],
 					['Source code', 'Closed', 'Open on GitHub'],
 					['Offline', 'Needs a connection', 'Works offline once loaded']
+				]
+			}
+		},
+		{
+			heading: 'The engines under the hood',
+			paragraphs: [
+				'The same battle-tested open-source encoders professional tools are built on — compiled to WebAssembly, running on your device. Video drives WebCodecs, the hardware encoder already built into your browser, so even long videos convert at full speed.'
+			],
+			table: {
+				columns: ['Category', 'Engines running in your browser'],
+				rows: [
+					['JPG', 'MozJPEG — Mozilla’s tuned JPEG encoder'],
+					['PNG', 'OxiPNG (lossless) and libimagequant, the pngquant engine (lossy)'],
+					['WebP / AVIF', 'libwebp and libavif with libaom — the reference encoders'],
+					['HEIC / GIF', 'libheif with libde265 for decoding; gifsicle for GIF'],
+					[
+						'Video',
+						'WebCodecs (your browser’s hardware H.264/HEVC/VP9 encoder), orchestrated by mediabunny'
+					],
+					['Audio', 'LAME (MP3), FFmpeg’s AAC encoder, libFLAC (FLAC), plus WebCodecs for Opus'],
+					['PDF', 'Ghostscript for compression; pdf-lib and pdf.js for merge, split and rendering'],
+					['SVG', 'SVGO — the standard SVG optimizer'],
+					['Fonts', 'HarfBuzz for subsetting; Google’s woff2 with Brotli for WOFF2'],
+					['Archives', '7-Zip 24.09 compiled to WebAssembly, with fflate for ZIP/gzip fast paths']
 				]
 			}
 		}
@@ -917,14 +1029,13 @@ export const CONVERTERS: ConverterEntry[] = [
 		label: 'HEIC → JPG',
 		feature: 'Convert HEIC to JPG',
 		preset: { kind: 'image', tab: 'heic', to: 'jpg' },
-		inFooter: true,
 		title: 'HEIC to JPG Converter — Private, In-Browser | Compress Pro',
 		description:
 			'Convert iPhone HEIC photos to JPG right in your browser — no uploads, no accounts. Batch-convert whole camera rolls, tune quality, download as a ZIP. Free.',
 		h1: 'Convert HEIC to JPG.',
 		tagline: 'iPhone HEIC to JPG in your browser — photos never leave.',
 		intro:
-			'Convert iPhone HEIC photos to JPG right here in your browser — not on a server. Drop a whole camera roll, pick a quality, and download everything as a ZIP. Your photos are never uploaded anywhere. If you want JPG output but smaller, set a target size like 500 KB and the tool finds the best quality that fits. Free, with no ads and no limit on how many photos you convert.',
+			'Convert iPhone HEIC photos to JPG right here in your browser — not on a server. Drop a whole camera roll, pick a quality, and download everything as a ZIP. **Your photos are never uploaded anywhere.** If you want JPG output but smaller, set a target size like 500 KB and the tool finds the best quality that fits. Free, with no ads and no limit on how many photos you convert.',
 		faq: [
 			{
 				q: 'Why won’t HEIC photos open on Windows or Android?',
@@ -980,14 +1091,13 @@ export const CONVERTERS: ConverterEntry[] = [
 		accept: 'image/heic,image/heif,.heic,.heif',
 		dropSubject: 'HEIC files',
 		dropHint: 'iPhone HEIC photos · decoded to PNG locally',
-		inFooter: true,
 		title: 'HEIC to PNG Converter — Lossless & Private | Compress Pro',
 		description:
 			'Convert iPhone HEIC photos to lossless PNG in your browser — batch whole albums, download as a ZIP, nothing uploaded. Ideal for editing and archiving.',
 		h1: 'Convert HEIC to PNG.',
 		tagline: 'iPhone HEIC decoded to lossless PNG — on your own device.',
 		intro:
-			'Convert iPhone HEIC photos straight to lossless PNG — everything runs in your browser, and the pixels read from the photo are exactly the pixels PNG stores. That makes PNG the right stop before editing or archiving: no second round of lossy compression on top of HEIC’s. Drop a whole album and download the set as a ZIP.',
+			'Convert iPhone HEIC photos straight to lossless PNG — **everything runs in your browser**, and the pixels read from the photo are exactly the pixels PNG stores. That makes PNG the right stop before editing or archiving: no second round of lossy compression on top of HEIC’s. Drop a whole album and download the set as a ZIP.',
 		faq: [
 			{
 				q: 'Why PNG instead of JPG?',
@@ -1026,14 +1136,13 @@ export const CONVERTERS: ConverterEntry[] = [
 		label: 'WebP → JPG',
 		feature: 'Convert WebP to JPG',
 		preset: { kind: 'image', tab: 'webp', to: 'jpg' },
-		inFooter: true,
 		title: 'WebP to JPG Converter — Free, No Upload | Compress Pro',
 		description:
 			'Convert WebP images to JPG in your browser. Transparency is flattened to white, batches download as a ZIP, and files are never uploaded anywhere. Free.',
 		h1: 'Convert WebP to JPG.',
 		tagline: 'WebP to JPG re-encoded locally — nothing ever uploaded.',
 		intro:
-			'Convert WebP images to JPG right in your browser — nothing is uploaded, files never leave your device. Handy for images saved from the web that older apps and upload forms refuse. Animated WebP converts to a single frame; transparency is flattened onto white. Batch-convert and grab everything as a ZIP.',
+			'Convert WebP images to JPG right in your browser — **nothing is uploaded, files never leave your device**. Handy for images saved from the web that older apps and upload forms refuse. Animated WebP converts to a single frame; transparency is flattened onto white. Batch-convert and grab everything as a ZIP.',
 		faq: [
 			{
 				q: 'Why convert WebP to JPG?',
@@ -1089,7 +1198,7 @@ export const CONVERTERS: ConverterEntry[] = [
 		h1: 'Convert WebP to PNG.',
 		tagline: 'WebP to lossless PNG in your browser — files stay local.',
 		intro:
-			'Convert WebP images to PNG entirely in your browser — opened and re-saved losslessly, all on your own device. Transparency survives intact and, at the default settings, pixels are preserved exactly. Nothing is uploaded; your files never leave your device.',
+			'Convert WebP images to PNG entirely in your browser — opened and re-saved losslessly, all on your own device. Transparency survives intact and, at the default settings, pixels are preserved exactly. **Nothing is uploaded; your files never leave your device.**',
 		faq: [
 			{
 				q: 'Why convert WebP to PNG?',
@@ -1125,14 +1234,13 @@ export const CONVERTERS: ConverterEntry[] = [
 		accept: 'image/avif,.avif',
 		dropSubject: 'AVIF files',
 		dropHint: 'AVIF only · multiple files supported',
-		inFooter: true,
 		title: 'AVIF to JPG Converter — Private, In-Browser | Compress Pro',
 		description:
 			'Convert AVIF images to JPG locally in your browser — perfect when an app or site cannot open AVIF yet. Batch support, ZIP download, zero uploads. Free.',
 		h1: 'Convert AVIF to JPG.',
 		tagline: 'AVIF decoded to JPG in your browser — nothing uploaded.',
 		intro:
-			'Convert AVIF images to JPG entirely in your browser — the conversion happens on your own device, with no upload step. AVIF is the newest image format on the web, which is exactly why older editors, viewers, and upload forms still reject it. Drop a batch, convert, and download everything as a ZIP.',
+			'Convert AVIF images to JPG entirely in your browser — **the conversion happens on your own device, with no upload step**. AVIF is the newest image format on the web, which is exactly why older editors, viewers, and upload forms still reject it. Drop a batch, convert, and download everything as a ZIP.',
 		faq: [
 			{
 				q: 'Why convert AVIF to JPG?',
@@ -1182,14 +1290,13 @@ export const CONVERTERS: ConverterEntry[] = [
 		label: 'PNG → JPG',
 		feature: 'Convert PNG to JPG',
 		preset: { kind: 'image', tab: 'png', to: 'jpg' },
-		inFooter: true,
 		title: 'PNG to JPG Converter — Batch, No Upload | Compress Pro',
 		description:
 			'Convert PNG images to JPG right in your browser. Transparency flattens to white, photos get dramatically smaller, and nothing is uploaded. Free & private.',
 		h1: 'Convert PNG to JPG.',
 		tagline: 'PNG to JPG converted in your browser — files stay local.',
 		intro:
-			'Convert PNG images to JPG right here in your browser tab — nothing is uploaded. Photographic PNGs are often 5–10× smaller as JPG with no visible difference. Transparent regions are flattened onto white, since JPG cannot store transparency. Convert in batches and download the lot as a ZIP.',
+			'Convert PNG images to JPG right here **in your browser tab — nothing is uploaded**. Photographic PNGs are often 5–10× smaller as JPG with no visible difference. Transparent regions are flattened onto white, since JPG cannot store transparency. Convert in batches and download the lot as a ZIP.',
 		faq: [
 			{
 				q: 'When does PNG to JPG make sense?',
@@ -1228,7 +1335,7 @@ export const CONVERTERS: ConverterEntry[] = [
 		h1: 'Convert JPG to WebP.',
 		tagline: 'JPG to WebP, typically 30% smaller — all in your browser.',
 		intro:
-			'Convert JPG photos to WebP right in your browser — no uploads, no accounts, files never leave your device. WebP typically lands 25–35% smaller than JPG at the same visual quality, which is why it is the default choice for fast websites. Batch-convert and download everything as a ZIP.',
+			'Convert JPG photos to WebP right in your browser — **no uploads, no accounts, files never leave your device**. WebP typically lands 25–35% smaller than JPG at the same visual quality, which is why it is the default choice for fast websites. Batch-convert and download everything as a ZIP.',
 		faq: [
 			{
 				q: 'Why convert JPG to WebP?',
@@ -1273,7 +1380,7 @@ export const CONVERTERS: ConverterEntry[] = [
 		h1: 'Convert PNG to WebP.',
 		tagline: 'PNG to WebP with transparency kept — converted locally.',
 		intro:
-			'Convert PNG images to WebP entirely in your browser — processed on your device, never uploaded. Unlike JPG, WebP keeps transparency fully intact, so logos, UI graphics, and stickers stay see-through while shrinking dramatically. Pick a quality or a target size, convert in batches, and download a ZIP.',
+			'Convert PNG images to WebP entirely in your browser — **processed on your device, never uploaded**. Unlike JPG, WebP keeps transparency fully intact, so logos, UI graphics, and stickers stay see-through while shrinking dramatically. Pick a quality or a target size, convert in batches, and download a ZIP.',
 		faq: [
 			{
 				q: 'Why convert PNG to WebP?',
@@ -1312,14 +1419,13 @@ export const CONVERTERS: ConverterEntry[] = [
 		label: 'JPG → PDF',
 		feature: 'Convert JPG to PDF',
 		preset: { kind: 'pdf-from-images' },
-		inFooter: true,
 		title: 'JPG to PDF Converter — Combine Images, Private | Compress Pro',
 		description:
 			'Combine JPG photos into a single PDF right in your browser — one page per image, in your order. Reorder pages, set JPEG quality, download. No uploads. Free.',
 		h1: 'Convert JPG to PDF.',
 		tagline: 'JPGs into one PDF, page per image — built in your browser.',
 		intro:
-			'Combine JPG photos into a single PDF entirely in your browser — the document is assembled on your device, and nothing is uploaded. Each image becomes one page sized exactly to the image, in the order you arrange with the list arrows. Other image types work too: PNG, WebP, GIF, and AVIF are re-encoded as JPEG pages, with transparency flattened to white.',
+			'Combine JPG photos into a single PDF entirely in your browser — **the document is assembled on your device, and nothing is uploaded**. Each image becomes one page sized exactly to the image, in the order you arrange with the list arrows. Other image types work too: PNG, WebP, GIF, and AVIF are re-encoded as JPEG pages, with transparency flattened to white.',
 		faq: [
 			{
 				q: 'How are the PDF pages laid out?',
@@ -1367,14 +1473,13 @@ export const CONVERTERS: ConverterEntry[] = [
 		accept: 'image/png,.png',
 		dropSubject: 'PNG files',
 		dropHint: 'PNG images · combined into one PDF locally',
-		inFooter: true,
 		title: 'PNG to PDF — Turn Screenshots into One File | Compress Pro',
 		description:
 			'Turn PNG screenshots and graphics into a single PDF in your browser — one page per image, in your order. Nothing is uploaded or watermarked. Free.',
 		h1: 'Convert PNG to PDF.',
 		tagline: 'PNG screenshots into one PDF — assembled on your device.',
 		intro:
-			'Bundle PNG screenshots, scans or graphics into a single PDF without anything leaving your browser. Each PNG becomes one page sized to the image, in the order you arrange; transparent areas are flattened to white, since PDF pages have no transparency. Perfect for turning a screenshot trail into one shareable document.',
+			'Bundle PNG screenshots, scans or graphics into a single PDF **without anything leaving your browser**. Each PNG becomes one page sized to the image, in the order you arrange; transparent areas are flattened to white, since PDF pages have no transparency. Perfect for turning a screenshot trail into one shareable document.',
 		faq: [
 			{
 				q: 'What happens to PNG transparency?',
@@ -1413,14 +1518,13 @@ export const CONVERTERS: ConverterEntry[] = [
 		label: 'PDF → JPG',
 		feature: 'Convert PDF to JPG',
 		preset: { kind: 'pdf-to-images', imageFormat: 'jpg' },
-		inFooter: true,
 		title: 'PDF to JPG Converter — Every Page, No Upload | Compress Pro',
 		description:
 			'Turn PDF pages into JPG images entirely in your browser. Choose 72–300 DPI and JPEG quality; multi-page PDFs download as a ZIP of images. No uploads. Free.',
 		h1: 'Convert PDF to JPG.',
 		tagline: 'PDF pages to JPG images — rendered 100% in your browser.',
 		intro:
-			'Turn PDF pages into JPG images without uploading the document anywhere — rendering happens entirely in your browser. Pick a resolution (72, 150, or 300 DPI) and a JPEG quality; every page becomes an image. Single-page PDFs download directly as a .jpg, multi-page ones as a ZIP with one image per page.',
+			'Turn PDF pages into JPG images **without uploading the document anywhere** — rendering happens entirely in your browser. Pick a resolution (72, 150, or 300 DPI) and a JPEG quality; every page becomes an image. Single-page PDFs download directly as a .jpg, multi-page ones as a ZIP with one image per page.',
 		faq: [
 			{
 				q: 'Which DPI should I choose?',
@@ -1481,7 +1585,7 @@ export const CONVERTERS: ConverterEntry[] = [
 		h1: 'Convert PDF to PNG.',
 		tagline: 'PDF pages become lossless PNGs — rendered on your device.',
 		intro:
-			'Render PDF pages to pixel-perfect PNG images without the file leaving your browser. PNG is lossless, so hairline text, diagrams and line art come out exactly as the page draws them — no JPEG artifacts around sharp edges. Pick the DPI, drop a document, and multi-page results arrive as one ZIP.',
+			'Render PDF pages to pixel-perfect PNG images **without the file leaving your browser**. PNG is lossless, so hairline text, diagrams and line art come out exactly as the page draws them — no JPEG artifacts around sharp edges. Pick the DPI, drop a document, and multi-page results arrive as one ZIP.',
 		faq: [
 			{
 				q: 'PNG or JPG for PDF pages?',
@@ -1534,14 +1638,13 @@ export const CONVERTERS: ConverterEntry[] = [
 		accept: 'video/quicktime,.mov',
 		dropSubject: 'MOV files',
 		dropHint: 'MOV only · multiple files supported',
-		inFooter: true,
 		title: 'MOV to MP4 Converter — iPhone Video, No Upload | Compress Pro',
 		description:
 			'Convert iPhone MOV videos to MP4 right in your browser — fast, audio carried over, nothing uploaded. Hit a target size in the same step. Free & private.',
 		h1: 'Convert MOV to MP4.',
 		tagline: 'iPhone MOV to MP4 on your device — nothing gets uploaded.',
 		intro:
-			'Convert iPhone and Mac MOV recordings to MP4 right in your browser — the conversion runs on your device, and nothing is uploaded. MP4 plays everywhere: Windows, Android, TVs, editors, and every upload form. Keep the quality slider high for a near-identical copy, or set a target size like 25 MB to shrink while you convert.',
+			'Convert iPhone and Mac MOV recordings to MP4 right in your browser — **the conversion runs on your device, and nothing is uploaded**. MP4 plays everywhere: Windows, Android, TVs, editors, and every upload form. Keep the quality slider high for a near-identical copy, or set a target size like 25 MB to shrink while you convert.',
 		faq: [
 			{
 				q: 'Why convert MOV to MP4?',
@@ -1595,14 +1698,13 @@ export const CONVERTERS: ConverterEntry[] = [
 		accept: 'video/webm,.webm',
 		dropSubject: 'WebM files',
 		dropHint: 'WebM only · multiple files supported',
-		inFooter: true,
 		title: 'WebM to MP4 Converter — Play Anywhere, Private | Compress Pro',
 		description:
 			'Convert WebM videos to MP4 in your browser so they play on Apple devices, TVs and editors. Audio included, batches supported, nothing uploaded. Free.',
 		h1: 'Convert WebM to MP4.',
 		tagline: 'WebM to MP4 converted on your device — files never leave.',
 		intro:
-			'Turn WebM videos into MP4 without uploading them — the whole conversion happens in your browser. WebM plays great in browsers, but Apple devices, TVs, and most editors still want MP4. Drop a batch, keep the audio, and download files that play everywhere.',
+			'Turn WebM videos into MP4 **without uploading them** — the whole conversion happens in your browser. WebM plays great in browsers, but Apple devices, TVs, and most editors still want MP4. Drop a batch, keep the audio, and download files that play everywhere.',
 		faq: [
 			{
 				q: 'Why convert WebM to MP4?',
@@ -1650,7 +1752,7 @@ export const CONVERTERS: ConverterEntry[] = [
 		h1: 'Convert MKV to MP4.',
 		tagline: 'MKV into universal MP4 — converted right in your browser.',
 		intro:
-			'Convert MKV files to MP4 entirely in your browser — the video is re-encoded and the audio carried over or converted, with nothing uploaded anywhere. MKV is a flexible format, but phones, TVs and editors often refuse it; MP4 opens everywhere. If your browser cannot read the video inside, the tool tells you straight away.',
+			'Convert MKV files to MP4 entirely in your browser — the video is re-encoded and the audio carried over or converted, **with nothing uploaded anywhere**. MKV is a flexible format, but phones, TVs and editors often refuse it; MP4 opens everywhere. If your browser cannot read the video inside, the tool tells you straight away.',
 		faq: [
 			{
 				q: 'Why convert MKV to MP4?',
@@ -1698,7 +1800,7 @@ export const CONVERTERS: ConverterEntry[] = [
 		h1: 'Convert MP4 to WebM.',
 		tagline: 'MP4 to WebM in your browser — smaller video, same quality.',
 		intro:
-			'Convert MP4 videos to WebM right in your browser — everything runs on your device, nothing is uploaded. WebM (VP9) usually lands noticeably smaller than MP4 at the same visual quality, which makes it the go-to format for websites and web apps. The audio track comes along too.',
+			'Convert MP4 videos to WebM right in your browser — **everything runs on your device, nothing is uploaded**. WebM (VP9) usually lands noticeably smaller than MP4 at the same visual quality, which makes it the go-to format for websites and web apps. The audio track comes along too.',
 		faq: [
 			{
 				q: 'Why convert MP4 to WebM?',
@@ -1737,14 +1839,13 @@ export const CONVERTERS: ConverterEntry[] = [
 		label: 'Video → GIF',
 		feature: 'Convert video to GIF',
 		preset: { kind: 'video', container: 'gif' },
-		inFooter: true,
 		title: 'Video to GIF Converter — Free & Private | Compress Pro',
 		description:
 			'Convert MP4, WebM or MOV video to an animated GIF in your browser. Pick fps and size, files never leave your device. Free, private, no watermark.',
 		h1: 'Convert video to GIF.',
 		tagline: 'Turn MP4 or WebM clips into GIFs — right in your browser.',
 		intro:
-			'Turn any video your browser can play — MP4, WebM, MOV — into a looping GIF, entirely on your own device. Nothing is uploaded, and there is no watermark or length gate: drop a clip, pick the frame rate and size, and download the GIF.',
+			'Turn any video your browser can play — MP4, WebM, MOV — into a looping GIF, entirely on your own device. **Nothing is uploaded, and there is no watermark or length gate**: drop a clip, pick the frame rate and size, and download the GIF.',
 		faq: [
 			{
 				q: 'How do I keep the GIF small?',
@@ -1798,7 +1899,7 @@ export const CONVERTERS: ConverterEntry[] = [
 		h1: 'Convert MP4 to GIF.',
 		tagline: 'MP4 clips become looping GIFs — made right on your device.',
 		intro:
-			'Convert MP4 videos to animated GIFs locally — everything happens right in your browser, and the finished GIF simply downloads. No watermark, no sign-up, no length gate. Best results come from short clips: pick the frame rate and a max dimension, and the GIF drops straight into chats, docs and READMEs.',
+			'Convert MP4 videos to animated GIFs locally — **everything happens right in your browser**, and the finished GIF simply downloads. No watermark, no sign-up, no length gate. Best results come from short clips: pick the frame rate and a max dimension, and the GIF drops straight into chats, docs and READMEs.',
 		faq: [
 			{
 				q: 'Why is the GIF bigger than my MP4?',
@@ -1857,7 +1958,7 @@ export const CONVERTERS: ConverterEntry[] = [
 		h1: 'Convert GIF to MP4.',
 		tagline: 'GIFs become silent MP4 videos — smaller, smoother, local.',
 		intro:
-			'MP4 stores the same animation in a fraction of the bytes and plays it smoother than any GIF. The conversion happens in your browser frame by frame — the file never leaves your device.',
+			'MP4 stores the same animation in a fraction of the bytes and plays it smoother than any GIF. The conversion happens in your browser frame by frame — **the file never leaves your device**.',
 		faq: [
 			{
 				q: 'Why convert GIF to MP4 at all?',
@@ -1899,14 +2000,13 @@ export const CONVERTERS: ConverterEntry[] = [
 		accept: 'video/mp4,video/quicktime,.mp4,.m4v,.mov',
 		dropSubject: 'video files',
 		dropHint: 'MP4/MOV video · audio extracted as MP3',
-		inFooter: true,
 		title: 'MP4 to MP3 Converter — Extract Audio | Compress Pro',
 		description:
 			'Extract the audio track from MP4 or MOV video and save it as MP3 — right in your browser. No upload, no sign-up, no length limits. Free and private.',
 		h1: 'Convert MP4 to MP3.',
 		tagline: 'Pull audio out of any video — straight to MP3, locally.',
 		intro:
-			'Extract the audio track from any MP4 or MOV video and save it as an MP3 — the extraction and encoding run in your browser, so nothing is uploaded and even hour-long recordings convert without limits. Drop a video, pick a bitrate, download just the sound.',
+			'Extract the audio track from any MP4 or MOV video and save it as an MP3 — the extraction and encoding run in your browser, so **nothing is uploaded and even hour-long recordings convert without limits**. Drop a video, pick a bitrate, download just the sound.',
 		faq: [
 			{
 				q: 'Does the video quality matter for the MP3?',
@@ -1954,14 +2054,13 @@ export const CONVERTERS: ConverterEntry[] = [
 		accept: 'audio/wav,audio/x-wav,.wav',
 		dropSubject: 'WAV files',
 		dropHint: 'WAV recordings · encoded to MP3 locally',
-		inFooter: true,
 		title: 'WAV to MP3 Converter — Free, Private, Local | Compress Pro',
 		description:
 			'Convert WAV audio to MP3 in your browser — typically 10× smaller with no audible difference. Pick the bitrate, keep the file on your device. Free forever.',
 		h1: 'Convert WAV to MP3.',
 		tagline: 'Turn huge WAV recordings into small MP3s, in your browser.',
 		intro:
-			'WAV stores raw samples; MP3 keeps what you can hear. At 192 kbps the MP3 is about a tenth of the WAV with no audible difference — and the conversion never leaves your machine.',
+			'WAV stores raw samples; MP3 keeps what you can hear. At 192 kbps the MP3 is about a tenth of the WAV with no audible difference — and **the conversion never leaves your machine**.',
 		faq: [
 			{
 				q: 'How much smaller does it get?',
@@ -2011,14 +2110,13 @@ export const CONVERTERS: ConverterEntry[] = [
 		accept: 'audio/mp4,audio/x-m4a,.m4a',
 		dropSubject: 'M4A files',
 		dropHint: 'M4A recordings · encoded to MP3 locally',
-		inFooter: true,
 		title: 'M4A to MP3 Converter — Voice Memos, No Upload | Compress Pro',
 		description:
 			'Convert M4A and AAC audio to MP3 right in your browser — voice memos, recordings and music that play anywhere. Pick a bitrate. Nothing is uploaded. Free.',
 		h1: 'Convert M4A to MP3.',
 		tagline: 'Apple voice memos become MP3s — converted on your device.',
 		intro:
-			'Convert M4A files — Apple’s default for Voice Memos, GarageBand exports and iTunes rips — to MP3 without uploading a second of audio. MP3 plays on everything ever made: car stereos, old players, court and HR portals, editing tools that shrug at M4A. Drop the files, pick a bitrate, download.',
+			'Convert M4A files — Apple’s default for Voice Memos, GarageBand exports and iTunes rips — to MP3 **without uploading a second of audio**. MP3 plays on everything ever made: car stereos, old players, court and HR portals, editing tools that shrug at M4A. Drop the files, pick a bitrate, download.',
 		faq: [
 			{
 				q: 'What is an M4A file?',
@@ -2077,7 +2175,7 @@ export const CONVERTERS: ConverterEntry[] = [
 		h1: 'Convert FLAC to MP3.',
 		tagline: 'Lossless FLAC in, small MP3 out — encoded on your device.',
 		intro:
-			'FLAC keeps every bit of the original; MP3 keeps what you can hear. Convert lossless archives into files that play on anything — the decoding and encoding run in your browser, so your library never leaves your machine. Drop FLAC files, pick a bitrate, download MP3s.',
+			'FLAC keeps every bit of the original; MP3 keeps what you can hear. Convert lossless archives into files that play on anything — the decoding and encoding run in your browser, so **your library never leaves your machine**. Drop FLAC files, pick a bitrate, download MP3s.',
 		faq: [
 			{
 				q: 'Does converting FLAC to MP3 lose quality?',
@@ -2119,7 +2217,7 @@ export const CONVERTERS: ConverterEntry[] = [
 		h1: 'Convert WAV to FLAC.',
 		tagline: 'Same audio, about half the bytes — WAV to FLAC, locally.',
 		intro:
-			'FLAC stores exactly the same samples as WAV in roughly half the bytes — compression with no quality question at all. Drop WAV masters, download FLACs that decode back bit-for-bit; everything runs in your browser and nothing is uploaded.',
+			'FLAC stores exactly the same samples as WAV in roughly half the bytes — compression with no quality question at all. Drop WAV masters, download FLACs that decode back bit-for-bit; **everything runs in your browser and nothing is uploaded**.',
 		faq: [
 			{
 				q: 'Is FLAC really lossless?',
@@ -2161,7 +2259,7 @@ export const CONVERTERS: ConverterEntry[] = [
 		h1: 'Convert OPUS to MP3.',
 		tagline: 'Turn WhatsApp voice notes into MP3s that play anywhere.',
 		intro:
-			'OPUS is what messaging apps use for voice — tiny and great-sounding, until a car stereo, portal or editor refuses it. Convert .opus files to MP3 entirely in your browser: drop the notes, pick a bitrate, download audio that plays on everything.',
+			'OPUS is what messaging apps use for voice — tiny and great-sounding, until a car stereo, portal or editor refuses it. **Convert .opus files to MP3 entirely in your browser**: drop the notes, pick a bitrate, download audio that plays on everything.',
 		faq: [
 			{
 				q: 'Where do OPUS files come from?',
@@ -2203,7 +2301,7 @@ export const CONVERTERS: ConverterEntry[] = [
 		h1: 'Convert OGG to MP3.',
 		tagline: 'OGG audio in, universal MP3 out — nothing ever uploaded.',
 		intro:
-			'OGG carries Vorbis or Opus audio — efficient, open, and still refused by plenty of players and editors. Convert it to MP3 without uploading anything: drop .ogg or .oga files, pick a bitrate, download audio that works everywhere.',
+			'OGG carries Vorbis or Opus audio — efficient, open, and still refused by plenty of players and editors. **Convert it to MP3 without uploading anything**: drop .ogg or .oga files, pick a bitrate, download audio that works everywhere.',
 		faq: [
 			{
 				q: 'What is inside an OGG file?',
@@ -2245,7 +2343,7 @@ export const CONVERTERS: ConverterEntry[] = [
 		h1: 'Convert AAC to MP3.',
 		tagline: 'AAC recordings become MP3s that play absolutely anywhere.',
 		intro:
-			'Raw .aac files — ADTS streams from voice recorders, broadcast rips and old phones — play in fewer places than they should. Convert them to MP3 entirely in your browser: drop the files, pick a bitrate, download audio that opens anywhere.',
+			'Raw .aac files — ADTS streams from voice recorders, broadcast rips and old phones — play in fewer places than they should. **Convert them to MP3 entirely in your browser**: drop the files, pick a bitrate, download audio that opens anywhere.',
 		faq: [
 			{
 				q: 'Is AAC the same as M4A?',
@@ -2287,7 +2385,7 @@ export const CONVERTERS: ConverterEntry[] = [
 		h1: 'Convert MP3 to WAV.',
 		tagline: 'Decode MP3s into clean WAV PCM for editors and samplers.',
 		intro:
-			'Some tools simply insist on WAV — hardware samplers, transcription suites, old editors. This decodes your MP3s to standard 16-bit PCM WAV entirely in the browser: drop the files, download WAVs, feed the tool that was complaining.',
+			'Some tools simply insist on WAV — hardware samplers, transcription suites, old editors. **This decodes your MP3s to standard 16-bit PCM WAV entirely in the browser**: drop the files, download WAVs, feed the tool that was complaining.',
 		faq: [
 			{
 				q: 'Does WAV sound better than the MP3?',
@@ -2329,7 +2427,7 @@ export const CONVERTERS: ConverterEntry[] = [
 		h1: 'Convert MP4 to WAV.',
 		tagline: 'Pull the audio out of video as WAV — ready for any editor.',
 		intro:
-			'Editors, transcription suites and samplers want WAV, not video. Drop an MP4 or MOV and the audio track comes out as standard 16-bit PCM WAV — decoded entirely in your browser, with no upload and no length limit.',
+			'Editors, transcription suites and samplers want WAV, not video. Drop an MP4 or MOV and the audio track comes out as standard 16-bit PCM WAV — **decoded entirely in your browser, with no upload and no length limit**.',
 		faq: [
 			{
 				q: 'Why WAV instead of MP3?',
@@ -2371,7 +2469,7 @@ export const CONVERTERS: ConverterEntry[] = [
 		h1: 'Convert BMP to JPG.',
 		tagline: 'Turn bulky BMP bitmaps into small JPGs — in your browser.',
 		intro:
-			'BMP stores every pixel raw, which is why screenshots and exports balloon to megabytes. JPG keeps what the eye sees at a fraction of the size — and the conversion runs entirely on your device.',
+			'BMP stores every pixel raw, which is why screenshots and exports balloon to megabytes. JPG keeps what the eye sees at a fraction of the size — and **the conversion runs entirely on your device**.',
 		faq: [
 			{
 				q: 'Why are BMP files so large?',
@@ -2419,7 +2517,7 @@ export const CONVERTERS: ConverterEntry[] = [
 		h1: 'Convert TIFF to JPG.',
 		tagline: 'Scanner TIFFs become shareable JPGs — locally, for free.',
 		intro:
-			'Scanners and pro cameras love TIFF; the rest of the world does not. Convert to JPG for sharing and uploading — the file never leaves your machine, so even huge scans are fine.',
+			'Scanners and pro cameras love TIFF; the rest of the world does not. Convert to JPG for sharing and uploading — **the file never leaves your machine**, so even huge scans are fine.',
 		faq: [
 			{
 				q: 'Does it handle multi-page TIFFs?',
@@ -2467,7 +2565,7 @@ export const CONVERTERS: ConverterEntry[] = [
 		h1: 'Convert PNG to ICO.',
 		tagline: 'Turn a PNG into a multi-size favicon ICO, in your browser.',
 		intro:
-			'Turn a PNG logo into a classic favicon.ico with 16–256 px versions embedded — generated entirely in your browser, so the file never leaves your device. Drop a square-ish PNG; transparency survives, and non-square images are centered.',
+			'Turn a PNG logo into a classic favicon.ico with 16–256 px versions embedded — **generated entirely in your browser, so the file never leaves your device**. Drop a square-ish PNG; transparency survives, and non-square images are centered.',
 		faq: [
 			{
 				q: 'Which sizes go into the ICO?',
@@ -2518,14 +2616,13 @@ export const CONVERTERS: ConverterEntry[] = [
 		accept: 'image/jpeg,.jpg,.jpeg',
 		dropSubject: 'JPG files',
 		dropHint: 'JPG logos & photos · turned into a multi-size favicon',
-		inFooter: true,
 		title: 'JPG to ICO Converter — Favicon Generator | Compress Pro',
 		description:
 			'Convert JPG to a multi-size ICO favicon (16–256 px) right in your browser. Non-square photos are centered and nothing gets uploaded. Free and unlimited.',
 		h1: 'Convert JPG to ICO.',
 		tagline: 'Turn a JPG logo into a multi-size favicon ICO — locally.',
 		intro:
-			'Turn a JPG logo or photo into a classic favicon.ico with 16–256 px versions embedded — generated entirely in your browser, so the file never leaves your device. Non-square images are centered on a transparent square rather than stretched.',
+			'Turn a JPG logo or photo into a classic favicon.ico with 16–256 px versions embedded — **generated entirely in your browser, so the file never leaves your device**. Non-square images are centered on a transparent square rather than stretched.',
 		faq: [
 			{
 				q: 'Which sizes end up in the ICO?',
@@ -2567,14 +2664,13 @@ export const CONVERTERS: ConverterEntry[] = [
 		accept: 'image/svg+xml,.svg',
 		dropSubject: 'SVG files',
 		dropHint: 'SVG artwork · rendered to PNG locally',
-		inFooter: true,
 		title: 'SVG to PNG Converter — Free & Private | Compress Pro',
 		description:
 			'Convert SVG to PNG right in your browser — pick the output size, keep transparency, and batch-convert files. No uploads, no limits. Free and private.',
 		h1: 'Convert SVG to PNG.',
 		tagline: 'Crisp PNGs from SVG at any size — right in your browser.',
 		intro:
-			'Render SVG artwork to pixel-perfect PNG entirely in your browser — pick the size you need and transparency is preserved. Nothing is uploaded: logos, icons and illustrations never leave your device.',
+			'Render SVG artwork to pixel-perfect PNG entirely in your browser — pick the size you need and transparency is preserved. **Nothing is uploaded: logos, icons and illustrations never leave your device.**',
 		faq: [
 			{
 				q: 'What size should I render at?',
@@ -2616,7 +2712,7 @@ export const CONVERTERS: ConverterEntry[] = [
 		h1: 'Convert SVG to ICO.',
 		tagline: 'Vector-sharp favicons — SVG to a multi-size ICO, locally.',
 		intro:
-			'SVG is the ideal favicon source: the vector is rendered fresh for the ICO, so every embedded size comes out sharp. The classic favicon.ico with 16–256 px versions is built entirely in your browser — your artwork never leaves your device.',
+			'SVG is the ideal favicon source: the vector is rendered fresh for the ICO, so every embedded size comes out sharp. The classic favicon.ico with 16–256 px versions is built entirely in your browser — **your artwork never leaves your device**.',
 		faq: [
 			{
 				q: 'Why convert from SVG instead of PNG?',
@@ -2653,14 +2749,13 @@ export const CONVERTERS: ConverterEntry[] = [
 		accept: 'font/ttf,.ttf',
 		dropSubject: 'TTF fonts',
 		dropHint: 'TTF fonts · repackaged to WOFF2 locally',
-		inFooter: true,
 		title: 'TTF to WOFF2 Converter — Free, Private, Local | Compress Pro',
 		description:
 			'Convert TTF fonts to WOFF2 in your browser — typically half the size, identical glyphs, kerning and hinting. Nothing is uploaded. Free, no sign-up.',
 		h1: 'Convert TTF to WOFF2.',
 		tagline: 'Turn desktop TTF fonts into web-ready WOFF2 — privately.',
 		intro:
-			'WOFF2 is the same font wrapped in Brotli compression — the format every modern browser wants in @font-face. Drop a TTF (or a whole batch) and it comes out typically half the size, with glyphs, kerning and hinting untouched. Nothing is uploaded anywhere.',
+			'WOFF2 is the same font wrapped in Brotli compression — the format every modern browser wants in @font-face. Drop a TTF (or a whole batch) and it comes out typically half the size, with glyphs, kerning and hinting untouched. **Nothing is uploaded anywhere.**',
 		faq: [
 			{
 				q: 'How much smaller does WOFF2 get?',
@@ -2700,7 +2795,7 @@ export const CONVERTERS: ConverterEntry[] = [
 		h1: 'Convert TTF to WOFF.',
 		tagline: 'TTF wrapped as WOFF for legacy browsers — all in-browser.',
 		intro:
-			'WOFF (the original web font format) is a zlib-compressed wrapper around your TTF — every table comes through byte-for-byte. Modern sites should prefer WOFF2; reach for WOFF when you must support genuinely old browsers.',
+			'WOFF (the original web font format) is a zlib-compressed wrapper around your TTF — **every table comes through byte-for-byte**. Modern sites should prefer WOFF2; reach for WOFF when you must support genuinely old browsers.',
 		faq: [
 			{
 				q: 'Should I use WOFF or WOFF2?',
@@ -2726,14 +2821,13 @@ export const CONVERTERS: ConverterEntry[] = [
 		accept: 'font/otf,.otf',
 		dropSubject: 'OTF fonts',
 		dropHint: 'OTF fonts · repackaged to WOFF2 locally',
-		inFooter: true,
 		title: 'OTF to WOFF2 Converter — Free, Private, Local | Compress Pro',
 		description:
 			'Convert OTF fonts to WOFF2 in your browser — smaller for the web, with CFF outlines stored byte-for-byte. Nothing is uploaded. Free and private.',
 		h1: 'Convert OTF to WOFF2.',
 		tagline: 'Web-ready WOFF2 from your OTF fonts — nothing uploaded.',
 		intro:
-			'OTF fonts go straight into WOFF2 with their PostScript (CFF) outlines stored as-is — no outline conversion, no quality loss, just Brotli compression around the same tables. The result is what modern browsers expect in @font-face.',
+			'OTF fonts go straight into WOFF2 with their PostScript (CFF) outlines stored as-is — **no outline conversion, no quality loss**, just Brotli compression around the same tables. The result is what modern browsers expect in @font-face.',
 		faq: [
 			{
 				q: 'Do the PostScript outlines survive?',
@@ -2765,7 +2859,7 @@ export const CONVERTERS: ConverterEntry[] = [
 		h1: 'Convert OTF to WOFF.',
 		tagline: 'OTF wrapped as WOFF for legacy browsers — all in-browser.',
 		intro:
-			'WOFF wraps your OTF in zlib compression, table by table, byte for byte — the PostScript outlines are untouched. Prefer WOFF2 for modern sites; WOFF exists for the long tail of old browsers.',
+			'WOFF wraps your OTF in zlib compression, table by table, byte for byte — **the PostScript outlines are untouched**. Prefer WOFF2 for modern sites; WOFF exists for the long tail of old browsers.',
 		faq: [
 			{
 				q: 'When is WOFF the right choice over WOFF2?',
@@ -2797,7 +2891,7 @@ export const CONVERTERS: ConverterEntry[] = [
 		h1: 'Convert WOFF to TTF.',
 		tagline: 'Unwrap WOFF web fonts back to installable TTF — locally.',
 		intro:
-			'A WOFF is a compressed envelope around a desktop font — unwrapping it returns the original TTF, byte for byte, ready to install or open in a font editor. The decompression happens entirely in your browser.',
+			'A WOFF is a compressed envelope around a desktop font — unwrapping it returns the original TTF, byte for byte, ready to install or open in a font editor. **The decompression happens entirely in your browser**.',
 		faq: [
 			{
 				q: 'Can I install the result?',
@@ -2829,7 +2923,7 @@ export const CONVERTERS: ConverterEntry[] = [
 		h1: 'Convert WOFF to OTF.',
 		tagline: 'Unwrap WOFF web fonts back to desktop OTF — in-browser.',
 		intro:
-			'Unwrapping a WOFF returns the exact desktop font that was packaged into it. If that font has PostScript (CFF) outlines you get an .otf; if it is a TrueType font you get a .ttf — either way, byte-identical tables and a file you can install.',
+			'Unwrapping a WOFF returns the exact desktop font that was packaged into it. If that font has PostScript (CFF) outlines you get an .otf; if it is a TrueType font you get a .ttf — either way, **byte-identical tables and a file you can install**.',
 		faq: [
 			{
 				q: 'Why did my file come out as .ttf?',
@@ -2855,14 +2949,13 @@ export const CONVERTERS: ConverterEntry[] = [
 		accept: 'font/woff,application/font-woff,.woff',
 		dropSubject: 'WOFF fonts',
 		dropHint: 'WOFF web fonts · upgraded to WOFF2 locally',
-		inFooter: true,
 		title: 'WOFF to WOFF2 Converter — Free, Private, Local | Compress Pro',
 		description:
 			'Convert WOFF to WOFF2 in your browser — Brotli recompression makes web fonts about a quarter smaller, losslessly. Nothing uploaded. Free, no sign-up.',
 		h1: 'Convert WOFF to WOFF2.',
 		tagline: 'Upgrade WOFF fonts to smaller WOFF2 — nothing uploaded.',
 		intro:
-			'Still serving WOFF? WOFF2 carries the same font in Brotli instead of zlib — usually 25–30% smaller, supported by every browser released since 2016. The upgrade is pure recompression: unwrap, rewrap, identical tables.',
+			'Still serving WOFF? WOFF2 carries the same font in Brotli instead of zlib — usually 25–30% smaller, supported by every browser released since 2016. The upgrade is pure recompression: **unwrap, rewrap, identical tables**.',
 		faq: [
 			{
 				q: 'How much do I save?',
@@ -2888,14 +2981,13 @@ export const CONVERTERS: ConverterEntry[] = [
 		accept: 'font/woff2,.woff2',
 		dropSubject: 'WOFF2 fonts',
 		dropHint: 'WOFF2 web fonts · decoded locally',
-		inFooter: true,
 		title: 'WOFF2 to TTF Converter — Free, Private, Local | Compress Pro',
 		description:
 			'Convert WOFF2 web fonts to installable TTF in your browser — glyphs, kerning and hinting all preserved. Nothing is uploaded. Free, private, no sign-up.',
 		h1: 'Convert WOFF2 to TTF.',
 		tagline: 'Unpack WOFF2 web fonts into installable TTF — privately.',
 		intro:
-			'WOFF2 is a Brotli-compressed envelope around a desktop font. Decoding it in your browser returns a TTF you can install, inspect or edit — with every glyph, kerning pair and hinting instruction intact.',
+			'WOFF2 is a Brotli-compressed envelope around a desktop font. **Decoding it in your browser** returns a TTF you can install, inspect or edit — with every glyph, kerning pair and hinting instruction intact.',
 		faq: [
 			{
 				q: 'Can I install the result?',
@@ -2935,7 +3027,7 @@ export const CONVERTERS: ConverterEntry[] = [
 		h1: 'Convert WOFF2 to OTF.',
 		tagline: 'Unpack WOFF2 web fonts into desktop OTF — in your browser.',
 		intro:
-			'Decoding a WOFF2 returns the desktop font it was made from. PostScript (CFF) outlines come out byte-for-byte — WOFF2 stores them without any transformation — so the .otf you download is exactly the font the site serves.',
+			'Decoding a WOFF2 returns the desktop font it was made from. **PostScript (CFF) outlines come out byte-for-byte** — WOFF2 stores them without any transformation — so the .otf you download is exactly the font the site serves.',
 		faq: [
 			{
 				q: 'Why did my file come out as .ttf?',
@@ -2967,7 +3059,7 @@ export const CONVERTERS: ConverterEntry[] = [
 		h1: 'Convert WOFF2 to WOFF.',
 		tagline: 'Repack WOFF2 as WOFF for legacy browsers — output grows.',
 		intro:
-			'Going from WOFF2 back to WOFF trades size for reach: zlib compresses less than Brotli, so expect the output to be 25–40% larger — same font, older wrapper. Useful when a legacy browser or an old toolchain insists on WOFF.',
+			'Going from WOFF2 back to WOFF trades size for reach: zlib compresses less than Brotli, so expect the output to be 25–40% larger — **same font, older wrapper**. Useful when a legacy browser or an old toolchain insists on WOFF.',
 		faq: [
 			{
 				q: 'Why is the converted file bigger than my WOFF2?',
@@ -2999,7 +3091,7 @@ export const CONVERTERS: ConverterEntry[] = [
 		h1: 'Convert TTF to EOT.',
 		tagline: 'EOT files for the old Internet Explorer — created locally.',
 		intro:
-			'EOT (Embedded OpenType) is the web font format Internet Explorer 6–8 understood — a small metadata header in front of the unchanged TTF. If a legacy intranet or an ancient CSS pipeline still demands it, this makes one without your font leaving the machine.',
+			'EOT (Embedded OpenType) is the web font format Internet Explorer 6–8 understood — a small metadata header in front of the unchanged TTF. If a legacy intranet or an ancient CSS pipeline still demands it, this makes one **without your font leaving the machine**.',
 		faq: [
 			{
 				q: 'Do I actually need EOT?',
@@ -3031,7 +3123,7 @@ export const CONVERTERS: ConverterEntry[] = [
 		h1: 'Convert EOT to TTF.',
 		tagline: 'Rescue fonts from legacy EOT files — decoded in-browser.',
 		intro:
-			'Old sites and intranets left a trail of EOT files with no desktop counterpart. Most EOTs store the original TTF verbatim behind a header — this unwraps it (XOR-obfuscated ones included) into a font you can install or convert onward.',
+			'Old sites and intranets left a trail of EOT files with no desktop counterpart. Most EOTs **store the original TTF verbatim** behind a header — this unwraps it (XOR-obfuscated ones included) into a font you can install or convert onward.',
 		faq: [
 			{
 				q: 'Does every EOT work?',
@@ -3056,14 +3148,13 @@ export const CONVERTERS: ConverterEntry[] = [
 		accept: '.rar,application/vnd.rar,application/x-rar-compressed',
 		dropSubject: 'RAR archives',
 		dropHint: 'RAR v4 & v5 · repacked to ZIP locally',
-		inFooter: true,
 		title: 'RAR to ZIP Converter — Private, No Upload | Compress Pro',
 		description:
 			'Convert RAR to ZIP right in your browser — no WinRAR, no upload. Handles RAR v4 and v5, password-protected ones included. Files stay on your device.',
 		h1: 'Convert RAR to ZIP.',
 		tagline: 'Open-anywhere ZIP from RAR — converted on your own device.',
 		intro:
-			'RAR needs WinRAR or 7-Zip; ZIP opens with a double-click on every Windows, Mac and Linux machine made this century. Drop a RAR, get the same files repacked as a ZIP — extraction and repacking run entirely in your browser, so the archive never touches a server.',
+			'RAR needs WinRAR or 7-Zip; ZIP opens with a double-click on every Windows, Mac and Linux machine made this century. Drop a RAR, get the same files repacked as a ZIP — extraction and repacking run entirely in your browser, so **the archive never touches a server**.',
 		faq: [
 			{
 				q: 'Why convert RAR to ZIP?',
@@ -3099,14 +3190,13 @@ export const CONVERTERS: ConverterEntry[] = [
 		accept: '.7z,application/x-7z-compressed',
 		dropSubject: '7Z archives',
 		dropHint: '7-Zip archives · repacked to ZIP locally',
-		inFooter: true,
 		title: '7Z to ZIP Converter — Private, No Upload | Compress Pro',
 		description:
 			'Convert 7Z archives to ZIP in your browser — nothing to install, nothing uploaded. Password-protected 7Z files work too. Free, fast and private.',
 		h1: 'Convert 7Z to ZIP.',
 		tagline: 'Turn 7Z archives into ZIPs that open everywhere, locally.',
 		intro:
-			'7Z compresses harder, but plenty of computers cannot open it without extra software. Drop a 7Z, get a ZIP with the same files and folders — every machine from the office PC to a locked-down work laptop opens it natively. The whole conversion runs in your browser.',
+			'7Z compresses harder, but plenty of computers cannot open it without extra software. Drop a 7Z, get a ZIP with the same files and folders — every machine from the office PC to a locked-down work laptop opens it natively. **The whole conversion runs in your browser**.',
 		faq: [
 			{
 				q: 'Will the ZIP be bigger than my 7Z?',
@@ -3148,7 +3238,7 @@ export const CONVERTERS: ConverterEntry[] = [
 		h1: 'Convert ZIP to 7Z.',
 		tagline: 'Repack ZIP as 7Z for the strongest everyday compression.',
 		intro:
-			'ZIP is universal; 7Z is efficient. Repacking a ZIP as 7Z re-compresses the same files with LZMA2, which routinely lands noticeably smaller on documents, code and mixed folders. The conversion runs entirely in your browser — drop a ZIP, download a 7Z.',
+			'ZIP is universal; 7Z is efficient. Repacking a ZIP as 7Z re-compresses the same files with LZMA2, which routinely lands noticeably smaller on documents, code and mixed folders. **The conversion runs entirely in your browser** — drop a ZIP, download a 7Z.',
 		faq: [
 			{
 				q: 'How much smaller does 7Z get?',
@@ -3190,7 +3280,7 @@ export const CONVERTERS: ConverterEntry[] = [
 		h1: 'Convert TAR.GZ to ZIP.',
 		tagline: 'Unix tar.gz in, Windows-friendly ZIP out — all on-device.',
 		intro:
-			'Tarballs are the lingua franca of unix and the bane of Windows — Explorer will not open a .tar.gz without help. Drop one here and get a ZIP with the same files: the gzip layer and the tar layer are both unpacked in your browser and repacked as a plain ZIP anyone can open.',
+			'Tarballs are the lingua franca of unix and the bane of Windows — Explorer will not open a .tar.gz without help. Drop one here and get a ZIP with the same files: **the gzip layer and the tar layer are both unpacked in your browser** and repacked as a plain ZIP anyone can open.',
 		faq: [
 			{
 				q: 'Which tarball flavors are supported?',
@@ -3232,7 +3322,7 @@ export const CONVERTERS: ConverterEntry[] = [
 		h1: 'Convert ISO to ZIP.',
 		tagline: 'Disc image in, plain ZIP of its files out — no installs.',
 		intro:
-			'An ISO is a snapshot of a whole disc; sometimes all you want is the files inside without mounting anything. Drop the image here and its file tree is read in your browser and repacked as an ordinary ZIP — no virtual drives, no admin rights, no upload.',
+			'An ISO is a snapshot of a whole disc; sometimes all you want is the files inside without mounting anything. Drop the image here and its file tree is read in your browser and repacked as an ordinary ZIP — **no virtual drives, no admin rights, no upload**.',
 		faq: [
 			{
 				q: 'Will the ZIP still be bootable like the ISO?',
@@ -3274,7 +3364,7 @@ export const CONVERTERS: ConverterEntry[] = [
 		h1: 'Convert ZIP to TAR.GZ.',
 		tagline: 'ZIP from Windows in, unix-ready tar.gz out — on-device.',
 		intro:
-			'Docker contexts, CI pipelines, Linux servers and package tooling all speak tar.gz; the file you were sent is a ZIP. Drop it here and the same tree comes back as a gzipped tarball — unpacked and repacked entirely in your browser, nothing installed and nothing uploaded.',
+			'Docker contexts, CI pipelines, Linux servers and package tooling all speak tar.gz; the file you were sent is a ZIP. Drop it here and the same tree comes back as a gzipped tarball — **unpacked and repacked entirely in your browser, nothing installed and nothing uploaded**.',
 		faq: [
 			{
 				q: 'Why do unix tools prefer tar.gz over ZIP?',
@@ -3324,7 +3414,7 @@ export const TOOLS: ConverterEntry[] = [
 		h1: 'Unlock PDF files.',
 		tagline: 'Remove PDF passwords locally — nothing ever gets uploaded.',
 		intro:
-			'Remove the password from a PDF you own and get a copy that opens freely. Unlike online unlockers, both the PDF and the password you type stay on your device — the whole job runs right in your browser, and nothing is ever sent anywhere.',
+			'Remove the password from a PDF you own and get a copy that opens freely. Unlike online unlockers, **both the PDF and the password you type stay on your device** — the whole job runs right in your browser, and nothing is ever sent anywhere.',
 		faq: [
 			{
 				q: 'Is unlocking a PDF legal?',
@@ -3373,7 +3463,7 @@ export const TOOLS: ConverterEntry[] = [
 		h1: 'Password-protect PDF files.',
 		tagline: 'Password-protect PDFs locally — no uploads, no accounts.',
 		intro:
-			'Add a password to any PDF and download an encrypted copy that no reader opens without it. Everything happens in your browser with standard PDF encryption — the kind every reader supports — and neither the file nor the password is ever sent anywhere.',
+			'Add a password to any PDF and download an encrypted copy that no reader opens without it. Everything happens in your browser with standard PDF encryption — the kind every reader supports — and **neither the file nor the password is ever sent anywhere**.',
 		faq: [
 			{
 				q: 'Which encryption does it use?',
@@ -3422,7 +3512,7 @@ export const TOOLS: ConverterEntry[] = [
 		h1: 'Merge PDF files.',
 		tagline: 'Combine PDFs into one file locally — nothing is uploaded.',
 		intro:
-			'Combine any number of PDFs into a single document, assembled entirely in your browser. Drop the files, arrange them with the list arrows, and merge — pages are copied losslessly, so nothing is re-encoded unless you also tick “Compress after merging”. No server ever touches your documents.',
+			'Combine any number of PDFs into a single document, assembled entirely in your browser. Drop the files, arrange them with the list arrows, and merge — pages are copied losslessly, so nothing is re-encoded unless you also tick “Compress after merging”. **No server ever touches your documents.**',
 		faq: [
 			{
 				q: 'How do I control the page order?',
@@ -3487,7 +3577,7 @@ export const TOOLS: ConverterEntry[] = [
 		h1: 'Split PDF files.',
 		tagline: 'Extract or remove PDF pages locally — nothing is uploaded.',
 		intro:
-			'Pull exact pages out of a PDF — or cut pages from it — entirely in your browser. Type a range like 1-3,7,12- and choose whether to keep or remove those pages; the rest assemble into a new document with nothing re-encoded and nothing uploaded.',
+			'Pull exact pages out of a PDF — or cut pages from it — entirely in your browser. Type a range like 1-3,7,12- and choose whether to keep or remove those pages; the rest assemble into a new document with **nothing re-encoded and nothing uploaded**.',
 		faq: [
 			{
 				q: 'How do page ranges work?',
@@ -3535,6 +3625,7 @@ export const TOOLS: ConverterEntry[] = [
 		format: 'video',
 		path: '/compress-mp4',
 		ogImage: '/og/compress-mp4.jpg',
+		demo: 'video',
 		label: 'Compress MP4',
 		feature: 'Compress MP4 video to a size limit',
 		preset: { kind: 'video', container: 'mp4' },
@@ -3547,7 +3638,7 @@ export const TOOLS: ConverterEntry[] = [
 		h1: 'Compress MP4 videos.',
 		tagline: 'Shrink MP4s on your device — under any upload size limit.',
 		intro:
-			'Compress MP4 files right on your own device — no upload, no queue, no watermark. Set a quality for a smaller look-alike, or type the limit you’re fighting and target-size mode finds the settings that fit. Audio is carried over untouched whenever possible.',
+			'Compress MP4 files right on your own device — **no upload, no queue, no watermark**. Set a quality for a smaller look-alike, or type the limit you’re fighting and target-size mode finds the settings that fit. Audio is carried over untouched whenever possible.',
 		faq: [
 			{
 				q: 'How much smaller will my MP4 get?',
@@ -3587,6 +3678,12 @@ export const TOOLS: ConverterEntry[] = [
 				paragraphs: [
 					'MP4 (H.264) plays on effectively everything made this decade — Windows, Android, TVs, editors, browsers, upload forms. If your source is a newer iPhone recording (HEVC), converting costs some efficiency but buys universal playback; keep the quality higher to compensate. For the smallest file where compatibility doesn’t matter, the [Compress video](/compress-video) tab’s WebM output beats it.'
 				]
+			},
+			{
+				heading: 'Under the hood',
+				paragraphs: [
+					'Compression runs on WebCodecs — the H.264 encoder built into your browser, usually the same hardware block that records your screen — while mediabunny does the container work of reading the source MP4 and writing the new one around the fresh video track. The quality slider maps to a bitrate matched to the clip’s resolution and frame rate, capped so the re-encode never spends more bits than the original. Everything happens on your device, which is why there is no upload, no queue and no watermark.'
+				]
 			}
 		],
 		related: ['/compress-video', '/mov-to-mp4', '/mp4-to-webm', '/mp4-to-gif']
@@ -3607,7 +3704,7 @@ export const TOOLS: ConverterEntry[] = [
 		h1: 'Compress MOV videos.',
 		tagline: 'Shrink QuickTime MOV files on your device — still a MOV.',
 		intro:
-			'Compress MOV files without changing what they are — the video is re-encoded on your own device and stays in its QuickTime container, so it drops straight back into Final Cut, QuickTime Player and every Apple workflow. Pick a quality for a smaller look-alike, or type the limit you’re fighting and target-size mode finds settings that fit. Audio is carried over untouched whenever possible, and nothing is uploaded anywhere.',
+			'Compress MOV files without changing what they are — the video is re-encoded on your own device and stays in its QuickTime container, so it drops straight back into Final Cut, QuickTime Player and every Apple workflow. Pick a quality for a smaller look-alike, or type the limit you’re fighting and target-size mode finds settings that fit. Audio is carried over untouched whenever possible, and **nothing is uploaded anywhere**.',
 		faq: [
 			{
 				q: 'Why compress MOV to MOV instead of converting to MP4?',
@@ -3668,7 +3765,7 @@ export const TOOLS: ConverterEntry[] = [
 		h1: 'Resize images.',
 		tagline: 'Downscale photos to any pixel size — all in your browser.',
 		intro:
-			'Shrink image dimensions on your device: set the longest side — the page starts at 1920 px — and every photo scales down proportionally with smooth, high-quality resampling. The format stays what it was, compression happens in the same pass, and upscaling never happens: images already smaller than the cap pass through untouched.',
+			'**Shrink image dimensions on your device**: set the longest side — the page starts at 1920 px — and every photo scales down proportionally with smooth, high-quality resampling. The format stays what it was, compression happens in the same pass, and upscaling never happens: images already smaller than the cap pass through untouched.',
 		faq: [
 			{
 				q: 'Does resizing keep the aspect ratio?',
@@ -3716,6 +3813,7 @@ export const TOOLS: ConverterEntry[] = [
 		format: 'jpg',
 		path: '/compress-image',
 		ogImage: '/og/compress-image.jpg',
+		demo: 'photo',
 		label: 'Image compressor',
 		feature: 'Compress any image format',
 		preset: { kind: 'image-any' },
@@ -3729,7 +3827,7 @@ export const TOOLS: ConverterEntry[] = [
 		h1: 'Compress images.',
 		tagline: 'JPG, PNG, WebP, HEIC & more — compressed on your device.',
 		intro:
-			'Compress any image right in your browser — JPG, PNG, WebP, GIF, HEIC and AVIF each land on the right tool automatically. Pick a quality, set an exact target size like 200 KB, or cap the dimensions; batches download as a ZIP. Nothing is uploaded, and there are no ads and no limits.',
+			'Compress any image right in your browser — JPG, PNG, WebP, GIF, HEIC and AVIF each land on the right tool automatically. Pick a quality, set an exact target size like 200 KB, or cap the dimensions; batches download as a ZIP. **Nothing is uploaded, and there are no ads and no limits.**',
 		faq: [
 			{
 				q: 'Which output format should I pick?',
@@ -3757,6 +3855,12 @@ export const TOOLS: ConverterEntry[] = [
 				paragraphs: [
 					'Dimensions first: a photo far larger than its destination wastes more bytes than any quality setting can recover — the [image resizer](/resize-image) caps the longest side. Quality second: 75–85 covers almost every real use. Format last: Auto mode picks it per image, so you rarely need to.'
 				]
+			},
+			{
+				heading: 'Under the hood',
+				paragraphs: [
+					'One dropzone, but not one engine: every image is routed to the reference encoder for its format — MozJPEG for JPG, OxiPNG and libimagequant for PNG, libwebp for WebP, libavif for AVIF — each compiled to WebAssembly and running on your device. You get the specialist tool’s results without knowing which specialist you needed; the routing happens automatically, file by file.'
+				]
 			}
 		],
 		related: ['/compress-jpg', '/compress-png', '/compress-heic', '/resize-image']
@@ -3777,7 +3881,7 @@ export const TOOLS: ConverterEntry[] = [
 		h1: 'Compress JPG to 100 KB.',
 		tagline: 'JPG photos squeezed under 100 KB — right in your browser.',
 		intro:
-			'Get a JPG under 100 KB without guessing at quality sliders: this page arrives preset to target-size mode with 100 KB already typed in, and the tool searches for the best quality that fits under the cap — for every photo in the batch. Everything runs in your browser; photos are never uploaded.',
+			'Get a JPG under 100 KB without guessing at quality sliders: this page arrives preset to target-size mode with 100 KB already typed in, and the tool searches for the best quality that fits under the cap — for every photo in the batch. **Everything runs in your browser; photos are never uploaded.**',
 		faq: [
 			{
 				q: 'Will my photo look bad at 100 KB?',
@@ -3826,7 +3930,7 @@ export const TOOLS: ConverterEntry[] = [
 		h1: 'Subset fonts.',
 		tagline: 'Keep only the characters you use — subset fonts locally.',
 		intro:
-			'A font ships every glyph it knows; your page usually needs a fraction of them. Pick character sets or paste the exact text, and HarfBuzz — the same subsetter the big font services run — keeps just those glyphs, with kerning and ligatures intact. Everything happens in your browser.',
+			'A font ships every glyph it knows; your page usually needs a fraction of them. Pick character sets or paste the exact text, and HarfBuzz — the same subsetter the big font services run — keeps just those glyphs, with kerning and ligatures intact. **Everything happens in your browser.**',
 		steps: [
 			'Drop a font — TTF, or WOFF/WOFF2 with TrueType outlines (batches work too).',
 			'Tick the character sets you need, paste exact text, or pin variable axes.',
@@ -3880,7 +3984,7 @@ export const TOOLS: ConverterEntry[] = [
 		h1: 'Variable font to static.',
 		tagline: 'Turn variable fonts into static instances — all locally.',
 		intro:
-			'Variable fonts pack every weight and width into one file — great on the web, awkward in tools that expect one style per file. Drop one, set a value per axis (or keep the defaults), and the axes are pinned into a normal static font, right in your browser.',
+			'Variable fonts pack every weight and width into one file — great on the web, awkward in tools that expect one style per file. Drop one, set a value per axis (or keep the defaults), and **the axes are pinned into a normal static font, right in your browser**.',
 		steps: [
 			'Drop a variable font — its axes (weight, width …) are detected automatically.',
 			'Set a value per axis, like weight 700, or simply keep each axis default.',
@@ -3927,7 +4031,7 @@ export const TOOLS: ConverterEntry[] = [
 		h1: 'Create 7Z archives.',
 		tagline: 'Build 7Z archives in your browser — small, AES, private.',
 		intro:
-			'7Z out-compresses ZIP on almost everything and encrypts with AES-256 when you set a password — it can even hide the file names inside. Drop any files, pick a compression level, download one .7z. The whole build runs locally, so your files never leave the machine.',
+			'7Z out-compresses ZIP on almost everything and encrypts with AES-256 when you set a password — it can even hide the file names inside. Drop any files, pick a compression level, download one .7z. The whole build runs locally, so **your files never leave the machine**.',
 		faq: [
 			{
 				q: 'How is 7Z better than ZIP?',
@@ -3969,7 +4073,7 @@ export const TOOLS: ConverterEntry[] = [
 		h1: 'Create TAR archives.',
 		tagline: 'Bundle files into a tar archive — built on your device.',
 		intro:
-			'A tar file glues many files into one stream without compressing them — the format unix tooling has expected since the tape-drive era. Drop files, download one .tar. Built entirely in your browser; combine it with gzip or xz here too if you want it compressed.',
+			'A tar file glues many files into one stream without compressing them — the format unix tooling has expected since the tape-drive era. Drop files, download one .tar. **Built entirely in your browser**; combine it with gzip or xz here too if you want it compressed.',
 		faq: [
 			{
 				q: 'Why is my tar as big as the inputs combined?',
@@ -4011,7 +4115,7 @@ export const TOOLS: ConverterEntry[] = [
 		h1: 'Create TAR.GZ tarballs.',
 		tagline: 'Make tar.gz tarballs in your browser — nothing uploaded.',
 		intro:
-			'The tarball is how source code, releases and server payloads travel in the unix world. Drop files, get one .tar.gz — tarred and gzipped entirely in your browser. The format pills switch to tar.bz2 for a smaller file or tar.xz for the smallest, when the extra build time is worth it.',
+			'The tarball is how source code, releases and server payloads travel in the unix world. Drop files, get one .tar.gz — **tarred and gzipped entirely in your browser**. The format pills switch to tar.bz2 for a smaller file or tar.xz for the smallest, when the extra build time is worth it.',
 		faq: [
 			{
 				q: 'tar.gz or .tgz — is there a difference?',
@@ -4053,7 +4157,7 @@ export const TOOLS: ConverterEntry[] = [
 		h1: 'Gzip files.',
 		tagline: 'Gzip any file right in your browser — nothing uploaded.',
 		intro:
-			'Gzip compresses a single file into a single .gz — no bundling, no archive semantics, just the exact stream format web servers, log rotators and unix tools speak. Drop files and each one comes back as its own .gz, compressed entirely on your device.',
+			'Gzip compresses a single file into a single .gz — no bundling, no archive semantics, just the exact stream format web servers, log rotators and unix tools speak. Drop files and each one comes back as its own .gz, **compressed entirely on your device**.',
 		faq: [
 			{
 				q: 'Why did I get three .gz files instead of one archive?',
@@ -4095,7 +4199,7 @@ export const TOOLS: ConverterEntry[] = [
 		h1: 'Bzip2 files.',
 		tagline: 'Bzip2-compress files in your browser — smaller than gzip.',
 		intro:
-			'Bzip2 sits between gzip and xz: noticeably smaller output than gzip on text, without the xz build times. Drop files and each comes back as its own .bz2, compressed on your device — the exact format bunzip2 and every unix toolchain expect.',
+			'Bzip2 sits between gzip and xz: noticeably smaller output than gzip on text, without the xz build times. Drop files and each comes back as its own .bz2, **compressed on your device** — the exact format bunzip2 and every unix toolchain expect.',
 		faq: [
 			{
 				q: 'When is bzip2 the right pick?',
@@ -4137,7 +4241,7 @@ export const TOOLS: ConverterEntry[] = [
 		h1: 'XZ-compress files.',
 		tagline: 'XZ squeezes hardest — compress files on your own device.',
 		intro:
-			'XZ is the strongest of the classic unix compressors — the same LZMA2 engine 7Z uses, wrapped in a single-file stream. Drop files and each returns as its own .xz, built locally. Expect the smallest results on text and data, at the cost of more compute than gzip.',
+			'XZ is the strongest of the classic unix compressors — the same LZMA2 engine 7Z uses, wrapped in a single-file stream. Drop files and each returns as its own .xz, **built locally**. Expect the smallest results on text and data, at the cost of more compute than gzip.',
 		faq: [
 			{
 				q: 'How much smaller is xz than gzip really?',
@@ -4179,7 +4283,7 @@ export const TOOLS: ConverterEntry[] = [
 		h1: 'Extract RAR archives.',
 		tagline: 'Open RAR archives in your browser — files out, no apps.',
 		intro:
-			'Someone sent a .rar and Windows just shrugs. Drop it here instead: every file inside becomes its own download, straight in your browser — RAR v4 and v5, password-protected ones too. No WinRAR trial, no sketchy installer, no upload to a stranger with a server.',
+			'Someone sent a .rar and Windows just shrugs. Drop it here instead: every file inside becomes its own download, straight in your browser — RAR v4 and v5, password-protected ones too. No WinRAR trial, no sketchy installer, **no upload to a stranger with a server**.',
 		faq: [
 			{
 				q: 'Do password-protected RARs work?',
@@ -4221,7 +4325,7 @@ export const TOOLS: ConverterEntry[] = [
 		h1: 'Extract 7Z archives.',
 		tagline: 'Unpack 7Z archives locally — every file its own download.',
 		intro:
-			'A .7z on a machine without 7-Zip is a locked box. This page is the key: drop the archive and each file inside becomes its own download, decompressed entirely in your browser — LZMA2, encrypted archives, even ones whose file list is hidden behind the password.',
+			'A .7z on a machine without 7-Zip is a locked box. This page is the key: drop the archive and each file inside becomes its own download, **decompressed entirely in your browser** — LZMA2, encrypted archives, even ones whose file list is hidden behind the password.',
 		faq: [
 			{
 				q: 'Do encrypted 7Z archives open?',
@@ -4263,7 +4367,7 @@ export const TOOLS: ConverterEntry[] = [
 		h1: 'Extract TAR.GZ tarballs.',
 		tagline: 'Open tar.gz tarballs in your browser — no terminal used.',
 		intro:
-			'A .tar.gz is two wrappers deep — gzip around tar around your files — which is why double-clicking one on Windows goes nowhere. Drop it here and both layers unwrap automatically; plain .tar, .tar.bz2 and .tar.xz work the same way. Each file inside becomes its own download.',
+			'A .tar.gz is two wrappers deep — gzip around tar around your files — which is why double-clicking one on Windows goes nowhere. Drop it here and **both layers unwrap automatically**; plain .tar, .tar.bz2 and .tar.xz work the same way. Each file inside becomes its own download.',
 		faq: [
 			{
 				q: 'Why does Windows open tar.gz in two steps?',
@@ -4305,7 +4409,7 @@ export const TOOLS: ConverterEntry[] = [
 		h1: 'Extract GZ files.',
 		tagline: 'Gunzip .gz files in your browser — nothing gets uploaded.',
 		intro:
-			'Log rotations, database dumps and API exports land as .gz — one compressed file, no archive inside. Drop them here and the original comes back: access.log.gz turns into access.log, decompressed entirely on your device. A .tar.gz unwraps all the way to its files automatically.',
+			'Log rotations, database dumps and API exports land as .gz — one compressed file, no archive inside. Drop them here and the original comes back: access.log.gz turns into access.log, **decompressed entirely on your device**. A .tar.gz unwraps all the way to its files automatically.',
 		faq: [
 			{
 				q: 'Is .gz the same as .zip?',
@@ -4347,7 +4451,7 @@ export const TOOLS: ConverterEntry[] = [
 		h1: 'Extract ISO images.',
 		tagline: 'Look inside ISO disc images — files out, never mounted.',
 		intro:
-			'An ISO wants to be mounted as a virtual disc before it shows its files — an odd ceremony when you just need one installer or driver out of it. Drop the image here and its file tree reads directly in your browser: every file becomes its own download, no drive letters involved.',
+			'An ISO wants to be mounted as a virtual disc before it shows its files — an odd ceremony when you just need one installer or driver out of it. Drop the image here and **its file tree reads directly in your browser**: every file becomes its own download, no drive letters involved.',
 		faq: [
 			{
 				q: 'Do I need admin rights or a virtual drive?',
@@ -4389,7 +4493,7 @@ export const TOOLS: ConverterEntry[] = [
 		h1: 'Extract CAB archives.',
 		tagline: 'Open Windows CAB archives right in your browser — free.',
 		intro:
-			'CAB is the archive format Windows itself ships in — drivers, installers and updates all travel as cabinets. When you need one file out of a driver package (or you are just curious), drop the .cab here: contents extract in your browser, each file its own download.',
+			'CAB is the archive format Windows itself ships in — drivers, installers and updates all travel as cabinets. When you need one file out of a driver package (or you are just curious), drop the .cab here: **contents extract in your browser**, each file its own download.',
 		faq: [
 			{
 				q: 'Where do CAB files even come from?',
@@ -4431,7 +4535,7 @@ export const TOOLS: ConverterEntry[] = [
 		h1: 'Extract DEB packages.',
 		tagline: 'See inside Debian .deb packages — unpacked on your device.',
 		intro:
-			'A .deb is an archive-in-an-archive: an ar wrapper holding control metadata and a data tarball with the actual files. Drop one here and the chain unwraps automatically down to the real payload — binaries, configs, docs — each file its own download, no Linux machine required.',
+			'A .deb is an archive-in-an-archive: an ar wrapper holding control metadata and a data tarball with the actual files. Drop one here and **the chain unwraps automatically down to the real payload** — binaries, configs, docs — each file its own download, no Linux machine required.',
 		faq: [
 			{
 				q: 'Why do other tools show me data.tar.xz instead of files?',
@@ -4473,7 +4577,7 @@ export const TOOLS: ConverterEntry[] = [
 		h1: 'Extract RPM packages.',
 		tagline: 'Open RPM packages in your browser — the payload files out.',
 		intro:
-			'Fedora, RHEL and SUSE ship software as .rpm — a header stapled to a compressed cpio payload. The classic unix answer is rpm2cpio piped through cpio; the browser answer is this page. Drop the package and the payload unwraps to its actual files automatically.',
+			'Fedora, RHEL and SUSE ship software as .rpm — a header stapled to a compressed cpio payload. The classic unix answer is rpm2cpio piped through cpio; **the browser answer is this page**. Drop the package and the payload unwraps to its actual files automatically.',
 		faq: [
 			{
 				q: 'Why does my rpm show a .cpio file in other tools?',
@@ -4515,7 +4619,7 @@ export const TOOLS: ConverterEntry[] = [
 		h1: 'Extract cpio archives.',
 		tagline: 'Unpack cpio archives in your browser — nothing uploaded.',
 		intro:
-			'cpio is tar’s older sibling — still underneath rpm packages, initramfs images and plenty of unix backup scripts. Drop a .cpio (or a .cpio.gz) here and its files extract right in the browser, no pipe incantations required.',
+			'cpio is tar’s older sibling — still underneath rpm packages, initramfs images and plenty of unix backup scripts. Drop a .cpio (or a .cpio.gz) here and **its files extract right in the browser**, no pipe incantations required.',
 		faq: [
 			{
 				q: 'Where would I even meet a cpio file?',
@@ -4557,7 +4661,7 @@ export const TOOLS: ConverterEntry[] = [
 		h1: 'Extract LHA/LZH archives.',
 		tagline: 'Open LHA and LZH archives — retro formats, done locally.',
 		intro:
-			'LHA (.lzh) ruled Japanese software distribution and the Amiga scene long before ZIP won globally — and retro archives, abandonware collections and old game mods still carry it. Drop one here and its files extract in your browser, no vintage tooling required.',
+			'LHA (.lzh) ruled Japanese software distribution and the Amiga scene long before ZIP won globally — and retro archives, abandonware collections and old game mods still carry it. Drop one here and **its files extract in your browser**, no vintage tooling required.',
 		faq: [
 			{
 				q: 'LHA or LZH — which is it?',
@@ -4599,7 +4703,7 @@ export const TOOLS: ConverterEntry[] = [
 		h1: 'Extract ARJ archives.',
 		tagline: 'Open ARJ archives in your browser — DOS-era files freed.',
 		intro:
-			'ARJ compressed half the BBS scene and a generation of floppy backups before ZIP took the crown. The files still exist; the tooling mostly does not. Drop an .arj here and its contents extract right in your browser — old family backups included.',
+			'ARJ compressed half the BBS scene and a generation of floppy backups before ZIP took the crown. The files still exist; the tooling mostly does not. Drop an .arj here and **its contents extract right in your browser** — old family backups included.',
 		faq: [
 			{
 				q: 'Why would I have ARJ files in 2026?',
@@ -4631,6 +4735,96 @@ export const TOOLS: ConverterEntry[] = [
 export const TOOL_SLUGS: readonly string[] = [...FORMATS, ...CONVERTERS, ...TOOLS].map((e) =>
 	e.path.slice(1)
 );
+
+/** Homepage "Popular tools" grid — order is display order (curated by search
+ *  demand). seo.test.ts asserts each path exists and the list stays at 12. */
+export const FEATURED_PATHS: readonly string[] = [
+	'/compress-pdf',
+	'/compress-image',
+	'/compress-jpg',
+	'/compress-png',
+	'/compress-video',
+	'/merge-pdf',
+	'/heic-to-jpg',
+	'/webp-to-jpg',
+	'/mov-to-mp4',
+	'/mp4-to-mp3',
+	'/resize-image',
+	'/jpg-to-pdf'
+];
+
+/** Content-category buckets — ONE definition drives both the homepage
+ *  directory grouping (title + formats) and the curated footer columns
+ *  (footerPaths, display order, hub page first). seo.test.ts asserts the
+ *  formats partition every FileFormat and each footer path resolves. */
+export const TOOL_GROUPS: readonly {
+	title: string;
+	/** Column heading override where `title` wraps the narrow footer grid. */
+	footerTitle?: string;
+	formats: readonly FileFormat[];
+	footerPaths: readonly string[];
+}[] = [
+	{
+		title: 'Images',
+		formats: ['jpg', 'png', 'webp', 'gif', 'heic', 'svg'],
+		footerPaths: [
+			'/compress-jpg',
+			'/compress-png',
+			'/compress-webp',
+			'/heic-to-jpg',
+			'/resize-image',
+			'/compress-image'
+		]
+	},
+	{
+		title: 'Video & audio',
+		formats: ['video', 'audio'],
+		footerPaths: [
+			'/compress-video',
+			'/compress-mp4',
+			'/mov-to-mp4',
+			'/mp4-to-mp3',
+			'/video-to-gif',
+			'/compress-audio'
+		]
+	},
+	{
+		title: 'PDF',
+		formats: ['pdf'],
+		footerPaths: [
+			'/compress-pdf',
+			'/merge-pdf',
+			'/split-pdf',
+			'/jpg-to-pdf',
+			'/pdf-to-jpg',
+			'/unlock-pdf'
+		]
+	},
+	{
+		title: 'Fonts',
+		formats: ['font'],
+		footerPaths: [
+			'/font-converter',
+			'/ttf-to-woff2',
+			'/woff2-to-ttf',
+			'/subset-font',
+			'/variable-font-to-static'
+		]
+	},
+	{
+		title: 'Archives & metadata',
+		footerTitle: 'Archives',
+		formats: ['zip', 'exif'],
+		footerPaths: [
+			'/zip-files',
+			'/create-7z',
+			'/extract-rar',
+			'/extract-7z',
+			'/gzip-files',
+			'/remove-exif'
+		]
+	}
+];
 
 export function pathFor(format: FileFormat): string {
 	// EXIF removes, ZIP archives and fonts convert rather than compress —

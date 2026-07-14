@@ -10,25 +10,60 @@
 		beforeLabel: string;
 		afterLabel: string;
 		fill?: boolean;
+		/** Intrinsic dimensions — set on both imgs so the aspect ratio is
+		 *  reserved before load (zero CLS for below-fold static usage). */
+		width?: number;
+		height?: number;
+		lazy?: boolean;
+		beforeAlt?: string;
+		afterAlt?: string;
 	}
 
-	let { beforeSrc, afterSrc, beforeLabel, afterLabel, fill = false }: Props = $props();
+	let {
+		beforeSrc,
+		afterSrc,
+		beforeLabel,
+		afterLabel,
+		fill = false,
+		width,
+		height,
+		lazy = false,
+		beforeAlt = 'Original',
+		afterAlt = 'Compressed'
+	}: Props = $props();
 
 	let position = $state(50);
 	let isDragging = $state(false);
 	let containerEl: HTMLDivElement | undefined = $state();
 	let handleEl: HTMLDivElement | undefined = $state();
 
-	// One-shot "you can drag this" hint shortly after the slider appears —
+	// One-shot "you can drag this" hint once the slider is actually SEEN —
 	// nudges the whole divider (line + handle) so the handle stays on its line.
+	// IntersectionObserver instead of a bare mount timer: in the modal the
+	// slider is visible at mount (fires immediately, timing unchanged), but on
+	// a below-fold page section the hint would otherwise play unseen.
 	let dividerEl: HTMLDivElement | undefined = $state();
 	let hintAnim: ReturnType<typeof animate> | undefined;
 	$effect(() => {
-		if (!dividerEl || !motionOK()) return;
-		const timer = setTimeout(() => {
-			hintAnim = animate(dividerEl!, { x: [0, 7, -5, 0] }, { duration: 0.9, ease: 'easeInOut' });
-		}, 600);
+		if (!dividerEl || !containerEl || !motionOK()) return;
+		let timer: ReturnType<typeof setTimeout> | undefined;
+		const io = new IntersectionObserver(
+			(entries) => {
+				if (!entries.some((e) => e.isIntersecting)) return;
+				io.disconnect();
+				timer = setTimeout(() => {
+					hintAnim = animate(
+						dividerEl!,
+						{ x: [0, 7, -5, 0] },
+						{ duration: 0.9, ease: 'easeInOut' }
+					);
+				}, 600);
+			},
+			{ threshold: 0.5 }
+		);
+		io.observe(containerEl);
 		return () => {
+			io.disconnect();
 			clearTimeout(timer);
 			hintAnim?.stop();
 		};
@@ -82,7 +117,11 @@
 	<!-- After (compressed) - full background -->
 	<img
 		src={afterSrc}
-		alt="Compressed"
+		alt={afterAlt}
+		{width}
+		{height}
+		loading={lazy ? 'lazy' : undefined}
+		decoding={lazy ? 'async' : undefined}
 		class={fill ? 'h-full w-full object-contain' : 'block w-full'}
 		draggable="false"
 	/>
@@ -90,7 +129,11 @@
 	<!-- Before (original) - clipped with clip-path -->
 	<img
 		src={beforeSrc}
-		alt="Original"
+		alt={beforeAlt}
+		{width}
+		{height}
+		loading={lazy ? 'lazy' : undefined}
+		decoding={lazy ? 'async' : undefined}
 		class="absolute inset-0 {fill ? 'h-full w-full object-contain' : 'block w-full'}"
 		style="clip-path: inset(0 {100 - position}% 0 0);"
 		draggable="false"

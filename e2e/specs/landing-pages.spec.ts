@@ -197,3 +197,42 @@ test('LP-14: /svg-to-ico presets ICO output and drops the SVGO disclosure', asyn
 	// The SVGO switches don't apply to raster output — no Advanced disclosure.
 	await expect(page.getByTestId('advanced-toggle')).toHaveCount(0);
 });
+
+test('LP-16: the before/after demo renders where honest and nowhere else', async ({ page }) => {
+	// Every demo asset is real output of its own page's pipeline (pnpm
+	// demo-assets) — it may appear only there (seo.test.ts pins the kind↔page
+	// map; this asserts the rendered result on both sides of the rule).
+	await gotoPath(page, '/compress-jpg');
+	await expect(page.locator('[aria-label="Image comparison slider"]')).toBeVisible();
+	await gotoPath(page, '/compress-pdf');
+	await expect(page.locator('[aria-label="Image comparison slider"]')).toBeVisible();
+	await gotoPath(page, '/compress-mp4');
+	await expect(page.locator('[aria-label="Image comparison slider"]')).toBeVisible();
+	// The playable preview must never cost video bytes before play.
+	await expect(page.getByTestId('demo-clip')).toHaveAttribute('preload', 'none');
+	await gotoPath(page, '/compress-video');
+	await expect(page.locator('[aria-label="Image comparison slider"]')).toBeVisible();
+	// Audio has no visual side — its demo is a listening pair, both players
+	// preload="none" so no audio bytes move before Play.
+	await gotoPath(page, '/compress-audio');
+	await expect(page.locator('[aria-label="Image comparison slider"]')).toHaveCount(0);
+	const players = page.locator('audio[controls]');
+	await expect(players).toHaveCount(2);
+	await expect(players.first()).toHaveAttribute('preload', 'none');
+	await expect(players.last()).toHaveAttribute('preload', 'none');
+	// Font renders a live specimen, archive a folder table, exif a metadata
+	// table — none of them a slider.
+	await gotoPath(page, '/font-converter');
+	await expect(page.locator('[aria-label="Image comparison slider"]')).toHaveCount(0);
+	await expect(page.locator('[data-demo-specimen]')).toBeVisible();
+	await gotoPath(page, '/zip-files');
+	await expect(page.locator('[data-demo-archive]')).toBeVisible();
+	await gotoPath(page, '/remove-exif');
+	await expect(page.locator('[data-demo-exif]')).toBeVisible();
+	// /merge-pdf and /compress-mov run the same engine families but have no
+	// demo of their own.
+	await gotoPath(page, '/merge-pdf');
+	await expect(page.locator('[aria-label="Image comparison slider"]')).toHaveCount(0);
+	await gotoPath(page, '/compress-mov');
+	await expect(page.locator('[aria-label="Image comparison slider"]')).toHaveCount(0);
+});

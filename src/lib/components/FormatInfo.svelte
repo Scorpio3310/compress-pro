@@ -1,8 +1,9 @@
 <script lang="ts">
-	import { FORMATS, CONVERTERS, TOOLS, seoFor, type SeoEntry } from '$lib/seo';
+	import { seoFor, type SeoEntry } from '$lib/seo';
 	import { pasteKey } from '$lib/paste-key.svelte';
-	import type { FileFormat } from '$lib/types';
 	import { resolve } from '$app/paths';
+	import ToolDirectory from './ToolDirectory.svelte';
+	import DemoCompare from './DemoCompare.svelte';
 
 	interface Props {
 		entry: SeoEntry;
@@ -10,38 +11,30 @@
 
 	let { entry }: Props = $props();
 
-	// Home-only tool directory, grouped by the hosting tab each entry names.
-	const ALL_TOOL_ENTRIES = [...FORMATS, ...CONVERTERS, ...TOOLS];
-	const TOOL_GROUPS = (
-		[
-			['Images', ['jpg', 'png', 'webp', 'gif', 'heic', 'svg']],
-			['Video & audio', ['video', 'audio']],
-			['PDF', ['pdf']],
-			['Fonts', ['font']],
-			['Archives & metadata', ['zip', 'exif']]
-		] as const
-	).map(([title, formats]) => ({
-		title,
-		entries: ALL_TOOL_ENTRIES.filter(
-			(e) => e.format !== null && (formats as readonly FileFormat[]).includes(e.format)
-		)
-	}));
-
-	// Guide paragraphs may carry `[text](/path)` internal links — parsed into
-	// segments here (never {@html}) and rendered with the content-link styling.
-	type LinkSegment = { text: string; href?: string };
-	function parseLinks(paragraph: string): LinkSegment[] {
-		const segments: LinkSegment[] = [];
+	// Prose may carry `[text](/path)` internal links and `**bold**` emphasis — parsed
+	// into segments here (never {@html}) and rendered with the content-link / strong
+	// styling. `**` markers double as native bold in the .md twins (see markdown.ts).
+	type TextSegment = { text: string; href?: string; bold?: boolean };
+	function parseInline(paragraph: string): TextSegment[] {
+		const segments: TextSegment[] = [];
 		let last = 0;
-		for (const match of paragraph.matchAll(/\[([^\]]+)\]\((\/[a-z0-9-]+)\)/g)) {
+		for (const match of paragraph.matchAll(/\[([^\]]+)\]\((\/[a-z0-9-]+)\)|\*\*([^*]+)\*\*/g)) {
 			if (match.index > last) segments.push({ text: paragraph.slice(last, match.index) });
-			segments.push({ text: match[1], href: match[2] });
+			if (match[2] !== undefined) segments.push({ text: match[1], href: match[2] });
+			else segments.push({ text: match[3], bold: true });
 			last = match.index + match[0].length;
 		}
 		if (last < paragraph.length) segments.push({ text: paragraph.slice(last) });
 		return segments;
 	}
 </script>
+
+{#snippet prose(text: string)}{#each parseInline(text) as segment, i (i)}{#if segment.href}<a
+				href={resolve(segment.href)}
+				class="font-medium text-ink underline decoration-line underline-offset-4 transition-colors hover:decoration-ink"
+				>{segment.text}</a
+			>{:else if segment.bold}<strong class="font-semibold text-ink">{segment.text}</strong
+			>{:else}{segment.text}{/if}{/each}{/snippet}
 
 <section
 	class="reveal-css mt-16 divide-y divide-line text-[13px] leading-relaxed text-muted [&>*]:py-9 [&>*:first-child]:pt-0 [&>*:last-child]:pb-0"
@@ -53,11 +46,15 @@
 			<h2 class="text-stat mt-3 max-w-2xl text-balance text-ink">
 				Your files never leave your device.
 			</h2>
-			<p class="mt-5 max-w-2xl text-sm leading-relaxed sm:text-base">{entry.intro}</p>
+			<p class="mt-5 max-w-2xl text-sm leading-relaxed sm:text-base">
+				{@render prose(entry.intro)}
+			</p>
 			<p class="mt-3 max-w-2xl text-sm leading-relaxed sm:text-base">
 				No cookies, no analytics, no tracking — the server only ships this page’s static files.
 				Don’t take our word for it: compress a file, switch your connection off, and compress
-				another — it still works, because nothing ever left. Open source —
+				another — it still works, because <strong class="font-semibold text-ink"
+					>nothing ever left</strong
+				>. Open source —
 				<a
 					href="https://github.com/Scorpio3310/compress-pro"
 					target="_blank"
@@ -69,36 +66,25 @@
 			</p>
 		</div>
 
-		<div class="spec-row">
-			<h2 class="microlabel text-muted">All {ALL_TOOL_ENTRIES.length} tools</h2>
-			<!-- padding (not margin: .spec-row zeroes content margin-top on desktop)
-			     matches the h2's 2px optical nudge, so the first group's
-			     microlabel (IMAGES) sits on the same line as ALL TOOLS -->
-			<div class="mt-5 space-y-6 md:pt-[2px]">
-				{#each TOOL_GROUPS as group (group.title)}
-					<div>
-						<h3 class="microlabel text-faint">{group.title}</h3>
-						<ul class="mt-2.5 grid grid-cols-1 gap-x-8 gap-y-2 sm:grid-cols-2">
-							{#each group.entries as e (e.path)}
-								<li>
-									<a
-										href={resolve(e.path)}
-										class="font-medium text-ink underline decoration-line underline-offset-4 transition-colors hover:decoration-ink"
-									>
-										{e.h1.replace(/\.$/, '')}
-									</a>
-								</li>
-							{/each}
-						</ul>
-					</div>
-				{/each}
-			</div>
-		</div>
+		<DemoCompare kind="photo" hero />
+
+		<ToolDirectory />
 	{:else}
 		<!-- Datasheet lede — the annex abstract. The wrapper is full-width so the
 		     section divider under it runs edge to edge; max-w lives on the <p>. -->
 		<div>
-			<p class="max-w-2xl text-sm leading-relaxed text-ink sm:text-base">{entry.intro}</p>
+			<p class="max-w-2xl text-sm leading-relaxed text-ink sm:text-base">
+				{@render prose(entry.intro)}
+			</p>
+		</div>
+	{/if}
+
+	{#if entry.demo}
+		<div class="spec-row">
+			<h2 class="microlabel text-muted">Before / after</h2>
+			<div class="mt-5 md:pt-[2px]">
+				<DemoCompare kind={entry.demo} />
+			</div>
 		</div>
 	{/if}
 
@@ -122,13 +108,7 @@
 		<div class="spec-row">
 			<h2 class="microlabel text-muted">{section.heading}</h2>
 			{#each section.paragraphs ?? [] as paragraph (paragraph)}
-				<p class="mt-3 max-w-xl">
-					{#each parseLinks(paragraph) as segment, i (i)}{#if segment.href}<a
-								href={resolve(segment.href)}
-								class="font-medium text-ink underline decoration-line underline-offset-4 transition-colors hover:decoration-ink"
-								>{segment.text}</a
-							>{:else}{segment.text}{/if}{/each}
-				</p>
+				<p class="mt-3 max-w-xl">{@render prose(paragraph)}</p>
 			{/each}
 			{#if section.table}
 				<div class="mt-3 overflow-x-auto rounded-xl">

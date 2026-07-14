@@ -175,7 +175,12 @@ expose<WorkerContracts['video']>({
 			// the track, and the answer flips once an audio-tab M4A job happens
 			// to have registered the encoder. Gated on an audio track existing,
 			// so the ~1 MB encoder chunk is only fetched when the answer matters.
-			audio ? ensureAacEncoder().then(() => canEncodeAudio('aac'), () => false) : false
+			audio
+				? ensureAacEncoder().then(
+						() => canEncodeAudio('aac'),
+						() => false
+					)
+				: false
 		]);
 		const isobmffCodec = mp4Codec === 'avc' || mp4Codec === 'hevc' ? mp4Codec : null;
 

@@ -269,13 +269,32 @@ async function runGsArgs(
 	return new Uint8Array(result);
 }
 
-function runGs(
+/** GS always terminates a healthy pdfwrite file with `%%EOF`; a missing one
+ *  means the write was silently cut short (exit code stays 0 — measured). */
+function endsWithEof(out: Uint8Array): boolean {
+	const tail = out.subarray(Math.max(0, out.length - 64));
+	return new TextDecoder('latin1').decode(tail).includes('%%EOF');
+}
+
+async function runGs(
 	input: ArrayBuffer,
 	params: GsParams,
 	onPage: (page: number, pageCount: number | null) => void,
 	signal?: AbortSignal
 ): Promise<Uint8Array> {
-	return runGsArgs(input, buildGsArgs(params), onPage, signal);
+	const out = await runGsArgs(input, buildGsArgs(params), onPage, signal);
+	if (endsWithEof(out)) return out;
+	// The -dFastWebView linearization pass can exhaust wasm memory on complex
+	// documents and truncate the output mid-xref while still exiting 0
+	// (measured on a real 62 MB guide AND on a 5.6 MB brochure — it's not a
+	// size threshold). Linearization is a nicety; a complete file is not.
+	signal?.throwIfAborted();
+	const args = buildGsArgs(params).filter((a) => a !== '-dFastWebView=true');
+	const retry = await runGsArgs(input, args, onPage, signal);
+	if (!endsWithEof(retry)) {
+		throw new Error('Ghostscript produced a truncated PDF — the document may be too complex');
+	}
+	return retry;
 }
 
 // --- Unlock / Protect (no downsampling flags — pixel quality is untouched) --

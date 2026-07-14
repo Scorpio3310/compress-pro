@@ -8,7 +8,7 @@
 	import ThemeToggle from '$lib/components/ThemeToggle.svelte';
 	import { pressable } from '$lib/motion/gestures';
 	import { logoSqueeze } from '$lib/motion/logo';
-	import { FORMATS, CONVERTERS, TOOLS } from '$lib/seo';
+	import { TOOL_GROUPS, TOOL_SLUGS, seoFor } from '$lib/seo';
 	import { detectPasteKey } from '$lib/paste-key.svelte';
 	import { registerWebMcpTools } from '$lib/webmcp';
 	import { resolve } from '$app/paths';
@@ -21,18 +21,13 @@
 		registerWebMcpTools();
 	});
 
-	// Footer directory — the same curated data the old flat rows used, grouped
-	// into columns. The 16-strong inFooter subset is asserted in seo.test.ts.
-	const FOOTER_IMAGE_FORMATS = ['jpg', 'png', 'webp', 'gif', 'heic', 'svg'];
-	const footerColumns = [
-		{ title: 'Images', links: FORMATS.filter((f) => FOOTER_IMAGE_FORMATS.includes(f.format)) },
-		{
-			title: 'Files & media',
-			links: FORMATS.filter((f) => !FOOTER_IMAGE_FORMATS.includes(f.format))
-		},
-		{ title: 'Convert', links: CONVERTERS.filter((c) => c.inFooter) },
-		{ title: 'Tools', links: TOOLS }
-	];
+	// Footer directory — the homepage buckets' curated picks (hub page first);
+	// the full 93 live behind the "All tools" link. seo.test.ts asserts every
+	// path resolves and the buckets stay a partition.
+	const footerColumns = TOOL_GROUPS.map((group) => ({
+		title: group.footerTitle ?? group.title,
+		links: group.footerPaths.map((path) => seoFor(path.slice(1)))
+	}));
 
 	// Baked by Vite's `define` — SSR and client render the same stamp.
 	const buildYear = __BUILD_DATE__.slice(0, 4);
@@ -137,7 +132,10 @@
 				No ads, no accounts, no cookies, no analytics.
 			</p>
 
-			<nav aria-label="All tools" class="mt-8 grid grid-cols-2 gap-x-8 gap-y-8 sm:grid-cols-4">
+			<nav
+				aria-label="Popular tools"
+				class="mt-8 grid grid-cols-2 gap-x-8 gap-y-8 sm:grid-cols-3 md:grid-cols-5"
+			>
 				{#each footerColumns as column (column.title)}
 					<div>
 						<p class="microlabel text-muted">{column.title}</p>
@@ -157,21 +155,36 @@
 				{/each}
 			</nav>
 
+			<!-- Deep link opens the collapsed homepage directory (ToolDirectory). -->
+			<a
+				href="{resolve('/')}#all-tools"
+				class="group mt-8 inline-flex items-center gap-1 text-xs font-medium text-muted transition-colors hover:text-ink"
+			>
+				All {TOOL_SLUGS.length} tools
+				<Icon
+					name="chevron-right"
+					class="size-3.5 transition-transform duration-200 group-hover:translate-x-0.5"
+				/>
+			</a>
+
 			<div
 				class="mt-10 flex flex-wrap items-center justify-between gap-x-6 gap-y-2 border-t border-line pt-5 text-xs text-faint"
 			>
 				<p>© {buildYear} Compress Pro</p>
 				<div class="flex flex-wrap items-center gap-x-4 gap-y-2">
 					<p class="flex items-center gap-x-1.5">
-						<a href={resolve('/about')} class="transition-colors hover:text-ink">About</a>
+						<a href={resolve('/about')} class="text-muted transition-colors hover:text-ink">About</a
+						>
 						<span aria-hidden="true">·</span>
-						<a href={resolve('/privacy')} class="transition-colors hover:text-ink">Privacy</a>
+						<a href={resolve('/privacy')} class="text-muted transition-colors hover:text-ink"
+							>Privacy</a
+						>
 						<span aria-hidden="true">·</span>
 						<a
 							href="https://github.com/Scorpio3310/compress-pro"
 							target="_blank"
 							rel="noopener"
-							class="transition-colors hover:text-ink">GitHub</a
+							class="text-muted transition-colors hover:text-ink">GitHub</a
 						>
 					</p>
 					<!-- build stamp chip — metadata, deliberately set apart from the nav links -->
@@ -181,12 +194,12 @@
 							target="_blank"
 							rel="noopener"
 							title="Built from this commit"
-							class="rounded-full px-2.5 py-0.5 font-mono text-[10px] font-medium tabular-nums ring-1 ring-line transition-colors hover:text-ink"
+							class="rounded-full px-2.5 py-0.5 font-mono text-[10px] font-medium text-muted tabular-nums ring-1 ring-line transition-colors hover:text-ink"
 							>{__BUILD_DATE__} · {__COMMIT__}</a
 						>
 					{:else}
 						<span
-							class="rounded-full px-2.5 py-0.5 font-mono text-[10px] font-medium tabular-nums ring-1 ring-line"
+							class="rounded-full px-2.5 py-0.5 font-mono text-[10px] font-medium text-muted tabular-nums ring-1 ring-line"
 							>{__BUILD_DATE__} · {__COMMIT__}</span
 						>
 					{/if}

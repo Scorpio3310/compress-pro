@@ -1,0 +1,416 @@
+{
+	"photo": {
+		"tool": "/compress-jpg",
+		"engine": "MozJPEG",
+		"quality": 75,
+		"outputFormat": "jpg",
+		"input": {
+			"name": "magnific-12304873-seiser-alm.jpg",
+			"width": 4000,
+			"height": 2666,
+			"megapixels": 11
+		},
+		"originalBytes": 8173457,
+		"compressedBytes": 1086599,
+		"savingsPercent": 87,
+		"display": {
+			"before": "photo-before.jpg",
+			"after": "photo-after.jpg",
+			"width": 1440,
+			"height": 1080,
+			"shows": "crop",
+			"crop": {
+				"left": 320,
+				"top": 320,
+				"width": 1440,
+				"height": 1080
+			}
+		},
+		"credit": {
+			"author": "Magnific",
+			"url": "https://www.magnific.com/free-photo/landscape-seiser-alm-near-langkofel-group-mountains-sunlight-italy_12304873.htm",
+			"source": "Magnific"
+		}
+	},
+	"png": {
+		"tool": "/compress-png",
+		"engine": "libimagequant + OxiPNG",
+		"quality": 80,
+		"outputFormat": "png",
+		"input": {
+			"name": "magnific-407746309-watercolor.png",
+			"width": 2417,
+			"height": 1114,
+			"megapixels": 3
+		},
+		"originalBytes": 2446893,
+		"compressedBytes": 714217,
+		"savingsPercent": 71,
+		"display": {
+			"before": "png-before.webp",
+			"after": "png-after.webp",
+			"width": 1440,
+			"height": 1080,
+			"shows": "crop",
+			"crop": {
+				"left": 496,
+				"top": 16,
+				"width": 1440,
+				"height": 1080
+			}
+		},
+		"credit": {
+			"author": "Magnific",
+			"url": "https://www.magnific.com/free-psd/majestic-mountain-landscape-watercolor-masterpiece_407746309.htm",
+			"source": "Magnific"
+		}
+	},
+	"webp": {
+		"tool": "/compress-webp",
+		"engine": "libwebp",
+		"quality": 75,
+		"outputFormat": "webp",
+		"input": {
+			"name": "unsplash-Bkci_8qcdvQ-kalen-emsley.webp",
+			"width": 5760,
+			"height": 3840,
+			"megapixels": 22
+		},
+		"originalBytes": 5086678,
+		"compressedBytes": 1615542,
+		"savingsPercent": 68,
+		"display": {
+			"before": "webp-before.webp",
+			"after": "webp-after.webp",
+			"width": 1440,
+			"height": 1080,
+			"shows": "crop",
+			"crop": {
+				"left": 864,
+				"top": 1152,
+				"width": 1440,
+				"height": 1080
+			}
+		},
+		"credit": {
+			"author": "Kalen Emsley",
+			"url": "https://unsplash.com/photos/snow-capped-mountains-with-valley-and-forest-Bkci_8qcdvQ",
+			"source": "Unsplash"
+		}
+	},
+	"heic": {
+		"tool": "/compress-heic",
+		"engine": "libheif → MozJPEG",
+		"quality": 75,
+		"outputFormat": "jpg",
+		"formatChanged": true,
+		"input": {
+			"name": "heicdigital-sewing-threads.heic",
+			"width": 4000,
+			"height": 3000,
+			"megapixels": 12
+		},
+		"originalBytes": 1595244,
+		"compressedBytes": 1066448,
+		"savingsPercent": 33,
+		"display": {
+			"before": "heic-before.jpg",
+			"after": "heic-after.jpg",
+			"width": 1440,
+			"height": 1080,
+			"shows": "crop",
+			"crop": {
+				"left": 1280,
+				"top": 960,
+				"width": 1440,
+				"height": 1080
+			}
+		},
+		"credit": {
+			"author": "HEIC Digital",
+			"url": "https://heic.digital/samples/",
+			"source": "HEIC Digital"
+		}
+	},
+	"gif": {
+		"tool": "/compress-gif",
+		"engine": "gifsicle",
+		"quality": 80,
+		"outputFormat": "gif",
+		"input": {
+			"name": "wikimedia-muybridge-cat.gif",
+			"width": 1231,
+			"height": 551,
+			"megapixels": 1
+		},
+		"originalBytes": 6361109,
+		"compressedBytes": 1945376,
+		"savingsPercent": 69,
+		"display": {
+			"before": "gif-before.webp",
+			"after": "gif-after.webp",
+			"width": 1231,
+			"height": 551,
+			"shows": "frame",
+			"frame": {
+				"index": 0,
+				"ofFrames": 20
+			},
+			"anim": {
+				"file": "gif-anim.gif",
+				"bytes": 342715,
+				"maxDimension": 480
+			}
+		},
+		"credit": {
+			"author": "Eadweard Muybridge",
+			"url": "https://commons.wikimedia.org/wiki/File:Cat_trotting,_changing_to_a_gallop.gif",
+			"source": "Wikimedia Commons",
+			"license": "public domain"
+		}
+	},
+	"svg": {
+		"tool": "/compress-svg",
+		"engine": "SVGO",
+		"precision": 3,
+		"outputFormat": "svg",
+		"input": {
+			"name": "magnific-9899870-landscape.svg",
+			"width": 750,
+			"height": 500,
+			"megapixels": 0
+		},
+		"originalBytes": 85004,
+		"compressedBytes": 54322,
+		"savingsPercent": 36,
+		"display": {
+			"before": "svg-before.svg",
+			"after": "svg-after.svg",
+			"width": 750,
+			"height": 500,
+			"shows": "file"
+		},
+		"credit": {
+			"author": "Magnific",
+			"url": "https://www.magnific.com/free-vector/natural-landscape-background-theme_9899870.htm",
+			"source": "Magnific"
+		}
+	},
+	"pdf": {
+		"tool": "/compress-pdf",
+		"engine": "Ghostscript",
+		"level": "medium",
+		"outputFormat": "pdf",
+		"input": {
+			"name": "nasa-sls-reference-guide-2022.pdf",
+			"pages": 83
+		},
+		"originalBytes": 62237228,
+		"compressedBytes": 8616934,
+		"savingsPercent": 86,
+		"display": {
+			"before": "pdf-before.jpg",
+			"after": "pdf-after.jpg",
+			"width": 1224,
+			"height": 1216,
+			"shows": "crop",
+			"crop": {
+				"left": 24,
+				"top": 1672,
+				"width": 1224,
+				"height": 1216
+			},
+			"render": {
+				"page": 47,
+				"width": 2448,
+				"height": 3168,
+				"dpi": 288
+			}
+		},
+		"credit": {
+			"author": "NASA SLS Reference Guide (2022)",
+			"url": "https://www.nasa.gov/humans-in-space/space-launch-system/reference-guide/",
+			"source": "NASA",
+			"license": "public domain"
+		}
+	},
+	"video": {
+		"tool": "/compress-mp4",
+		"engine": "WebCodecs + mediabunny",
+		"quality": 75,
+		"maxDimension": 1920,
+		"outputFormat": "mp4",
+		"input": {
+			"name": "magnific-474074-woman-selfie-stick.mp4",
+			"width": 3840,
+			"height": 2024,
+			"megapixels": 8,
+			"durationSec": 13.3,
+			"fps": 30
+		},
+		"originalBytes": 40240259,
+		"compressedBytes": 10313345,
+		"savingsPercent": 74,
+		"display": {
+			"before": "video-before.webp",
+			"after": "video-after.webp",
+			"width": 1350,
+			"height": 1012,
+			"shows": "crop",
+			"crop": {
+				"left": 286,
+				"top": 0,
+				"width": 1350,
+				"height": 1012
+			},
+			"still": {
+				"atSec": 6.516666666666667
+			},
+			"clip": {
+				"file": "video-clip.mp4",
+				"bytes": 770797,
+				"maxDimension": 640,
+				"width": 640,
+				"height": 336,
+				"quality": 50,
+				"poster": "video-poster.webp"
+			}
+		},
+		"credit": {
+			"author": "Magnific",
+			"url": "https://www.magnific.com/free-video/close-up-view-caucasian-blonde-young-woman-recording-video-smartphone-while-holding-it-with-selfie-stick-street_474074",
+			"source": "Magnific"
+		}
+	},
+	"audio": {
+		"tool": "/compress-audio",
+		"engine": "LAME",
+		"bitrateKbps": 128,
+		"outputFormat": "mp3",
+		"input": {
+			"name": "pixabay-564418-the-mountain-upbeat.mp3",
+			"durationSec": 147.3
+		},
+		"originalBytes": 4714579,
+		"compressedBytes": 2357863,
+		"savingsPercent": 50,
+		"display": {
+			"before": "audio-before.mp3",
+			"after": "audio-after.mp3",
+			"width": 0,
+			"height": 0,
+			"shows": "file"
+		},
+		"credit": {
+			"author": "The Mountain",
+			"url": "https://pixabay.com/music/old-school-hip-hop-upbeat-564418/",
+			"source": "Pixabay"
+		}
+	},
+	"font": {
+		"tool": "/font-converter",
+		"engine": "woff2 + Brotli",
+		"outputFormat": "woff2",
+		"formatChanged": true,
+		"input": {
+			"name": "googlefonts-plus-jakarta-sans.ttf"
+		},
+		"originalBytes": 176288,
+		"compressedBytes": 60548,
+		"savingsPercent": 66,
+		"display": {
+			"before": "font-before.ttf",
+			"after": "font-after.woff2",
+			"width": 0,
+			"height": 0,
+			"shows": "file"
+		},
+		"credit": {
+			"author": "Tokotype",
+			"url": "https://fonts.google.com/specimen/Plus+Jakarta+Sans",
+			"source": "Google Fonts",
+			"license": "SIL Open Font License"
+		}
+	},
+	"archive": {
+		"tool": "/zip-files",
+		"engine": "7-Zip",
+		"outputFormat": "7z",
+		"input": {
+			"name": "gutenberg-2701-moby-dick.txt"
+		},
+		"originalBytes": 3416162,
+		"compressedBytes": 1036968,
+		"savingsPercent": 70,
+		"display": {
+			"before": "",
+			"after": "",
+			"width": 0,
+			"height": 0,
+			"shows": "file",
+			"archive": {
+				"entries": [
+					{
+						"name": "gutenberg-2701-moby-dick.txt",
+						"bytes": 1234609
+					},
+					{
+						"name": "gutenberg-1342-pride-and-prejudice.txt",
+						"bytes": 738046
+					},
+					{
+						"name": "gutenberg-345-dracula.txt",
+						"bytes": 870683
+					},
+					{
+						"name": "gutenberg-84-frankenstein.txt",
+						"bytes": 421633
+					},
+					{
+						"name": "gutenberg-11-alice-in-wonderland.txt",
+						"bytes": 151191
+					}
+				],
+				"zipBytes": 1347411
+			}
+		}
+	},
+	"exif": {
+		"tool": "/remove-exif",
+		"engine": "byte surgery",
+		"outputFormat": "jpg",
+		"input": {
+			"name": "unsplash-pOWBHdgy1Lo-bled-exif.jpg",
+			"width": 4000,
+			"height": 2525,
+			"megapixels": 10
+		},
+		"originalBytes": 2355390,
+		"compressedBytes": 2354750,
+		"savingsPercent": 0,
+		"display": {
+			"before": "exif-before.jpg",
+			"after": "exif-after.jpg",
+			"width": 1440,
+			"height": 1080,
+			"shows": "crop",
+			"crop": {
+				"left": 1200,
+				"top": 800,
+				"width": 1440,
+				"height": 1080
+			},
+			"metadata": {
+				"camera": "Canon EOS 550D",
+				"taken": "2016:10:28 08:15:24",
+				"gps": "46.3617° N, 14.0817° E",
+				"fields": 31
+			}
+		},
+		"credit": {
+			"author": "Neven Krcmarek",
+			"url": "https://unsplash.com/photos/island-surrounded-by-water-and-mountains-at-daytime-pOWBHdgy1Lo",
+			"source": "Unsplash"
+		}
+	}
+}

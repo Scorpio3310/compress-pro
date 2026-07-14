@@ -709,7 +709,10 @@
 	<div
 		class="mt-4 flex flex-wrap items-center gap-2 font-mono text-[10px] font-medium tracking-[0.1em] text-muted uppercase"
 	>
-		<span class="rounded-full bg-card/70 px-3 py-1.5 backdrop-blur-xs">No uploads</span>
+		<span class="flex items-center gap-1.5 rounded-full bg-ink px-3 py-1.5 text-ink-contrast">
+			<Icon name="lock" class="size-3 shrink-0" />
+			No uploads — 100% local
+		</span>
 		<span class="rounded-full bg-card/70 px-3 py-1.5 backdrop-blur-xs">No ads</span>
 		<span class="rounded-full bg-card/70 px-3 py-1.5 backdrop-blur-xs">Free & open source</span>
 	</div>
@@ -867,12 +870,11 @@
 	{/if}
 </div>
 
-<p
-	class="reveal-css mt-3 flex items-center justify-center gap-1.5 text-xs text-faint"
-	style="--reveal-i: 2.5"
->
-	<Icon name="lock" class="size-3 shrink-0" />
-	Files never leave your device — everything runs in your browser.
+<p class="reveal-css mt-3 text-center text-xs text-muted" style="--reveal-i: 2.5">
+	<span class="font-medium text-ink">
+		<Icon name="lock" class="mr-0.5 inline size-3 align-[-0.14em]" />Files never leave your device.
+	</span>
+	Everything runs in your browser, nothing touches a server — it even works offline once loaded.
 </p>
 
 <FormatInfo entry={seo} />

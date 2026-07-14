@@ -57,6 +57,8 @@
 		"test:e2e:xbrowser": "E2E_XBROWSER=1 playwright test --grep @xbrowser",
 		"test:e2e:preview": "E2E_PREVIEW=1 playwright test",
 		"test:e2e:ui": "playwright test --ui",
+		"bench:memory": "E2E_BENCH=1 E2E_PREVIEW=1 playwright test --config playwright.bench.config.ts",
+		"demo-assets": "playwright test --config playwright.demo.config.ts",
 		"report": "node scripts/build-report.mjs --open"
 	},
 	"devDependencies": {

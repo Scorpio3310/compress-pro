@@ -1,5 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { CONVERTERS, FORMATS, HOME, TOOLS, TOOL_SLUGS, converterFor, pathFor, seoFor } from './seo';
+import {
+	CONVERTERS,
+	FEATURED_PATHS,
+	FORMATS,
+	HOME,
+	TOOLS,
+	TOOL_GROUPS,
+	TOOL_SLUGS,
+	converterFor,
+	pathFor,
+	seoFor
+} from './seo';
 
 const ALL = [HOME, ...FORMATS, ...CONVERTERS, ...TOOLS];
 
@@ -70,15 +81,42 @@ describe('converter entries', () => {
 		}
 	});
 
-	it('curates exactly twenty-two converters into the footer', () => {
-		expect(CONVERTERS.filter((c) => c.inFooter)).toHaveLength(22);
-	});
-
 	it('uses "-to-" slugs that never collide with compress slugs', () => {
 		// Segments may be compound (tar-gz-to-zip) — the ONE "-to-" stays load-bearing.
 		for (const c of CONVERTERS) {
 			expect(c.path, c.path).toMatch(/^\/[a-z0-9]+(?:-[a-z0-9]+)*-to-[a-z0-9]+(?:-[a-z0-9]+)*$/);
 			expect(c.path.match(/-to-/g), c.path).toHaveLength(1);
+		}
+	});
+});
+
+describe('tool groups (homepage directory + footer columns)', () => {
+	it('partitions every FileFormat into exactly one group', () => {
+		// A format outside every bucket would silently drop its pages from BOTH
+		// the homepage directory and the footer — this is the tripwire.
+		const covered = TOOL_GROUPS.flatMap((g) => g.formats);
+		expect(new Set(covered).size, 'format in two groups').toBe(covered.length);
+		expect([...covered].sort()).toEqual(FORMATS.map((f) => f.format).sort());
+	});
+
+	it('curates 4–7 existing footer picks per group, hub page first, no duplicates', () => {
+		const seen = new Set<string>();
+		for (const g of TOOL_GROUPS) {
+			expect(g.footerPaths.length, g.title).toBeGreaterThanOrEqual(4);
+			expect(g.footerPaths.length, g.title).toBeLessThanOrEqual(7);
+			// seoFor falls back to HOME on unknown slugs — the round-trip catches typos.
+			for (const path of g.footerPaths) {
+				const entry = seoFor(path.slice(1));
+				expect(entry.path, `${g.title}: ${path} must resolve`).toBe(path);
+				expect(entry.format, `${g.title}: ${path} sits in the wrong column`).toSatisfy(
+					(f) => f !== null && g.formats.includes(f)
+				);
+				expect(seen.has(path), `${g.title}: ${path} appears twice`).toBe(false);
+				seen.add(path);
+			}
+			expect(g.formats.map(pathFor), `${g.title} leads with its hub page`).toContain(
+				g.footerPaths[0]
+			);
 		}
 	});
 });
@@ -109,6 +147,71 @@ describe('tool entries (standalone pages)', () => {
 	it('resolves through seoFor and converterFor like converters do', () => {
 		expect(seoFor('unlock-pdf').h1).toBe('Unlock PDF files.');
 		expect(converterFor('protect-pdf')?.preset).toEqual({ kind: 'pdf-op', op: 'protect' });
+	});
+});
+
+describe('engine copy', () => {
+	// The "Under the hood" sections are the only place subpages name their
+	// engines — keyed regexes keep the claims from silently drifting away
+	// from THIRD_PARTY_LICENSES.md and the HOME engines table.
+	const ENGINE_BY_PAGE: Record<string, RegExp> = {
+		'/compress-jpg': /MozJPEG/,
+		'/compress-png': /OxiPNG[\s\S]*libimagequant/,
+		'/compress-webp': /libwebp/,
+		'/compress-gif': /gifsicle/,
+		'/compress-heic': /libheif/,
+		'/compress-svg': /SVGO/,
+		'/compress-pdf': /Ghostscript/,
+		'/compress-video': /WebCodecs[\s\S]*mediabunny/,
+		'/compress-audio': /LAME/,
+		'/font-converter': /Brotli/,
+		'/zip-files': /7-Zip/,
+		'/remove-exif': /byte surgery/
+	};
+
+	it('every format page names its engine in an "Under the hood" section', () => {
+		for (const e of FORMATS) {
+			const section = e.guide?.find((s) => s.heading === 'Under the hood');
+			expect(section, e.path).toBeDefined();
+			expect(section!.paragraphs?.join(' '), e.path).toMatch(ENGINE_BY_PAGE[e.path]);
+		}
+	});
+
+	it('the universal image tool names its routed encoders', () => {
+		const section = seoFor('compress-image').guide?.find((s) => s.heading === 'Under the hood');
+		expect(section).toBeDefined();
+		expect(section!.paragraphs?.join(' ')).toMatch(/MozJPEG[\s\S]*libwebp/);
+	});
+
+	it('shows each demo kind only on the page whose pipeline made its assets', () => {
+		// Every demo asset is real output of one specific engine — on any other
+		// page the same slider would demonstrate an engine that page doesn't run.
+		const withDemo = [...FORMATS, ...CONVERTERS, ...TOOLS].filter((e) => e.demo);
+		expect(Object.fromEntries(withDemo.map((e) => [e.path, e.demo]))).toEqual({
+			'/compress-image': 'photo',
+			'/compress-jpg': 'photo',
+			'/compress-png': 'png',
+			'/compress-webp': 'webp',
+			'/compress-heic': 'heic',
+			'/compress-gif': 'gif',
+			'/compress-svg': 'svg',
+			'/compress-pdf': 'pdf',
+			'/compress-video': 'video',
+			'/compress-mp4': 'video',
+			'/compress-audio': 'audio',
+			'/font-converter': 'font',
+			'/zip-files': 'archive',
+			'/remove-exif': 'exif'
+		});
+	});
+});
+
+describe('featured tools', () => {
+	it('curates exactly twelve unique existing paths for the home grid', () => {
+		const valid = new Set([...FORMATS, ...CONVERTERS, ...TOOLS].map((e) => e.path));
+		expect(FEATURED_PATHS).toHaveLength(12);
+		expect(new Set(FEATURED_PATHS).size).toBe(FEATURED_PATHS.length);
+		for (const p of FEATURED_PATHS) expect(valid.has(p), p).toBe(true);
 	});
 });
 

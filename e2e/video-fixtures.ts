@@ -148,6 +148,22 @@ const CLIPS: ClipSpec[] = [
 	})
 ];
 
+// E2E_BENCH=1 (bench:memory) adds a long 720p clip for the video peak-memory
+// scenario. VP9-in-WebM because that is the one path the Playwright
+// firefox/webkit builds can also decode/encode (no licensed codecs).
+const BENCH = !!process.env.E2E_BENCH;
+const BENCH_CLIP = clip({
+	name: 'v-720p-45s.webm',
+	width: 1280,
+	height: 720,
+	fps: 30,
+	seconds: 45,
+	container: 'webm',
+	videoCodec: 'vp9',
+	audio: false,
+	noise: true
+});
+
 export async function generateVideoFixtures(): Promise<void> {
 	const bundleSource = readFileSync(BUNDLE, 'utf8');
 	const genHash = createHash('sha256')
@@ -158,11 +174,20 @@ export async function generateVideoFixtures(): Promise<void> {
 
 	if (existsSync(MANIFEST)) {
 		try {
-			if (JSON.parse(readFileSync(MANIFEST, 'utf8')).genHash === genHash) return;
+			// A hash-matching manifest from a NORMAL run lacks the bench clip —
+			// a bench run must still regenerate then (BENCH is not hashed, or the
+			// hash would flip between normal and bench runs).
+			if (
+				JSON.parse(readFileSync(MANIFEST, 'utf8')).genHash === genHash &&
+				(!BENCH || existsSync(join(VIDEO_DIR, BENCH_CLIP.name)))
+			) {
+				return;
+			}
 		} catch {
 			/* regenerate */
 		}
 	}
+	const clips = BENCH ? [...CLIPS, BENCH_CLIP] : CLIPS;
 	mkdirSync(VIDEO_DIR, { recursive: true });
 	console.log('generating video fixtures (Chromium + WebCodecs)…');
 
@@ -285,12 +310,12 @@ export async function generateVideoFixtures(): Promise<void> {
 				}
 				return { capabilities, files };
 			},
-			{ bundleSource, clips: CLIPS }
+			{ bundleSource, clips }
 		);
 
 		const manifestFiles: Record<string, object> = {};
 		const failures: string[] = [];
-		for (const spec of CLIPS) {
+		for (const spec of clips) {
 			const out = generated.files[spec.name];
 			if (!out?.base64) {
 				failures.push(`${spec.name}: ${out?.error ?? 'unknown'}`);

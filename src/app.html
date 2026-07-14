@@ -21,14 +21,22 @@
 	<body data-sveltekit-preload-data="hover">
 		<noscript>
 			<style>
+				html,
+				body {
+					overflow: hidden;
+				}
 				.noscript-note {
+					position: fixed;
+					inset: 0;
+					z-index: 2147483647;
 					box-sizing: border-box;
-					min-height: 100dvh;
 					display: grid;
 					place-items: center;
 					padding: 24px;
-					background: #f1f2f4;
-					color: #0b0c0e;
+					background: rgba(0, 0, 0, 0.9);
+					-webkit-backdrop-filter: blur(24px);
+					backdrop-filter: blur(24px);
+					color: #f1f2f4;
 					font-family:
 						system-ui,
 						-apple-system,
@@ -37,24 +45,54 @@
 					line-height: 1.6;
 					text-align: center;
 				}
-				.noscript-note p {
+				.noscript-note__card {
+					display: grid;
+					justify-items: center;
+					gap: 18px;
 					max-width: 34rem;
-					margin: 0;
 				}
-				@media (prefers-color-scheme: dark) {
-					.noscript-note {
-						background: #0c0d0e;
-						color: #f1f2f4;
-					}
+				.noscript-note__logo {
+					width: 64px;
+					height: 64px;
+				}
+				.noscript-note__title {
+					margin: 0;
+					font-size: 20px;
+					font-weight: 650;
+					letter-spacing: -0.01em;
+				}
+				.noscript-note p {
+					margin: 0;
 				}
 			</style>
 			<div class="noscript-note">
-				<p>
-					<strong>Compress Pro needs JavaScript.</strong><br />
-					The whole app runs in your browser — files are compressed on your device and never
-					uploaded, so there is no server that could do the work instead. Enable JavaScript and
-					reload the page.
-				</p>
+				<div class="noscript-note__card">
+					<svg
+						class="noscript-note__logo"
+						viewBox="0 0 32 32"
+						xmlns="http://www.w3.org/2000/svg"
+						aria-hidden="true"
+					>
+						<rect width="32" height="32" rx="8" fill="#ffffff" />
+						<g
+							fill="none"
+							stroke="#0b0c0e"
+							stroke-width="2.6"
+							stroke-linecap="butt"
+							stroke-linejoin="miter"
+						>
+							<path d="M11 6.5l5 5 5-5" />
+							<path d="M7 16h18" />
+							<path d="M11 25.5l5-5 5 5" />
+						</g>
+					</svg>
+					<p class="noscript-note__title">Compress Pro needs JavaScript</p>
+					<p>
+						The whole app runs in your browser — files are compressed on your device and never
+						uploaded, so there is no server that could do the work instead. Enable JavaScript and
+						reload the page.
+					</p>
+				</div>
 			</div>
 		</noscript>
 		<div style="display: contents">%sveltekit.body%</div>

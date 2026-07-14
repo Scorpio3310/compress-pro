@@ -40,10 +40,18 @@ const GEN_HASH = createHash('sha256')
 	.digest('hex')
 	.slice(0, 16);
 
+// E2E_BENCH=1 (bench:memory) additionally produces the large bench inputs.
+// Not part of GEN_HASH: that would flip the hash between normal and bench runs
+// and force a full regeneration on every switch.
+const BENCH = !!process.env.E2E_BENCH;
+const BENCH_PDF = 'image-heavy-large.pdf';
+
 if (process.argv.includes('--if-missing') && existsSync(MANIFEST)) {
 	try {
 		const m = JSON.parse(readFileSync(MANIFEST, 'utf8'));
-		if (m.genHash === GEN_HASH) {
+		// A hash-matching manifest written by a NORMAL run lacks the bench
+		// fixtures — a bench run must still regenerate then.
+		if (m.genHash === GEN_HASH && (!BENCH || existsSync(join(OUT, BENCH_PDF)))) {
 			console.log('fixtures up to date (hash match) — skipping');
 			process.exit(0);
 		}
@@ -1286,6 +1294,29 @@ async function generatePdfs() {
 		assertEq('image-heavy.pdf', 'pageCount', check.getPageCount(), 3);
 		assertRange('image-heavy.pdf', 'size', bytes.length, 2_000_000, 12_000_000);
 		manifest['image-heavy.pdf'] = { pages: 3, size: bytes.length };
+	}
+
+	// 23b. image-heavy-large.pdf — bench-only (~20 MB): the image-heavy recipe
+	// scaled to 26 pages of unique JPEGs, sized so the Ghostscript memory
+	// scenario measures a genuinely large job. Gated on E2E_BENCH so normal
+	// runs never pay the ~minute of generation.
+	if (BENCH) {
+		const doc = await PDFDocument.create();
+		const PAGES = 26;
+		for (let p = 0; p < PAGES; p++) {
+			const jpg = await sharp(await photoScene(2480, 3508, { noise: 55, seed: 600 + p }))
+				.jpeg({ quality: 90 })
+				.toBuffer();
+			const img = await doc.embedJpg(jpg);
+			const page = doc.addPage(A4);
+			page.drawImage(img, { x: 0, y: 0, width: A4[0], height: A4[1] });
+		}
+		writeFileSync(join(OUT, BENCH_PDF), await doc.save());
+		const bytes = readFileSync(join(OUT, BENCH_PDF));
+		const check = await PDFDocument.load(bytes);
+		assertEq(BENCH_PDF, 'pageCount', check.getPageCount(), PAGES);
+		assertRange(BENCH_PDF, 'size', bytes.length, 12_000_000, 60_000_000);
+		manifest[BENCH_PDF] = { pages: PAGES, size: bytes.length };
 	}
 
 	// 24. pages-12.pdf — page N is (400+N) pt wide → order/selection fingerprint

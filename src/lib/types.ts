@@ -29,6 +29,112 @@ export function isImageFormat(format: FileFormat): format is ImageFileFormat {
 	return (IMAGE_FORMATS as readonly FileFormat[]).includes(format);
 }
 
+/** Static before/after demo kinds — each page may only show output its own
+ *  pipeline produced (seo.test.ts pins the kind↔page map, `pnpm demo-assets`
+ *  regenerates the assets + manifest through the real tools). */
+export type DemoKind =
+	| 'photo'
+	| 'png'
+	| 'webp'
+	| 'heic'
+	| 'gif'
+	| 'svg'
+	| 'pdf'
+	| 'video'
+	| 'audio'
+	| 'font'
+	| 'archive'
+	| 'exif';
+
+export interface DemoCredit {
+	author: string;
+	url: string;
+	source:
+		| 'Unsplash'
+		| 'Wikimedia Commons'
+		| 'NASA'
+		| 'Openclipart'
+		| 'Magnific'
+		| 'HEIC Digital'
+		| 'Pixabay'
+		| 'Google Fonts';
+	/** Present for public-domain works — rendered as "— {license}." instead of
+	 *  "on {source}." (there is no author to credit, only a work to cite). */
+	license?: string;
+}
+
+/** One entry of src/lib/demo-stats.json — written only by the generator. */
+export interface DemoStats {
+	tool: string;
+	engine: string;
+	quality?: number;
+	precision?: number;
+	/** pdf: the preset pill the run was pinned to (quality has no meaning). */
+	level?: string;
+	/** audio: the bitrate pill the run was pinned to (quality has no meaning). */
+	bitrateKbps?: number;
+	/** video: the max-dimension pin of the run — the resize is part of the
+	 *  result the caption narrates (4K in, 1080p out), not a display choice. */
+	maxDimension?: number;
+	outputFormat: string;
+	/** heic: the output is a different format than the input — the caption
+	 *  must present the conversion as part of the result. */
+	formatChanged?: boolean;
+	/** Raster kinds carry width/height/megapixels; pdf carries pages; video
+	 *  adds duration/fps. The kind-specific guards in demo-stats.test.ts
+	 *  enforce presence per kind. */
+	input: {
+		name: string;
+		width?: number;
+		height?: number;
+		megapixels?: number;
+		pages?: number;
+		durationSec?: number;
+		fps?: number;
+	};
+	originalBytes: number;
+	compressedBytes: number;
+	savingsPercent: number;
+	display: {
+		before: string;
+		after: string;
+		width: number;
+		height: number;
+		shows: 'crop' | 'frame' | 'file';
+		crop?: { left: number; top: number; width: number; height: number };
+		frame?: { index: number; ofFrames: number };
+		/** pdf: the raster frame the crop was cut from — one page of the
+		 *  document rendered by the app's own pdf.js at this resolution. */
+		render?: { page: number; width: number; height: number; dpi: number };
+		/** gif: a live animated preview from a SECOND real tool run (quality +
+		 *  resize) — its own honest numbers, small enough to ship. */
+		anim?: { file: string; bytes: number; maxDimension: number };
+		/** video: the shared timestamp both slider stills were rasterized at —
+		 *  the video analog of pdf's `render` provenance. */
+		still?: { atSec: number };
+		/** video: a playable preview from a SECOND real tool run (quality +
+		 *  resize; gif-anim precedent) — width/height are the clip's real output
+		 *  dimensions, `poster` a committed frame so preload="none" costs no
+		 *  video bytes until play. */
+		clip?: {
+			file: string;
+			bytes: number;
+			maxDimension: number;
+			width: number;
+			height: number;
+			quality: number;
+			poster: string;
+		};
+		/** archive: the folder manifest (each entry is a committed fixture) and
+		 *  the SECOND real run's ZIP size — 7Z is the primary numbers. */
+		archive?: { entries: { name: string; bytes: number }[]; zipBytes: number };
+		/** exif: the curated metadata the tool found and removed — extracted by
+		 *  the app's own parser (src/lib/codecs/exif-parse). */
+		metadata?: { camera: string | null; taken: string | null; gps: string | null; fields: number };
+	};
+	credit?: DemoCredit;
+}
+
 export interface UploadedFile {
 	id: string;
 	file: File;

@@ -14,8 +14,9 @@
  *   collapsed content stays mounted, so value/count assertions work unopened
  */
 import { expect, type Download, type Locator, type Page } from '@playwright/test';
-import { readFileSync } from 'node:fs';
-import { basename } from 'node:path';
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { basename, join } from 'node:path';
+import { ROOT } from './fixtures';
 
 export type Tab =
 	'jpg' | 'png' | 'webp' | 'gif' | 'heic' | 'svg' | 'pdf' | 'video' | 'audio' | 'zip' | 'exif';
@@ -333,43 +334,73 @@ export async function dropOnZone(
  * Rasterize a PDF page inside the app page using the app's own pdfjs setup
  * (dev-server only — /src/* module URLs don't exist in the built app).
  * Returns a PNG buffer, or null under E2E_PREVIEW so callers can self-skip.
+ * The PDF travels via a temp file served through Vite's /@fs/ URL: a big
+ * document (the 62 MB demo fixture) doesn't fit through CDP either as a
+ * base64 evaluate argument (truncated blob → InvalidPDFException) or as a
+ * route.fulfill body ("Failed to fetch"). The temp file lives under
+ * .svelte-kit/ — one of the few dirs SvelteKit's server.fs.allow serves
+ * (test-results/ 403s), and gitignored.
  */
 export async function rasterizePdfInPage(
 	page: Page,
 	pdfBytes: Buffer,
-	pageNum: number
+	pageNum: number,
+	maxWidth = 1600
 ): Promise<Buffer | null> {
 	if (process.env.E2E_PREVIEW) return null;
-	const base64 = await page.evaluate(
-		async (args: { b64: string; pageNum: number }) => {
-			// Indirect import so the test transpiler leaves the specifier alone.
-			const load = new Function('p', 'return import(p)') as (p: string) => Promise<{
-				openPdfPreview(
-					source: Blob,
-					maxWidth?: number
-				): Promise<{
-					numPages: number;
-					renderPage(n: number): Promise<string>;
-					destroy(): Promise<void>;
-				}>;
-			}>;
-			const mod = await load('/src/lib/pdf-preview.ts');
-			const blob = await (await fetch(`data:application/pdf;base64,${args.b64}`)).blob();
-			const handle = await mod.openPdfPreview(blob, 1600);
-			const url = await handle.renderPage(args.pageNum);
-			const png = await (await fetch(url)).arrayBuffer();
-			URL.revokeObjectURL(url);
-			await handle.destroy();
-			const arr = new Uint8Array(png);
-			let s = '';
-			for (let i = 0; i < arr.length; i += 32768) {
-				s += String.fromCharCode(...arr.subarray(i, i + 32768));
+	const tmpDir = join(ROOT, '.svelte-kit', 'rasterize-tmp');
+	mkdirSync(tmpDir, { recursive: true });
+	const tmpPdf = join(tmpDir, `${Date.now()}-${Math.random().toString(36).slice(2)}.pdf`);
+	writeFileSync(tmpPdf, pdfBytes);
+	try {
+		// Up to 5 attempts, 5 s apart: a dev-server HMR reload, restart or dep
+		// re-optimization landing mid-fetch surfaces as a transient "Failed to
+		// fetch" / InvalidPDFException (measured) and can take ~10 s to settle;
+		// the path itself is sound.
+		let lastError: unknown;
+		for (let attempt = 0; attempt < 5; attempt++) {
+			try {
+				const base64 = await page.evaluate(
+					async (args: { url: string; pageNum: number; maxWidth: number }) => {
+						// Indirect import so the test transpiler leaves the specifier alone.
+						const load = new Function('p', 'return import(p)') as (p: string) => Promise<{
+							openPdfPreview(
+								source: Blob,
+								maxWidth?: number
+							): Promise<{
+								numPages: number;
+								renderPage(n: number): Promise<string>;
+								destroy(): Promise<void>;
+							}>;
+						}>;
+						const mod = await load('/src/lib/pdf-preview.ts');
+						const res = await fetch(args.url);
+						if (!res.ok) throw new Error(`pdf fetch ${res.status} for ${args.url}`);
+						const blob = await res.blob();
+						const handle = await mod.openPdfPreview(blob, args.maxWidth);
+						const url = await handle.renderPage(args.pageNum);
+						const png = await (await fetch(url)).arrayBuffer();
+						URL.revokeObjectURL(url);
+						await handle.destroy();
+						const arr = new Uint8Array(png);
+						let s = '';
+						for (let i = 0; i < arr.length; i += 32768) {
+							s += String.fromCharCode(...arr.subarray(i, i + 32768));
+						}
+						return btoa(s);
+					},
+					{ url: `/@fs${tmpPdf}`, pageNum, maxWidth }
+				);
+				return Buffer.from(base64, 'base64');
+			} catch (error) {
+				lastError = error;
+				await page.waitForTimeout(5_000);
 			}
-			return btoa(s);
-		},
-		{ b64: pdfBytes.toString('base64'), pageNum }
-	);
-	return Buffer.from(base64, 'base64');
+		}
+		throw lastError;
+	} finally {
+		rmSync(tmpPdf, { force: true });
+	}
 }
 
 /**
@@ -385,12 +416,45 @@ export async function rasterizeVideoFramesInPage(
 	mimeType: string,
 	atSecs: number[]
 ): Promise<Buffer[]> {
-	const base64s = await page.evaluate(
-		async (args: { b64: string; mimeType: string; atSecs: number[] }) => {
-			const blob = await (await fetch(`data:${args.mimeType};base64,${args.b64}`)).blob();
+	const frames = await rasterizeVideoFramesFromUrl(
+		page,
+		`data:${mimeType};base64,${videoBytes.toString('base64')}`,
+		atSecs
+	);
+	return frames.map((f) => f.frame);
+}
+
+/** Shared page-side <video>+canvas seek/draw loop for both video rasterizers.
+ *  `drawSize` fixes the canvas to those dimensions and lets drawImage scale
+ *  with the browser's own sampler — how a resized output is honestly compared
+ *  against its source at common framing (pdf's common-DPI render precedent).
+ *  `mediaTime` is the presentation timestamp of the frame that was ACTUALLY
+ *  drawn (requestVideoFrameCallback) — a seek that lands exactly on a frame
+ *  boundary may present either neighbor depending on the file's timescale
+ *  rounding, and only comparing mediaTimes proves two files show the same
+ *  moment. NaN when the callback never fired (non-Chromium). */
+async function rasterizeVideoFramesFromUrl(
+	page: Page,
+	srcUrl: string,
+	atSecs: number[],
+	drawSize?: { width: number; height: number }
+): Promise<{ frame: Buffer; mediaTime: number }[]> {
+	const raw = await page.evaluate(
+		async (args: {
+			srcUrl: string;
+			atSecs: number[];
+			drawSize?: { width: number; height: number };
+		}) => {
+			const res = await fetch(args.srcUrl);
+			if (!res.ok) throw new Error(`video fetch ${res.status} for ${args.srcUrl}`);
+			const blob = await res.blob();
 			const url = URL.createObjectURL(blob);
 			try {
-				const video = document.createElement('video');
+				const video = document.createElement('video') as HTMLVideoElement & {
+					requestVideoFrameCallback?: (
+						cb: (now: number, meta: { mediaTime: number }) => void
+					) => number;
+				};
 				video.muted = true;
 				video.src = url;
 				await new Promise<void>((ok, err) => {
@@ -398,24 +462,74 @@ export async function rasterizeVideoFramesInPage(
 					video.onerror = () => err(new Error('video failed to load'));
 				});
 				const canvas = document.createElement('canvas');
-				canvas.width = video.videoWidth;
-				canvas.height = video.videoHeight;
+				canvas.width = args.drawSize?.width ?? video.videoWidth;
+				canvas.height = args.drawSize?.height ?? video.videoHeight;
 				const ctx = canvas.getContext('2d')!;
-				const frames: string[] = [];
+				const frames: { b64: string; mediaTime: number }[] = [];
 				for (const atSec of args.atSecs) {
+					// Register BEFORE the seek so the presentation event can't be
+					// missed; 500 ms timeout → NaN keeps a hang impossible.
+					const presented = new Promise<number>((resolve) => {
+						if (!video.requestVideoFrameCallback) return resolve(NaN);
+						const timer = setTimeout(() => resolve(NaN), 500);
+						video.requestVideoFrameCallback((_, meta) => {
+							clearTimeout(timer);
+							resolve(meta.mediaTime);
+						});
+					});
 					video.currentTime = Math.min(atSec, Math.max(0, video.duration - 0.05));
 					await new Promise<void>((ok) => (video.onseeked = () => ok()));
-					ctx.drawImage(video, 0, 0);
-					frames.push(canvas.toDataURL('image/png').split(',')[1]);
+					const mediaTime = await presented;
+					ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+					frames.push({ b64: canvas.toDataURL('image/png').split(',')[1], mediaTime });
 				}
 				return frames;
 			} finally {
 				URL.revokeObjectURL(url);
 			}
 		},
-		{ b64: videoBytes.toString('base64'), mimeType, atSecs }
+		{ srcUrl, atSecs, drawSize }
 	);
-	return base64s.map((b64) => Buffer.from(b64, 'base64'));
+	return raw.map((f) => ({ frame: Buffer.from(f.b64, 'base64'), mediaTime: f.mediaTime }));
+}
+
+/**
+ * rasterizeVideoFramesInPage for LARGE files: the base64 evaluate argument
+ * truncates over CDP well below real-video sizes (same failure the pdf
+ * rasterizer documents), so the bytes travel via a temp file served through
+ * Vite's /@fs/ URL — dev-server only; returns null under E2E_PREVIEW so
+ * callers can self-skip. Temp lives under .svelte-kit/ (one of the few dirs
+ * SvelteKit's server.fs.allow serves — test-results/ 403s), and gitignored.
+ */
+export async function rasterizeVideoFramesViaFsInPage(
+	page: Page,
+	videoBytes: Buffer,
+	ext: string,
+	atSecs: number[],
+	drawSize?: { width: number; height: number }
+): Promise<{ frame: Buffer; mediaTime: number }[] | null> {
+	if (process.env.E2E_PREVIEW) return null;
+	const tmpDir = join(ROOT, '.svelte-kit', 'rasterize-tmp');
+	mkdirSync(tmpDir, { recursive: true });
+	const tmpVid = join(tmpDir, `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`);
+	writeFileSync(tmpVid, videoBytes);
+	try {
+		// Up to 3 attempts: a dev-server HMR reload or dep re-optimization
+		// landing mid-fetch surfaces as a transient "Failed to fetch"
+		// (pdf-rasterizer precedent); the path itself is sound.
+		let lastError: unknown;
+		for (let attempt = 0; attempt < 3; attempt++) {
+			try {
+				return await rasterizeVideoFramesFromUrl(page, `/@fs${tmpVid}`, atSecs, drawSize);
+			} catch (error) {
+				lastError = error;
+				await page.waitForTimeout(5_000);
+			}
+		}
+		throw lastError;
+	} finally {
+		rmSync(tmpVid, { force: true });
+	}
 }
 
 /** Single-frame convenience wrapper around rasterizeVideoFramesInPage. */
