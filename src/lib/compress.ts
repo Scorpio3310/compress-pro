@@ -13,7 +13,8 @@ import type {
 	ExifSettings,
 	ProgressInfo
 } from '$lib/types';
-import { isImageFormat } from '$lib/types';
+import { isBundlingArchiveFormat, isImageFormat } from '$lib/types';
+import { ARCHIVE_OUTPUT_EXT } from '$lib/codecs/sevenzip-args';
 import { runWithConcurrency } from '$lib/concurrency';
 import { compressImage, type ImageProgress } from '$lib/codecs/image';
 import { compressSvg } from '$lib/codecs/svg';
@@ -166,25 +167,82 @@ function uniqueEntryName(name: string, used: Set<string>): string {
 	}
 }
 
+/** One extract result row per archive entry — basename-flattened (zip-slip
+ *  hygiene: path segments never reach the download attribute), typed so image
+ *  entries render as row thumbnails, deduped across the whole batch. */
+function entryRow(
+	fileId: string,
+	index: number,
+	entryPath: string,
+	bytes: Uint8Array | ArrayBuffer,
+	used: Set<string>,
+	info: string | null
+): CompressedFile {
+	const short = uniqueEntryName(entryPath.split('/').pop()!, used);
+	used.add(short);
+	// SVG is never content-sniffed; '' keeps today's default otherwise.
+	const blob = new Blob([bytes as BlobPart], { type: displayableImageMime(short) ?? '' });
+	return {
+		id: `${fileId}#${index}`, // never collides with an upload id
+		name: short,
+		originalSize: blob.size,
+		compressedSize: blob.size,
+		blob,
+		objectUrl: URL.createObjectURL(blob),
+		savings: 0,
+		warning: null,
+		info
+	};
+}
+
+/** Entries worth a row: real files, not folder markers, empty blobs or
+ *  dotfile noise (__MACOSX/.DS_Store) — same rule fflate extract always had. */
+function extractableEntry(path: string, size: number): boolean {
+	return !path.endsWith('/') && size > 0 && !path.split('/').pop()!.startsWith('.');
+}
+
 /**
- * ZIP tab: create → ONE combined archive from all inputs; extract → one
- * result row per archive ENTRY (ids never match an upload, so FileList
- * renders them as standalone rows). Zip-slip hygiene: entry names are
- * flattened to their basename for display/download.
+ * Archive tab (fflate + 7z-wasm).
+ * - create, bundling formats (zip/7z/tar/tgz/tbz2/txz) → ONE combined archive
+ *   from all inputs; plain unencrypted zip keeps the fflate fast path, the
+ *   rest runs in the archive worker.
+ * - create, stream formats (gz/bz2/xz) → one output per input.
+ * - extract → one result row per archive ENTRY (ids never match an upload, so
+ *   FileList renders them as standalone rows); unencrypted .zip goes through
+ *   fflate first and falls back to the worker (which speaks every format and
+ *   maps password errors to friendly messages).
+ * - convert → each input repacked into the target format (extract + create in
+ *   the worker, folder structure preserved).
  */
-export async function runZipTool(
+export async function runArchiveTool(
 	files: UploadedFile[],
 	settings: ZipSettings,
 	onProgress: (progress: ProgressInfo) => void,
 	signal?: AbortSignal
 ): Promise<PdfToolOutput> {
-	const fflate = await import('fflate');
-
 	if (settings.op === 'create') {
-		try {
-			const sum = files.reduce((total, f) => total + f.size, 0);
-			const base = { fileIndex: 0, fileCount: 1, fileName: 'archive.zip' };
-			onProgress({ ...base, fileFraction: 0, detail: null, stage: 'processing' });
+		return isBundlingArchiveFormat(settings.outputFormat)
+			? createArchiveBundle(files, settings, onProgress, signal)
+			: createArchiveStreams(files, settings, onProgress, signal);
+	}
+	if (settings.op === 'convert') return convertArchives(files, settings, onProgress, signal);
+	return extractArchives(files, settings, onProgress, signal);
+}
+
+async function createArchiveBundle(
+	files: UploadedFile[],
+	settings: ZipSettings,
+	onProgress: (progress: ProgressInfo) => void,
+	signal?: AbortSignal
+): Promise<PdfToolOutput> {
+	const sum = files.reduce((total, f) => total + f.size, 0);
+	const outName = `archive${ARCHIVE_OUTPUT_EXT[settings.outputFormat]}`;
+	const base = { fileIndex: 0, fileCount: 1, fileName: outName };
+	onProgress({ ...base, fileFraction: 0, detail: null, stage: 'processing' });
+	try {
+		if (settings.outputFormat === 'zip' && !settings.password) {
+			// fflate fast path — no wasm download for the everyday case.
+			const fflate = await import('fflate');
 			const entries: Record<string, Uint8Array> = {};
 			const used = new Set<string>();
 			for (let i = 0; i < files.length; i++) {
@@ -206,14 +264,129 @@ export async function runZipTool(
 			);
 			onProgress({ ...base, fileFraction: 1, detail: null, stage: 'done' });
 			const blob = new Blob([data as BlobPart], { type: 'application/zip' });
-			return { results: [], failures: [], combined: makeCombined('archive.zip', blob, sum, null) };
-		} catch (error) {
-			if (wasCancelled(signal, error)) return { results: [], failures: [], combined: null };
-			throw error;
+			return { results: [], failures: [], combined: makeCombined(outName, blob, sum, null) };
 		}
-	}
 
-	// Extract: entries become standalone result rows.
+		const tools = await import('$lib/codecs/archive-tools');
+		let lastFraction = 0;
+		const { blob, name } = await tools.createBundle(
+			files,
+			settings,
+			'archive',
+			(fraction, detail) => {
+				lastFraction = fraction ?? lastFraction;
+				onProgress({ ...base, fileFraction: lastFraction, detail, stage: 'processing' });
+			},
+			signal
+		);
+		onProgress({ ...base, fileFraction: 1, detail: null, stage: 'done' });
+		return { results: [], failures: [], combined: makeCombined(name, blob, sum, null) };
+	} catch (error) {
+		if (wasCancelled(signal, error)) return { results: [], failures: [], combined: null };
+		throw error;
+	}
+}
+
+async function createArchiveStreams(
+	files: UploadedFile[],
+	settings: ZipSettings,
+	onProgress: (progress: ProgressInfo) => void,
+	signal?: AbortSignal
+): Promise<PdfToolOutput> {
+	const tools = await import('$lib/codecs/archive-tools');
+	const results: CompressedFile[] = [];
+	const failures: FileFailure[] = [];
+	for (let i = 0; i < files.length; i++) {
+		if (signal?.aborted) break;
+		const file = files[i];
+		const base = { fileIndex: i, fileCount: files.length, fileName: file.name };
+		onProgress({ ...base, fileFraction: 0, detail: null, stage: 'processing' });
+		try {
+			let lastFraction = 0;
+			const { blob, name } = await tools.createStream(
+				file,
+				settings,
+				(fraction, detail) => {
+					lastFraction = fraction ?? lastFraction;
+					onProgress({ ...base, fileFraction: lastFraction, detail, stage: 'processing' });
+				},
+				signal
+			);
+			results.push({
+				id: file.id,
+				name,
+				originalSize: file.size,
+				compressedSize: blob.size,
+				blob,
+				objectUrl: URL.createObjectURL(blob),
+				savings: savingsPercent(file.size, blob.size),
+				warning: null,
+				info: null
+			});
+		} catch (error) {
+			if (wasCancelled(signal, error)) break;
+			failures.push(toFailure(file, error));
+			onProgress({ ...base, fileFraction: 1, detail: null, stage: 'error' });
+			continue;
+		}
+		onProgress({ ...base, fileFraction: 1, detail: null, stage: 'done' });
+	}
+	return { results, failures, combined: null };
+}
+
+async function convertArchives(
+	files: UploadedFile[],
+	settings: ZipSettings,
+	onProgress: (progress: ProgressInfo) => void,
+	signal?: AbortSignal
+): Promise<PdfToolOutput> {
+	const tools = await import('$lib/codecs/archive-tools');
+	const results: CompressedFile[] = [];
+	const failures: FileFailure[] = [];
+	for (let i = 0; i < files.length; i++) {
+		if (signal?.aborted) break;
+		const file = files[i];
+		const base = { fileIndex: i, fileCount: files.length, fileName: file.name };
+		onProgress({ ...base, fileFraction: 0, detail: null, stage: 'processing' });
+		try {
+			let lastFraction = 0;
+			const { blob, name, entryCount } = await tools.convertArchive(
+				file,
+				settings,
+				(fraction, detail) => {
+					lastFraction = fraction ?? lastFraction;
+					onProgress({ ...base, fileFraction: lastFraction, detail, stage: 'processing' });
+				},
+				signal
+			);
+			results.push({
+				id: file.id,
+				name,
+				originalSize: file.size,
+				compressedSize: blob.size,
+				blob,
+				objectUrl: URL.createObjectURL(blob),
+				savings: savingsPercent(file.size, blob.size),
+				warning: null,
+				info: `${entryCount} ${entryCount === 1 ? 'file' : 'files'} repacked`
+			});
+		} catch (error) {
+			if (wasCancelled(signal, error)) break;
+			failures.push(toFailure(file, error));
+			onProgress({ ...base, fileFraction: 1, detail: null, stage: 'error' });
+			continue;
+		}
+		onProgress({ ...base, fileFraction: 1, detail: null, stage: 'done' });
+	}
+	return { results, failures, combined: null };
+}
+
+async function extractArchives(
+	files: UploadedFile[],
+	settings: ZipSettings,
+	onProgress: (progress: ProgressInfo) => void,
+	signal?: AbortSignal
+): Promise<PdfToolOutput> {
 	const results: CompressedFile[] = [];
 	const failures: FileFailure[] = [];
 	const used = new Set<string>();
@@ -223,35 +396,49 @@ export async function runZipTool(
 		const base = { fileIndex: i, fileCount: files.length, fileName: file.name };
 		onProgress({ ...base, fileFraction: 0, detail: null, stage: 'processing' });
 		try {
-			const bytes = new Uint8Array(await file.file.arrayBuffer());
-			const entries = await new Promise<Record<string, Uint8Array>>((resolve, reject) =>
-				fflate.unzip(bytes, (error, out) => (error ? reject(error) : resolve(out)))
-			);
-			const names = Object.keys(entries).filter(
-				(n) => !n.endsWith('/') && entries[n].length > 0 && !n.split('/').pop()!.startsWith('.')
-			);
-			if (!names.length) throw new Error('The archive contains no extractable files');
-			for (let e = 0; e < names.length; e++) {
-				// Basename only — path segments never reach the download attribute.
-				const short = uniqueEntryName(names[e].split('/').pop()!, used);
-				used.add(short);
-				// Typed so image entries' object URLs render as row thumbnails
-				// (SVG is never content-sniffed; '' keeps today's default otherwise).
-				const blob = new Blob([entries[names[e]] as BlobPart], {
-					type: displayableImageMime(short) ?? ''
-				});
-				results.push({
-					id: `${file.id}#${e}`, // never collides with an upload id
-					name: short,
-					originalSize: blob.size,
-					compressedSize: blob.size,
-					blob,
-					objectUrl: URL.createObjectURL(blob),
-					savings: 0,
-					warning: null,
-					info: null
-				});
+			let rows: CompressedFile[] | null = null;
+
+			if (!settings.password && /\.zip$/i.test(file.name)) {
+				// fflate fast path; ANY failure (encrypted entries, zip64 quirks,
+				// misnamed file) falls through to the worker for a better answer.
+				try {
+					const fflate = await import('fflate');
+					const bytes = new Uint8Array(await file.file.arrayBuffer());
+					const entries = await new Promise<Record<string, Uint8Array>>((resolve, reject) =>
+						fflate.unzip(bytes, (error, out) => (error ? reject(error) : resolve(out)))
+					);
+					const names = Object.keys(entries).filter((n) => extractableEntry(n, entries[n].length));
+					if (names.length) {
+						rows = names.map((n, e) => entryRow(file.id, e, n, entries[n], used, null));
+					}
+				} catch (error) {
+					if (wasCancelled(signal, error)) break;
+					rows = null;
+				}
 			}
+
+			if (!rows) {
+				const tools = await import('$lib/codecs/archive-tools');
+				let lastFraction = 0.05;
+				const { entries, note } = await tools.extractArchive(
+					file,
+					settings.password,
+					(fraction, detail) => {
+						lastFraction = fraction ?? lastFraction;
+						onProgress({ ...base, fileFraction: lastFraction, detail, stage: 'processing' });
+					},
+					signal
+				);
+				const real = entries.filter((e) => extractableEntry(e.path, e.bytes.byteLength));
+				if (!real.length) throw new Error('The archive contains no extractable files');
+				// The chaining note (e.g. deb control files skipped) rides on the
+				// first row — once per archive, not once per entry.
+				rows = real.map((e, index) =>
+					entryRow(file.id, index, e.path, e.bytes, used, index === 0 ? note : null)
+				);
+			}
+
+			results.push(...rows);
 		} catch (error) {
 			if (wasCancelled(signal, error)) break;
 			failures.push(toFailure(file, error));

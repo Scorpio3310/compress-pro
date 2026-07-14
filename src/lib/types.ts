@@ -192,10 +192,41 @@ export interface FontConversionSettings {
 	axisValues: Record<string, number>;
 }
 
+/** Archive-tab output targets. zip/7z/tar/tgz/tbz2/txz bundle every input into
+ *  ONE archive; gz/bz2/xz are single-stream formats — one output per input. */
+export type ArchiveOutputFormat =
+	'zip' | '7z' | 'tar' | 'tgz' | 'tbz2' | 'txz' | 'gz' | 'bz2' | 'xz';
+
+export const BUNDLING_ARCHIVE_FORMATS = [
+	'zip',
+	'7z',
+	'tar',
+	'tgz',
+	'tbz2',
+	'txz'
+] as const satisfies readonly ArchiveOutputFormat[];
+
+export function isBundlingArchiveFormat(
+	format: ArchiveOutputFormat
+): format is (typeof BUNDLING_ARCHIVE_FORMATS)[number] {
+	return (BUNDLING_ARCHIVE_FORMATS as readonly ArchiveOutputFormat[]).includes(format);
+}
+
 export interface ZipSettings {
-	op: 'create' | 'extract';
-	/** Deflate level for create — 0 = store, 9 = smallest. */
+	op: 'create' | 'extract' | 'convert';
+	/** Create/convert target. gz/bz2/xz are single-stream formats (one output
+	 *  per input) — create only; convert snaps them back to a bundling format. */
+	outputFormat: ArchiveOutputFormat;
+	/** 0 = store, 9 = smallest. Plain-zip creates use it as the fflate deflate
+	 *  level; every 7zz path maps it onto -mx0/1/5/9. */
 	level: 0 | 1 | 6 | 9;
+	/** Create: encrypt (ZIP/7Z, AES-256). Extract/convert: decrypt the source.
+	 *  RUNTIME ONLY: stripped before persisting and never merged back (the
+	 *  pdf.password treatment — see serializeSettings / mergeZip). */
+	password: string;
+	/** 7Z create only: also encrypt the file list (-mhe=on). Persisted — it's a
+	 *  preference, not a secret; it only takes effect alongside a password. */
+	encryptNames: boolean;
 }
 
 export interface ExifSettings {

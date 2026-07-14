@@ -37,6 +37,30 @@ export function realFile(re: RegExp): string | null {
 	}
 }
 
+export const ARCHIVES = join(ROOT, 'tests', 'fixtures', 'archives');
+
+/** Absolute path of a vendored archive fixture (rar/cab/iso/… — committed,
+ *  because no JS/WASM compressor exists for these formats). */
+export function fxArchive(name: string): string {
+	return join(ARCHIVES, name);
+}
+
+interface ArchiveFixtureMeta {
+	format: string;
+	password?: string;
+	headerEncrypted?: boolean;
+	/** Intermediate containers the app's chaining unwraps (e.g. rpm → .cpio). */
+	chain?: string[];
+	/** Basenames of every file after full extraction (chaining applied). */
+	entries: string[];
+	sample: { entry: string; text: string } | null;
+}
+
+/** Committed expectations for the vendored archives (see archives/README.md). */
+export const ARCHIVE_FIXTURES: Record<string, ArchiveFixtureMeta> = JSON.parse(
+	readFileSync(join(ARCHIVES, 'archives.json'), 'utf8')
+);
+
 /** Absolute path of a generated VIDEO fixture (Chromium/WebCodecs-made). */
 export function fxVideo(name: string): string {
 	return join(GENERATED, 'video', name);

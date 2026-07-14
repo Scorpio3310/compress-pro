@@ -1,4 +1,5 @@
 import type {
+	ArchiveOutputFormat,
 	AudioConversionSettings,
 	FontFormat,
 	ImageFormat,
@@ -219,6 +220,76 @@ export interface FontProbeResult {
 	glyphCount: number | null;
 }
 
+// --- Archive (7-Zip 24.09 via 7z-wasm; fresh emscripten instance per job) ---
+
+export interface ArchiveEntryOut {
+	/** Path relative to the archive root — the UI flattens to basename, the
+	 *  convert op preserves it so folder structure survives repacking. */
+	path: string;
+	bytes: ArrayBuffer;
+}
+
+export interface ArchiveCreatePayload {
+	files: { name: string; bytes: ArrayBuffer }[];
+	output: ArchiveOutputFormat;
+	level: 0 | 1 | 6 | 9;
+	/** '' = unencrypted. Only zip/7z can honor it. */
+	password: string;
+	/** 7z only: -mhe=on (hide the file list too). Needs a password. */
+	encryptNames: boolean;
+	/** Output stem — 'archive' for bundles, the source filename for streams
+	 *  (gz/bz2/xz APPEND their extension: "report.pdf" → "report.pdf.gz"). */
+	baseName: string;
+}
+
+export interface ArchiveCreateResult {
+	bytes: ArrayBuffer;
+	name: string;
+	mimeType: string;
+}
+
+export interface ArchiveExtractPayload {
+	bytes: ArrayBuffer;
+	name: string;
+	password: string;
+}
+
+export interface ArchiveExtractResult {
+	entries: ArchiveEntryOut[];
+	/** Chaining commentary (e.g. deb control files skipped) — info, not a warning. */
+	note: string | null;
+}
+
+export interface ArchiveConvertPayload {
+	bytes: ArrayBuffer;
+	name: string;
+	/** Password of the SOURCE archive — the repacked output is never encrypted. */
+	password: string;
+	/** Streams can't hold several entries, so convert targets bundles only. */
+	output: Exclude<ArchiveOutputFormat, 'gz' | 'bz2' | 'xz'>;
+	level: 0 | 1 | 6 | 9;
+}
+
+export interface ArchiveConvertResult {
+	bytes: ArrayBuffer;
+	name: string;
+	mimeType: string;
+	entryCount: number;
+}
+
+export interface ArchiveProbeResult {
+	/** Container type 7zz reports ("7z", "Rar5", "Iso", …), null when unknown. */
+	format: string | null;
+	encrypted: boolean;
+	entryCount: number | null;
+}
+
+export interface ArchiveProgress {
+	/** 0..1 when the entry count is known, null = indeterminate pulse. */
+	fraction: number | null;
+	detail: string | null;
+}
+
 /**
  * Action → payload/result/progress map per worker kind. `callWorker` (rpc.ts)
  * and `expose` (host.ts) are both typed against this, so a wrong action name
@@ -270,6 +341,29 @@ export interface WorkerContracts {
 		};
 		/** Graceful mid-conversion cancel (mediabunny conversion.cancel()). */
 		cancel: { payload: { jobId: number }; result: null; progress: never };
+	};
+	archive: {
+		create: {
+			payload: ArchiveCreatePayload;
+			result: ArchiveCreateResult;
+			progress: ArchiveProgress;
+		};
+		extract: {
+			payload: ArchiveExtractPayload;
+			result: ArchiveExtractResult;
+			progress: ArchiveProgress;
+		};
+		convert: {
+			payload: ArchiveConvertPayload;
+			result: ArchiveConvertResult;
+			progress: ArchiveProgress;
+		};
+		/** Upload-time metadata (encryption detection drives the password field). */
+		probe: {
+			payload: { bytes: ArrayBuffer; name: string };
+			result: ArchiveProbeResult;
+			progress: never;
+		};
 	};
 }
 

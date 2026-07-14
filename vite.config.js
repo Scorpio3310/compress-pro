@@ -63,7 +63,10 @@ export default defineConfig({
 			'@jsquash/resize',
 			'icodec',
 			'@okathira/ghostpdl-wasm',
-			'gifsicle-wasm-browser'
+			'gifsicle-wasm-browser',
+			// Emscripten ESM whose .wasm we pass explicitly (fetch + wasmBinary);
+			// prebundling would only re-root its import.meta.url for nothing.
+			'7z-wasm'
 		],
 		// Lazily-imported deps (workers, dynamic imports) are otherwise discovered
 		// mid-session, and Vite's "new dependencies optimized" full-reload would

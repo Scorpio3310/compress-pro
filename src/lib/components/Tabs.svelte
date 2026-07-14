@@ -31,8 +31,9 @@
 		{ id: 'protect', label: 'Protect' }
 	];
 	const ZIP_OPS: { id: ZipSettings['op']; label: string }[] = [
-		{ id: 'create', label: 'Create ZIP' },
-		{ id: 'extract', label: 'Extract' }
+		{ id: 'create', label: 'Create' },
+		{ id: 'extract', label: 'Extract' },
+		{ id: 'convert', label: 'Convert' }
 	];
 	const FONT_OPS: { id: FontOp; label: string }[] = [
 		{ id: 'convert', label: 'Convert' },

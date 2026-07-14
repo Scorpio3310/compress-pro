@@ -28,7 +28,7 @@ export default defineConfig({
 	// CI-only retries absorb infra hiccups (server restarts, slow disk); local
 	// runs stay strict so real regressions surface immediately.
 	retries: process.env.CI ? 2 : 0,
-	testIgnore: quick ? ['**/real-files.spec.ts'] : [],
+	testIgnore: quick ? ['**/real-files.spec.ts', '**/real-archives.spec.ts'] : [],
 	reporter: [['list'], ['html', { outputFolder: 'test-results/pw-html', open: 'never' }]],
 	use: {
 		baseURL: preview ? 'http://localhost:8787' : 'http://localhost:5173',

@@ -79,7 +79,10 @@ export function defaultSettings(): SettingsMap {
 		},
 		zip: {
 			op: 'create',
-			level: 6
+			outputFormat: 'zip',
+			level: 6,
+			password: '',
+			encryptNames: false
 		},
 		exif: {
 			removeIcc: false
@@ -186,8 +189,23 @@ function mergeFont(target: FontConversionSettings, s: Record<string, unknown>): 
 }
 
 function mergeZip(target: ZipSettings, s: Record<string, unknown>): void {
-	target.op = oneOf(s.op, ['create', 'extract'] as const, target.op);
+	// `password` is deliberately NOT merged — secrets never round-trip storage.
+	target.op = oneOf(s.op, ['create', 'extract', 'convert'] as const, target.op);
+	target.outputFormat = oneOf(
+		s.outputFormat,
+		['zip', '7z', 'tar', 'tgz', 'tbz2', 'txz', 'gz', 'bz2', 'xz'] as const,
+		target.outputFormat
+	);
+	// Convert repacks into a multi-entry archive — a persisted stream format
+	// would wedge the op with an impossible combination.
+	if (
+		target.op === 'convert' &&
+		(target.outputFormat === 'gz' || target.outputFormat === 'bz2' || target.outputFormat === 'xz')
+	) {
+		target.outputFormat = 'zip';
+	}
 	target.level = oneOf(s.level, [0, 1, 6, 9] as const, target.level);
+	target.encryptNames = bool(s.encryptNames, target.encryptNames);
 }
 
 function mergePdf(target: PdfCompressionSettings, s: Record<string, unknown>): void {
@@ -220,6 +238,7 @@ function mergePdf(target: PdfCompressionSettings, s: Record<string, unknown>): v
 export function serializeSettings(version: number, map: SettingsMap): string {
 	const data = JSON.parse(JSON.stringify(map)) as SettingsMap;
 	data.pdf.password = '';
+	data.zip.password = '';
 	data.font.axisValues = {};
 	return JSON.stringify({ version, data });
 }

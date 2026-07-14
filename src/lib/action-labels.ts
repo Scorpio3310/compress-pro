@@ -1,6 +1,19 @@
-import type { FileFormat, SettingsMap } from '$lib/types';
-import { isImageFormat, isLosslessAudioFormat } from '$lib/types';
+import type { ArchiveOutputFormat, FileFormat, SettingsMap } from '$lib/types';
+import { isBundlingArchiveFormat, isImageFormat, isLosslessAudioFormat } from '$lib/types';
 import { validatePageRangeSyntax } from '$lib/pdf-range';
+
+/** User-facing archive format names (CTA labels, output pills). */
+export const ARCHIVE_FORMAT_LABELS: Record<ArchiveOutputFormat, string> = {
+	zip: 'ZIP',
+	'7z': '7Z',
+	tar: 'TAR',
+	tgz: 'TAR.GZ',
+	tbz2: 'TAR.BZ2',
+	txz: 'TAR.XZ',
+	gz: 'GZ',
+	bz2: 'BZ2',
+	xz: 'XZ'
+};
 
 /** Any tab's settings — the union of all SettingsMap values. */
 export type ToolSettings = SettingsMap[FileFormat];
@@ -20,9 +33,15 @@ export function actionLabel(
 			: `Convert ${filesCount} file${plural}`;
 	}
 	if (format === 'zip') {
-		return (settings as SettingsMap['zip']).op === 'create'
-			? `Create ZIP from ${filesCount} file${plural}`
-			: `Extract ${filesCount} archive${plural}`;
+		const zip = settings as SettingsMap['zip'];
+		const label = ARCHIVE_FORMAT_LABELS[zip.outputFormat];
+		if (zip.op === 'extract') return `Extract ${filesCount} archive${plural}`;
+		if (zip.op === 'convert') return `Convert ${filesCount} archive${plural} to ${label}`;
+		// Stream formats compress each file on its own — "create X from N" would
+		// promise a single bundle that never appears.
+		return isBundlingArchiveFormat(zip.outputFormat)
+			? `Create ${label} from ${filesCount} file${plural}`
+			: `Compress ${filesCount} file${plural} to ${label}`;
 	}
 	if (format !== 'pdf') return `Compress ${filesCount} file${plural}`;
 	const pdf = settings as SettingsMap['pdf'];

@@ -19,7 +19,7 @@
 	import VideoControls from './controls/VideoControls.svelte';
 	import AudioControls from './controls/AudioControls.svelte';
 	import FontControls from './controls/FontControls.svelte';
-	import ZipControls from './controls/ZipControls.svelte';
+	import ArchiveControls from './controls/ArchiveControls.svelte';
 	import ExifControls from './controls/ExifControls.svelte';
 	import AdvancedDisclosure from './controls/AdvancedDisclosure.svelte';
 	import ImageAdvanced from './controls/ImageAdvanced.svelte';
@@ -109,7 +109,7 @@
 			{:else if format === 'font'}
 				<FontControls bind:settings={fontSettings} {fontAxes} />
 			{:else if format === 'zip'}
-				<ZipControls bind:settings={zipSettings} />
+				<ArchiveControls bind:settings={zipSettings} />
 			{:else if format === 'exif'}
 				<ExifControls bind:settings={exifSettings} />
 			{/if}

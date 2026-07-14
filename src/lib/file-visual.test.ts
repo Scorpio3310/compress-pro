@@ -58,7 +58,12 @@ describe('fileVisual', () => {
 		expect(fileVisual('index.html')).toEqual({ kind: 'ext', label: 'HTML', tint: 'text-accent' });
 		expect(fileVisual('notes.txt')).toEqual({ kind: 'ext', label: 'TXT', tint: 'text-muted' });
 		expect(fileVisual('seed.torrent')).toMatchObject({ kind: 'ext', label: 'TORR' });
-		expect(fileVisual('backup.tar.gz')).toMatchObject({ kind: 'ext', label: 'GZ' });
+		// .gz routes to the archive tab now, so it earns the archive icon.
+		expect(fileVisual('backup.tar.gz')).toEqual({
+			kind: 'icon',
+			icon: 'archive',
+			tint: 'text-file-archive'
+		});
 	});
 
 	it('document fallback for no/hidden extension', () => {

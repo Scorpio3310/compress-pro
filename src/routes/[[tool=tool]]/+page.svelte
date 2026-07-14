@@ -6,10 +6,11 @@
 		CompressedFile,
 		TabState,
 		PdfOp,
-		ProgressInfo
+		ProgressInfo,
+		ZipSettings
 	} from '$lib/types';
-	import { IMAGE_FORMATS, isLosslessAudioFormat } from '$lib/types';
-	import { compressFiles, runPdfTool, runZipTool } from '$lib/compress';
+	import { IMAGE_FORMATS, isBundlingArchiveFormat, isLosslessAudioFormat } from '$lib/types';
+	import { compressFiles, runArchiveTool, runPdfTool } from '$lib/compress';
 	import { settings } from '$lib/stores/settings.svelte';
 	import { abortAll } from '$lib/workers/rpc';
 	import type { WorkerKind } from '$lib/workers/protocol';
@@ -279,8 +280,8 @@
 	const abortControllers: Partial<Record<FileFormat, AbortController>> = {};
 
 	// Worker kinds each tab's pipeline can have in flight. video/audio have no
-	// entry (graceful cancel keeps those expensive workers alive); zip and exif
-	// run on the main thread and need no worker teardown.
+	// entry (graceful cancel keeps those expensive workers alive); exif runs on
+	// the main thread and needs no worker teardown.
 	// Cancels are owner-scoped: every callWorker reachable from these kinds must
 	// pass `opts.owner` (the run's signal), or it becomes unkillable mid-call.
 	const CANCEL_KINDS: Partial<Record<FileFormat, WorkerKind[]>> = {
@@ -291,7 +292,8 @@
 		heic: ['image'],
 		svg: ['svg', 'image'], // raster (PNG/ICO) output encodes via the image worker
 		pdf: ['gs', 'image'], // fromImages re-encodes pages via the image worker
-		font: ['font'] // synchronous brotli — terminate is the only mid-encode cancel
+		font: ['font'], // synchronous brotli — terminate is the only mid-encode cancel
+		zip: ['archive'] // 7zz is synchronous wasm too; fflate fast paths cancel cooperatively
 	};
 
 	async function handleCompress() {
@@ -342,7 +344,7 @@
 		try {
 			const pdfSettings = settings.pdf;
 			if (tab === 'zip') {
-				const out = await runZipTool(state.files, settings.zip, onProgress, controller.signal);
+				const out = await runArchiveTool(state.files, settings.zip, onProgress, controller.signal);
 				state.results = out.results;
 				state.failures = out.failures;
 				state.combinedResult = out.combined;
@@ -422,15 +424,22 @@
 		clearResults(state);
 	}
 
-	function handleZipOpChange(op: 'create' | 'extract') {
+	function handleZipOpChange(op: ZipSettings['op']) {
 		if (op === settings.zip.op) return;
 		const state = tabStates.zip;
 		clearResults(state);
 		state.error = null;
-		// Create takes anything, extract takes archives — mixing makes no sense.
-		for (const f of state.files) URL.revokeObjectURL(f.objectUrl);
-		state.files = [];
+		// Create takes anything, extract/convert take archives — files only
+		// survive a switch that keeps the same input kind.
+		if ((op === 'create') !== (settings.zip.op === 'create')) {
+			for (const f of state.files) URL.revokeObjectURL(f.objectUrl);
+			state.files = [];
+		}
 		settings.zip.op = op;
+		// Convert repacks into a multi-entry archive — a stream target can't.
+		if (op === 'convert' && !isBundlingArchiveFormat(settings.zip.outputFormat)) {
+			settings.zip.outputFormat = 'zip';
+		}
 	}
 
 	function handlePdfOpChange(op: PdfOp) {
@@ -491,6 +500,9 @@
 			}
 		} else if (preset.kind === 'pdf-op') {
 			handlePdfOpChange(preset.op);
+		} else if (preset.kind === 'archive') {
+			handleZipOpChange(preset.op);
+			if (preset.to) settings.zip.outputFormat = preset.to;
 		} else if (preset.kind === 'resize') {
 			for (const tab of IMAGE_FORMATS) {
 				settings[tab].maxDimension = preset.maxDimension;
@@ -717,7 +729,7 @@
 						: activeTab === 'zip'
 							? zipOp === 'create'
 								? 'files'
-								: 'ZIP archives'
+								: 'archives'
 							: undefined)}
 			compact={currentState.files.length > 0}
 			disabled={currentState.isCompressing}

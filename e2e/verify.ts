@@ -414,6 +414,78 @@ export function unzip(buf: Buffer): Record<string, Uint8Array> {
 	return unzipSync(new Uint8Array(buf));
 }
 
+/**
+ * Lists + extracts ANY archive format via 7z-wasm (the engine the app ships) —
+ * the universal verifier for 7z/tar/gz/bz2/xz/rar/… outputs. Returns entries
+ * keyed by path relative to the archive root. Throws on nonzero exit
+ * (including wrong password).
+ */
+export async function sevenZipEntries(
+	buf: Buffer,
+	name: string,
+	password = ''
+): Promise<Record<string, Uint8Array>> {
+	const factory = (await import('7z-wasm/7zz.es6.js')).default;
+	const stderr: string[] = [];
+	const sz = await factory({
+		print: () => {},
+		printErr: (l: string) => stderr.push(l),
+		// EOF — the d.ts wants `number`, emscripten accepts null (see archive.worker.ts).
+		stdin: (() => null) as unknown as () => number
+	});
+	sz.FS.mkdir('/in');
+	sz.FS.mkdir('/out');
+	sz.FS.writeFile(`/in/${name}`, new Uint8Array(buf));
+	let exit: number | null = null;
+	try {
+		const returned = sz.callMain(['x', '-y', `-p${password}`, '-o/out', '--', `/in/${name}`]);
+		if (typeof returned === 'number') exit = returned;
+	} catch (error) {
+		throw new Error(`7zz threw on ${name}: ${String(error)} ${stderr.slice(-3).join(' | ')}`, {
+			cause: error
+		});
+	}
+	if (exit !== 0) throw new Error(`7zz exit ${exit} on ${name}: ${stderr.slice(-3).join(' | ')}`);
+	const entries: Record<string, Uint8Array> = {};
+	const walk = (dir: string) => {
+		for (const n of sz.FS.readdir(dir)) {
+			if (n === '.' || n === '..') continue;
+			const full = `${dir}/${n}`;
+			if (sz.FS.isDir(sz.FS.stat(full).mode)) walk(full);
+			else entries[full.slice('/out/'.length)] = sz.FS.readFile(full);
+		}
+	};
+	walk('/out');
+	return entries;
+}
+
+/** gunzip via node:zlib — independent of both fflate and 7zz. */
+export async function gunzipBuf(buf: Buffer): Promise<Buffer> {
+	const { gunzipSync } = await import('node:zlib');
+	return gunzipSync(buf);
+}
+
+/**
+ * True when the zip's first local file header has the encryption bit set or
+ * an AES-256 extra field (0x9901) — how e2e proves "this zip is really
+ * password-protected" without decrypting it.
+ */
+export function zipEntryEncrypted(buf: Buffer): boolean {
+	if (buf.readUInt32LE(0) !== 0x04034b50) return false;
+	const flags = buf.readUInt16LE(6);
+	if (flags & 0x1) return true;
+	const extraLen = buf.readUInt16LE(28);
+	const nameLen = buf.readUInt16LE(26);
+	let at = 30 + nameLen;
+	const end = at + extraLen;
+	while (at + 4 <= end && at + 4 <= buf.length) {
+		const id = buf.readUInt16LE(at);
+		if (id === 0x9901) return true;
+		at += 4 + buf.readUInt16LE(at + 2);
+	}
+	return false;
+}
+
 export interface VideoFileInfo {
 	durationSec: number;
 	width: number;

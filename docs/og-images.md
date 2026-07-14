@@ -40,6 +40,29 @@ each entry in `src/lib/seo.ts` — pages without one fall back to `/og.jpg`.
 | `/mp4-to-webm`             | MP4 → WebM          | Smaller video for the web. Converted locally.                  |
 | `/compress-audio`          | Compress audio.     | MP3, FLAC, M4A, WAV & OGG — encoded on your device.            |
 | `/zip-files`               | Zip & Unzip.        | Archives created and opened locally. No upload.                |
+| `/rar-to-zip`              | RAR → ZIP           | Opens everywhere — converted on your device.                   |
+| `/7z-to-zip`               | 7Z → ZIP            | Universal archives, repacked locally.                          |
+| `/zip-to-7z`               | ZIP → 7Z            | Same files, tighter compression.                               |
+| `/tar-gz-to-zip`           | TAR.GZ → ZIP        | Unix tarballs, Windows-friendly.                               |
+| `/iso-to-zip`              | ISO → ZIP           | Disc image files, no mounting.                                 |
+| `/zip-to-tar-gz`           | ZIP → TAR.GZ        | For servers and pipelines. Local.                              |
+| `/create-7z`               | Create 7Z.          | Strongest compression, AES-256. On-device.                     |
+| `/create-tar`              | Create TAR.         | The unix bundle — built in your browser.                       |
+| `/create-tar-gz`           | Create TAR.GZ.      | Tarballs the unix way. Nothing uploaded.                       |
+| `/gzip-files`              | Gzip files.         | Every file to its own .gz — locally.                           |
+| `/bzip2-files`             | Bzip2 files.        | Smaller than gzip, right in your browser.                      |
+| `/xz-files`                | XZ files.           | The hardest squeeze — on your device.                          |
+| `/extract-rar`             | Extract RAR.        | No WinRAR, no upload — opened in-browser.                      |
+| `/extract-7z`              | Extract 7Z.         | Unpacked locally, passwords included.                          |
+| `/extract-tar-gz`          | Extract TAR.GZ.     | Both layers unwrapped automatically.                           |
+| `/extract-gz`              | Extract GZ.         | Gunzip in the browser. Nothing uploaded.                       |
+| `/extract-iso`             | Extract ISO.        | Disc images opened — never mounted.                            |
+| `/extract-cab`             | Extract CAB.        | Windows cabinets, opened locally.                              |
+| `/extract-deb`             | Extract DEB.        | Debian payloads, unpacked in-browser.                          |
+| `/extract-rpm`             | Extract RPM.        | rpm2cpio, retired. Runs on your device.                        |
+| `/extract-cpio`            | Extract CPIO.       | initramfs & rpm payloads, opened locally.                      |
+| `/extract-lha`             | Extract LHA.        | Retro LZH archives, opened in-browser.                         |
+| `/extract-arj`             | Extract ARJ.        | DOS-era archives, opened on your device.                       |
 | `/unlock-pdf`              | Unlock PDFs.        | Your password never leaves your device.                        |
 | `/protect-pdf`             | Protect PDFs.       | Set a password — encrypted on your device.                     |
 | `/video-to-gif`            | Video → GIF         | Clips become loops — right in your browser.                    |

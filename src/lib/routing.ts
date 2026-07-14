@@ -47,7 +47,23 @@ const MIME_TO_FORMAT: Record<string, FileFormat> = {
 	'application/x-font-otf': 'font',
 	'application/vnd.ms-fontobject': 'font',
 	'application/zip': 'zip',
-	'application/x-zip-compressed': 'zip'
+	'application/x-zip-compressed': 'zip',
+	'application/x-7z-compressed': 'zip',
+	'application/vnd.rar': 'zip',
+	'application/x-rar-compressed': 'zip',
+	'application/x-tar': 'zip',
+	'application/gzip': 'zip',
+	'application/x-gzip': 'zip',
+	'application/x-bzip2': 'zip',
+	'application/x-xz': 'zip',
+	'application/x-iso9660-image': 'zip',
+	'application/vnd.ms-cab-compressed': 'zip',
+	'application/vnd.debian.binary-package': 'zip',
+	'application/x-rpm': 'zip',
+	'application/x-cpio': 'zip',
+	'application/x-lzh-compressed': 'zip',
+	'application/x-arj': 'zip',
+	'application/x-compress': 'zip'
 };
 
 const EXT_TO_FORMAT: Record<string, FileFormat> = {
@@ -86,7 +102,28 @@ const EXT_TO_FORMAT: Record<string, FileFormat> = {
 	woff: 'font',
 	woff2: 'font',
 	eot: 'font',
-	zip: 'zip'
+	// The whole archive family rides the zip tab. Extensions are load-bearing:
+	// pickers report a blank MIME for most of these (.7z, .rar, .cpio, .arj…).
+	zip: 'zip',
+	'7z': 'zip',
+	rar: 'zip',
+	tar: 'zip',
+	gz: 'zip',
+	tgz: 'zip',
+	bz2: 'zip',
+	tbz2: 'zip',
+	txz: 'zip',
+	xz: 'zip',
+	iso: 'zip',
+	cab: 'zip',
+	deb: 'zip',
+	rpm: 'zip',
+	cpio: 'zip',
+	lha: 'zip',
+	lzh: 'zip',
+	arj: 'zip',
+	z: 'zip', // .Z (unix compress) — formatFromName lowercases
+	lzma: 'zip'
 };
 
 /** Extension-only tab lookup — for names without a MIME (ZIP entries). */
@@ -151,7 +188,8 @@ export const TAB_ACCEPT: Record<FileFormat, string> = {
 		'audio/*,video/mp4,video/quicktime,video/webm,.mp3,.wav,.m4a,.aac,.ogg,.oga,.flac,.opus,.weba,.mp4,.mov,.webm',
 	// Extensions load-bearing (blank MIMEs, see EXT_TO_FORMAT).
 	font: 'font/ttf,font/otf,font/woff,font/woff2,application/vnd.ms-fontobject,.ttf,.otf,.woff,.woff2,.eot',
-	// Extract default; the create op overrides accept to '' (anything) in-page.
-	zip: 'application/zip,.zip',
+	// Extract/convert default; the create op overrides accept to '' (anything)
+	// in-page. Extensions load-bearing (blank MIMEs for most archive types).
+	zip: 'application/zip,application/x-zip-compressed,application/x-7z-compressed,application/vnd.rar,application/x-tar,application/gzip,.zip,.7z,.rar,.tar,.gz,.tgz,.bz2,.tbz2,.txz,.xz,.iso,.cab,.deb,.rpm,.cpio,.lha,.lzh,.arj,.z,.lzma',
 	exif: 'image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp'
 };

@@ -15,7 +15,10 @@ import {
 } from '../helpers';
 import { unzip } from '../verify';
 
-async function setZipOp(page: import('@playwright/test').Page, op: 'Create ZIP' | 'Extract') {
+async function setZipOp(
+	page: import('@playwright/test').Page,
+	op: 'Create' | 'Extract' | 'Convert'
+) {
 	const btn = page.getByRole('button', { name: op, exact: true });
 	await btn.click();
 	await expect(btn).toHaveAttribute('aria-pressed', 'true');
@@ -100,7 +103,7 @@ test('Z-06: zip-create accepts ANY file dropped on its dropzone', async ({ page 
 	await gotoTab(page, 'zip');
 	// Create mode publishes accept="" — even an unroutable .txt must park here
 	// instead of bouncing through the cross-family re-route.
-	await page.getByRole('button', { name: 'Create ZIP', exact: true }).click();
+	await page.getByRole('button', { name: 'Create', exact: true }).click();
 	await dropOnZone(page, [{ path: fx('notes.txt'), mimeType: 'text/plain' }]);
 	await expect(rows(page)).toHaveCount(1);
 	await expect(page.getByTestId('error-banner')).toHaveCount(0);

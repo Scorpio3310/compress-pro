@@ -205,6 +205,46 @@ describe('mergeStoredSettings', () => {
 		expect(target.pdf.password).toBe('');
 	});
 
+	it('never persists or restores the archive password', () => {
+		const map = defaultSettings();
+		map.zip.password = 'hunter2';
+		const stored = serializeSettings(2, map);
+		expect(stored).not.toContain('hunter2');
+		expect((JSON.parse(stored) as { data: { zip: { password: string } } }).data.zip.password).toBe(
+			''
+		);
+
+		const target = defaultSettings();
+		mergeStoredSettings(target, { zip: { op: 'extract', password: 'stolen' } });
+		expect(target.zip.op).toBe('extract');
+		expect(target.zip.password).toBe('');
+	});
+
+	it('round-trips archive settings and rejects garbage', () => {
+		const target = defaultSettings();
+		mergeStoredSettings(target, {
+			zip: { op: 'convert', outputFormat: '7z', level: 9, encryptNames: true }
+		});
+		expect(target.zip).toMatchObject({
+			op: 'convert',
+			outputFormat: '7z',
+			level: 9,
+			encryptNames: true
+		});
+
+		const bad = defaultSettings();
+		mergeStoredSettings(bad, { zip: { op: 'explode', outputFormat: 'rar', level: 3 } });
+		expect(bad.zip).toMatchObject({ op: 'create', outputFormat: 'zip', level: 6 });
+	});
+
+	it('snaps a persisted stream format back to zip under the convert op', () => {
+		// rar → gz would promise a single stream from a multi-file archive.
+		const target = defaultSettings();
+		mergeStoredSettings(target, { zip: { op: 'convert', outputFormat: 'gz' } });
+		expect(target.zip.op).toBe('convert');
+		expect(target.zip.outputFormat).toBe('zip');
+	});
+
 	it('never persists or restores font axis pins (per-font runtime state)', () => {
 		const map = defaultSettings();
 		map.font.axisValues = { wght: 725 };

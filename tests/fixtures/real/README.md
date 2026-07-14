@@ -45,6 +45,21 @@ Received (2026-07-13 — audio-format expansion):
 | file_example_MP3_5MG.mp3  | also RF-21 mp3→weba (audio-only WebM/Opus)                                                                                      |
 | sample-1/3/5.aif (AIFF)   | RF-22 — deliberately UNSUPPORTED format (mediabunny has no AIFF reader); asserts the clean row-level rejection                  |
 
+Received (2026-07-14 — archive suite, `real-archives.spec.ts` RA-01…12):
+
+| File(s)                                    | Covers                                                                                                                             |
+| ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
+| sample-1/3/4/5.rar (v4)                    | RA-01 extract (v4 — a different generation than the vendored v5 corpus) + RA-08 convert RAR→ZIP (`realFile` sort picks sample-1)   |
+| sample-2/3/4/5.7z                          | RA-02 extract (sort picks sample-2)                                                                                                |
+| sample-3.zip (20 MB)                       | RA-03 — fflate fast-path timing on a real-sized zip                                                                                |
+| sample-3.tar (65 MB)                       | RA-04 @slow — MEMFS scale proof (input + output coexist in wasm memory)                                                            |
+| sample-2/3/4/5.gz, sample-2/3/4/5.bz2      | RA-05 stream decompression timing                                                                                                  |
+| 1mb/3mb/100mb.iso                          | RA-06 (3 MB) + RA-07 @slow (100 MB — memory ceiling probe)                                                                         |
+| WAV+PDF+JPG+TTF (existing files, ~11.8 MB) | RA-10 @slow create benchmark: ZIP vs 7Z (cold+warm) vs TAR.GZ vs TAR — ratios, elapsed, MB/s; RA-11 gzip WAV; RA-12 7Z level sweep |
+
+Timings land as `metrics` in the visual report (`pnpm report`) — the RA suite
+is the wall-clock benchmark of record for the archive engine.
+
 Still wanted:
 
 | File                            | Used for                                                                                                                                     |

@@ -1,0 +1,221 @@
+import { describe, expect, it } from 'vitest';
+import {
+	buildCreateArgs,
+	buildExtractArgs,
+	buildListArgs,
+	createStages,
+	isEntryLine,
+	mapSevenZipError,
+	nextChainStep,
+	parseListOutput,
+	sanitizeEntryName
+} from './sevenzip-args';
+
+describe('createStages', () => {
+	it('runs tar.* targets as two passes', () => {
+		expect(createStages('tgz')).toEqual(['tar', 'gzip']);
+		expect(createStages('tbz2')).toEqual(['tar', 'bzip2']);
+		expect(createStages('txz')).toEqual(['tar', 'xz']);
+	});
+
+	it('runs direct targets as one pass', () => {
+		expect(createStages('zip')).toEqual(['zip']);
+		expect(createStages('7z')).toEqual(['7z']);
+		expect(createStages('tar')).toEqual(['tar']);
+		expect(createStages('gz')).toEqual(['gzip']);
+		expect(createStages('bz2')).toEqual(['bzip2']);
+		expect(createStages('xz')).toEqual(['xz']);
+	});
+});
+
+describe('buildCreateArgs', () => {
+	const base = { level: 6 as const, password: '', encryptNames: false };
+
+	it('maps UI levels onto -mx and separates operands with --', () => {
+		const args = buildCreateArgs('zip', base, '/out/a.zip', ['x.txt', 'y.txt']);
+		expect(args).toContain('-mx5');
+		expect(args.slice(args.indexOf('--') + 1)).toEqual(['/out/a.zip', 'x.txt', 'y.txt']);
+	});
+
+	it('caps the 7z dictionary for wasm32 memory', () => {
+		expect(buildCreateArgs('7z', base, '/out/a.7z', ['x'])).toContain('-md=16m');
+	});
+
+	it('passes no -mx for tar (uncompressed container)', () => {
+		expect(buildCreateArgs('tar', base, '/out/a.tar', ['x']).join(' ')).not.toContain('-mx');
+	});
+
+	it('encrypts zip with AES-256 only when a password is set', () => {
+		const plain = buildCreateArgs('zip', base, '/out/a.zip', ['x']);
+		expect(plain.join(' ')).not.toContain('-p');
+		const locked = buildCreateArgs('zip', { ...base, password: 'pw' }, '/out/a.zip', ['x']);
+		expect(locked).toContain('-ppw');
+		expect(locked).toContain('-mem=AES256');
+	});
+
+	it('adds -mhe=on only for 7z with encryptNames + password', () => {
+		const locked = buildCreateArgs('7z', { ...base, password: 'pw', encryptNames: true }, 'o', [
+			'x'
+		]);
+		expect(locked).toContain('-mhe=on');
+		const noPw = buildCreateArgs('7z', { ...base, encryptNames: true }, 'o', ['x']);
+		expect(noPw.join(' ')).not.toContain('-mhe');
+		const zip = buildCreateArgs('zip', { ...base, password: 'pw', encryptNames: true }, 'o', ['x']);
+		expect(zip.join(' ')).not.toContain('-mhe');
+	});
+});
+
+describe('extract/list args', () => {
+	it('always passes -y and an explicit -p so 7zz can never prompt', () => {
+		expect(buildExtractArgs('/in/a.rar', '', '/out')).toEqual([
+			'x',
+			'-y',
+			'-bb1',
+			'-bsp0',
+			'-p',
+			'-o/out',
+			'--',
+			'/in/a.rar'
+		]);
+		expect(buildListArgs('/in/a.rar', 'pw')).toEqual([
+			'l',
+			'-slt',
+			'-y',
+			'-ppw',
+			'--',
+			'/in/a.rar'
+		]);
+	});
+
+	it('recognizes -bb1 per-entry lines', () => {
+		expect(isEntryLine('- dir/file.txt')).toBe(true);
+		expect(isEntryLine('Everything is Ok')).toBe(false);
+	});
+});
+
+describe('parseListOutput', () => {
+	const listing = [
+		'Listing archive: /in/a.7z',
+		'--',
+		'Path = /in/a.7z',
+		'Type = 7z',
+		'Physical Size = 189',
+		'',
+		'----------',
+		'Path = docs',
+		'Folder = +',
+		'',
+		'Path = docs/readme.txt',
+		'Size = 20',
+		'Encrypted = +',
+		'',
+		'Path = image.png',
+		'Size = 4096',
+		'Attributes = A',
+		''
+	];
+
+	it('extracts type, encryption flag and the file-only entry count', () => {
+		expect(parseListOutput(listing)).toEqual({ format: '7z', encrypted: true, entryCount: 2 });
+	});
+
+	it('returns null count when the listing never reached the separator', () => {
+		expect(parseListOutput(['Listing archive: x', 'ERROR: oops'])).toEqual({
+			format: null,
+			encrypted: false,
+			entryCount: null
+		});
+	});
+});
+
+describe('mapSevenZipError', () => {
+	it('treats exit 0/1/null (no throw) as success', () => {
+		expect(mapSevenZipError(0, false, '', false)).toBeNull();
+		expect(mapSevenZipError(1, false, 'WARNING: something', false)).toBeNull();
+		expect(mapSevenZipError(null, false, '', false)).toBeNull();
+	});
+
+	it('maps password signals by whether a password was supplied', () => {
+		const tail = 'ERROR: Wrong password : a.txt';
+		expect(mapSevenZipError(2, false, tail, true)).toMatch(/^Wrong password/);
+		expect(mapSevenZipError(2, false, tail, false)).toMatch(/password-protected/);
+		expect(
+			mapSevenZipError(2, false, 'Cannot open encrypted archive. Wrong password?', false)
+		).toMatch(/password-protected/);
+		expect(
+			mapSevenZipError(2, false, 'ERROR: Data Error in encrypted file. Wrong password? : foo', true)
+		).toMatch(/^Wrong password/);
+	});
+
+	it('maps not-an-archive and out-of-memory failures', () => {
+		expect(mapSevenZipError(2, false, 'Cannot open the file as archive', false)).toMatch(
+			/supported archive/
+		);
+		expect(mapSevenZipError(8, false, '', false)).toMatch(/memory/);
+	});
+
+	it('maps numeric C++ throws to the password hypothesis', () => {
+		expect(mapSevenZipError(null, true, '', false)).toMatch(/password-protected or damaged/);
+		expect(mapSevenZipError(null, true, '', true)).toMatch(
+			/wrong password, or the file is damaged/
+		);
+	});
+
+	it('falls back to the last ERROR line, then a generic message', () => {
+		expect(mapSevenZipError(2, false, 'noise\nERROR: CRC failed : x.bin', false)).toBe(
+			'CRC failed : x.bin'
+		);
+		expect(mapSevenZipError(2, false, 'no error marker here', false)).toBe(
+			'Archive operation failed'
+		);
+	});
+});
+
+describe('nextChainStep', () => {
+	it('chains a lone tar/cpio/iso container from a decompression pass', () => {
+		expect(nextChainStep([{ path: 'x.tar', size: 10 }], 0)?.keep).toBe('x.tar');
+		expect(nextChainStep([{ path: 'pkg-1.0.cpio', size: 10 }], 1)?.keep).toBe('pkg-1.0.cpio');
+		expect(nextChainStep([{ path: 'disk.iso', size: 10 }], 0)?.keep).toBe('disk.iso');
+		expect(nextChainStep([{ path: 'data.tar.xz', size: 10 }], 0)?.keep).toBe('data.tar.xz');
+	});
+
+	it('picks the data.tar payload out of a deb and says so', () => {
+		const step = nextChainStep(
+			[
+				{ path: 'debian-binary', size: 4 },
+				{ path: 'control.tar.gz', size: 100 },
+				{ path: 'data.tar.xz', size: 900 }
+			],
+			0
+		);
+		expect(step?.keep).toBe('data.tar.xz');
+		expect(step?.note).toMatch(/control files/);
+	});
+
+	it('stops on real results, multiple entries and the hop cap', () => {
+		expect(nextChainStep([{ path: 'photo.jpg', size: 10 }], 0)).toBeNull();
+		expect(
+			nextChainStep(
+				[
+					{ path: 'a.txt', size: 1 },
+					{ path: 'b.txt', size: 2 }
+				],
+				0
+			)
+		).toBeNull();
+		expect(nextChainStep([{ path: 'x.tar', size: 10 }], 3)).toBeNull();
+	});
+});
+
+describe('sanitizeEntryName', () => {
+	it('flattens separators and strips control characters', () => {
+		expect(sanitizeEntryName('dir/sub\\file.txt')).toBe('dir_sub_file.txt');
+		expect(sanitizeEntryName('a\u0000b\u001fc.txt')).toBe('abc.txt');
+	});
+
+	it('never returns an empty or dot name', () => {
+		expect(sanitizeEntryName('')).toBe('file');
+		expect(sanitizeEntryName('..')).toBe('file');
+		expect(sanitizeEntryName('   ')).toBe('file');
+	});
+});

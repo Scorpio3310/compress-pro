@@ -5,7 +5,8 @@ const factories: Record<WorkerKind, () => Worker> = {
 	svg: () => new Worker(new URL('./svg.worker.ts', import.meta.url), { type: 'module' }),
 	gs: () => new Worker(new URL('./gs.worker.ts', import.meta.url), { type: 'module' }),
 	video: () => new Worker(new URL('./video.worker.ts', import.meta.url), { type: 'module' }),
-	font: () => new Worker(new URL('./font.worker.ts', import.meta.url), { type: 'module' })
+	font: () => new Worker(new URL('./font.worker.ts', import.meta.url), { type: 'module' }),
+	archive: () => new Worker(new URL('./archive.worker.ts', import.meta.url), { type: 'module' })
 };
 
 interface Pending {
@@ -39,7 +40,10 @@ const IDLE_TIMEOUT_MS: Record<WorkerKind, number> = {
 	video: 10 * 60_000,
 	// WOFF2 encode is synchronous brotli-q11 — sub-second for text fonts but
 	// minutes for 20 MB+ CJK ones; the ceiling catches "stuck", not "slow".
-	font: 10 * 60_000
+	font: 10 * 60_000,
+	// 7zz emits a stdout line per entry (-bb1), which re-arms this; a single
+	// huge solid block can legitimately stay silent for a while.
+	archive: 10 * 60_000
 };
 
 // Image work parallelizes across a small pool; svg is cheap and gs would cost

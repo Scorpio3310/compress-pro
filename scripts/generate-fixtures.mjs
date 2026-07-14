@@ -15,7 +15,8 @@
  * heicAvailable=false and HEIC tests skip.
  */
 import { createHash } from 'node:crypto';
-import { zipSync, zlibSync } from 'fflate';
+import { gzipSync, zipSync, zlibSync } from 'fflate';
+import SevenZipFactory from '7z-wasm/7zz.es6.js';
 import { crc32 } from 'node:zlib';
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
@@ -892,6 +893,254 @@ async function generateZip() {
 	}
 }
 
+// ----------------------------------------------------------------- archives
+
+/** One short-lived 7zz run against MEMFS; returns a reader for output paths.
+ *  Mirrors the app's archive.worker.ts usage (same engine, same flags). */
+async function sevenZip(args, inputs = {}) {
+	const sz = await SevenZipFactory({ print: () => {}, printErr: () => {}, stdin: () => null });
+	sz.FS.mkdir('/in');
+	sz.FS.mkdir('/out');
+	for (const [name, bytes] of Object.entries(inputs)) {
+		let cur = '/in';
+		for (const part of name.split('/').slice(0, -1)) {
+			cur += `/${part}`;
+			try {
+				sz.FS.mkdir(cur);
+			} catch {
+				/* exists */
+			}
+		}
+		sz.FS.writeFile(`/in/${name}`, bytes);
+	}
+	sz.FS.chdir('/in');
+	const code = sz.callMain(args);
+	if (typeof code === 'number' && code !== 0) {
+		throw new Error(`7zz exited ${code}: ${args.join(' ')}`);
+	}
+	return sz;
+}
+
+/** Extract with 7zz and return { 'relative/path': byteLength } for gen-verify. */
+async function sevenZipEntries(name, bytes, password = '') {
+	const sz = await sevenZip(['x', '-y', `-p${password}`, '-o/out', '--', `/in/${name}`], {
+		[name]: bytes
+	});
+	const walk = (dir) => {
+		const acc = {};
+		for (const n of sz.FS.readdir(dir)) {
+			if (n === '.' || n === '..') continue;
+			const full = `${dir}/${n}`;
+			if (sz.FS.isDir(sz.FS.stat(full).mode)) Object.assign(acc, walk(full));
+			else acc[full.slice(5)] = sz.FS.readFile(full).length;
+		}
+		return acc;
+	};
+	return walk('/out');
+}
+
+/** Minimal `ar` writer — enough for a valid .deb (BSD ar, no symbol table). */
+function arArchive(members) {
+	const parts = [Buffer.from('!<arch>\n')];
+	for (const m of members) {
+		const hdr = Buffer.alloc(60, 0x20);
+		hdr.write(m.name, 0, 'latin1');
+		hdr.write('0', 16, 'latin1'); // mtime
+		hdr.write('0', 28, 'latin1'); // uid
+		hdr.write('0', 34, 'latin1'); // gid
+		hdr.write('100644', 40, 'latin1');
+		hdr.write(String(m.bytes.length), 48, 'latin1');
+		hdr.write('`\n', 58, 'latin1');
+		parts.push(hdr, Buffer.from(m.bytes));
+		if (m.bytes.length % 2) parts.push(Buffer.from('\n')); // 2-byte alignment
+	}
+	return Buffer.concat(parts);
+}
+
+/** Minimal cpio "newc" (SVR4, no CRC) writer. */
+function cpioNewc(files) {
+	const parts = [];
+	const hex = (n) => n.toString(16).padStart(8, '0');
+	let ino = 1;
+	const push = (name, bytes, mode, nlink) => {
+		const nameZ = `${name}\0`;
+		const header =
+			'070701' +
+			hex(ino++) +
+			hex(mode) +
+			hex(0) + // uid
+			hex(0) + // gid
+			hex(nlink) +
+			hex(0) + // mtime
+			hex(bytes.length) +
+			hex(0) + // devmajor
+			hex(0) + // devminor
+			hex(0) + // rdevmajor
+			hex(0) + // rdevminor
+			hex(nameZ.length) +
+			hex(0); // check (0 for newc)
+		const nameBuf = Buffer.from(nameZ, 'latin1');
+		parts.push(
+			Buffer.from(header, 'latin1'),
+			nameBuf,
+			Buffer.alloc((4 - ((110 + nameBuf.length) % 4)) % 4),
+			Buffer.from(bytes),
+			Buffer.alloc((4 - (bytes.length % 4)) % 4)
+		);
+	};
+	for (const f of files) push(f.name, f.bytes, 0o100644, 1);
+	push('TRAILER!!!', Buffer.alloc(0), 0, 1);
+	return Buffer.concat(parts);
+}
+
+async function generateArchives() {
+	const enc = (s) => new TextEncoder().encode(s);
+	const CONTENTS = {
+		'alpha.txt': enc('alpha entry — compress-pro archive fixture\n'),
+		'beta.json': enc('{"fixture":true,"n":42}\n'),
+		'docs/gamma.txt': enc('nested entry for flatten/preserve checks\n')
+	};
+	const TOP = ['alpha.txt', 'beta.json', 'docs'];
+	const BASENAMES = ['alpha.txt', 'beta.json', 'gamma.txt'];
+
+	const expectEntries = async (file, name, bytes, password = '') => {
+		const got = Object.keys(await sevenZipEntries(name, bytes, password))
+			.map((p) => p.split('/').pop())
+			.sort();
+		const want = [...BASENAMES].sort();
+		if (JSON.stringify(got) !== JSON.stringify(want)) {
+			throw new Error(`gen-verify failed: ${file} entries ${got} != ${want}`);
+		}
+	};
+
+	// 40. 7z bundles: plain, data-encrypted, and header-encrypted (-mhe=on —
+	// even the file list needs the password).
+	{
+		const plain = (
+			await sevenZip(['a', '-t7z', '-mx5', '-md=16m', '--', '/out/bundle.7z', ...TOP], CONTENTS)
+		).FS.readFile('/out/bundle.7z'); //
+		await expectEntries('bundle.7z', 'bundle.7z', plain);
+		await write('bundle.7z', Buffer.from(plain));
+		manifest['bundle.7z'] = { entries: BASENAMES, password: null };
+
+		const locked = (
+			await sevenZip(
+				['a', '-t7z', '-mx5', '-md=16m', '-pTEST', '--', '/out/l.7z', ...TOP],
+				CONTENTS
+			)
+		).FS.readFile('/out/l.7z');
+		await expectEntries('bundle-locked.7z', 'l.7z', locked, 'TEST');
+		await write('bundle-locked.7z', Buffer.from(locked));
+		manifest['bundle-locked.7z'] = { entries: BASENAMES, password: 'TEST' };
+
+		const hidden = (
+			await sevenZip(
+				['a', '-t7z', '-mx5', '-md=16m', '-pTEST', '-mhe=on', '--', '/out/h.7z', ...TOP],
+				CONTENTS
+			)
+		).FS.readFile('/out/h.7z');
+		await expectEntries('bundle-hidden.7z', 'h.7z', hidden, 'TEST');
+		await write('bundle-hidden.7z', Buffer.from(hidden));
+		manifest['bundle-hidden.7z'] = { entries: BASENAMES, password: 'TEST', headerEncrypted: true };
+	}
+
+	// 41. AES-256 zip (7zz-made; fflate can't decrypt it — the app must route
+	// password zips through the 7z worker).
+	{
+		const aes = (
+			await sevenZip(
+				['a', '-tzip', '-mx5', '-pTEST', '-mem=AES256', '--', '/out/a.zip', ...TOP],
+				CONTENTS
+			)
+		).FS.readFile('/out/a.zip');
+		await expectEntries('bundle-aes.zip', 'a.zip', aes, 'TEST');
+		await write('bundle-aes.zip', Buffer.from(aes));
+		manifest['bundle-aes.zip'] = { entries: BASENAMES, password: 'TEST' };
+	}
+
+	// 42. tar + tar.gz (tar via 7zz — the tar the app writes; gzip via fflate).
+	{
+		const tar = (
+			await sevenZip(['a', '-ttar', '--', '/out/bundle.tar', ...TOP], CONTENTS)
+		).FS.readFile('/out/bundle.tar'); //
+		await expectEntries('bundle.tar', 'bundle.tar', tar);
+		await write('bundle.tar', Buffer.from(tar));
+		manifest['bundle.tar'] = { entries: BASENAMES };
+
+		const tgz = gzipSync(tar, { level: 6 });
+		await write('bundle.tar.gz', Buffer.from(tgz));
+		manifest['bundle.tar.gz'] = { entries: BASENAMES, chained: true };
+	}
+
+	// 43. Single-file streams (extract must yield exactly the inner file).
+	{
+		const text = enc('stream fixture — one file, one compressed stream\n');
+		writeFileSync(join(OUT, 'stream.txt'), Buffer.from(text));
+		manifest['stream.txt'] = { size: text.length };
+		for (const [ext, type] of [
+			['gz', 'gzip'],
+			['bz2', 'bzip2'],
+			['xz', 'xz']
+		]) {
+			const out = (
+				await sevenZip(['a', `-t${type}`, '-mx5', '--', `/out/stream.txt.${ext}`, 'stream.txt'], {
+					'stream.txt': text
+				})
+			).FS.readFile(`/out/stream.txt.${ext}`);
+			const entries = await sevenZipEntries(`stream.txt.${ext}`, out);
+			if (Object.keys(entries).length !== 1) {
+				throw new Error(`gen-verify failed: stream.txt.${ext} should hold exactly one entry`);
+			}
+			await write(`stream.txt.${ext}`, Buffer.from(out));
+			manifest[`stream.txt.${ext}`] = { inner: 'stream.txt', size: text.length };
+		}
+	}
+
+	// 44. deb — ar(debian-binary, control.tar.gz, data.tar.gz); the app must
+	// chain-unwrap data.tar.* and skip the control files.
+	{
+		const dataTar = (
+			await sevenZip(['a', '-ttar', '--', '/out/data.tar', 'usr'], {
+				'usr/share/doc/fixture/hello.txt': enc('payload file from the deb fixture\n')
+			})
+		).FS.readFile('/out/data.tar');
+		const controlTar = (
+			await sevenZip(['a', '-ttar', '--', '/out/control.tar', 'control'], {
+				control: enc('Package: fixture\nVersion: 1.0\nArchitecture: all\n')
+			})
+		).FS.readFile('/out/control.tar');
+		const deb = arArchive([
+			{ name: 'debian-binary', bytes: enc('2.0\n') },
+			{ name: 'control.tar.gz', bytes: gzipSync(controlTar, { level: 6 }) },
+			{ name: 'data.tar.gz', bytes: gzipSync(dataTar, { level: 6 }) }
+		]);
+		// gen-verify: 7zz's Deb handler surfaces the (already gunzipped) data
+		// payload directly — pass 1 must yield data.tar, pass 2 the real file.
+		const members = Object.keys(await sevenZipEntries('sample.deb', new Uint8Array(deb)));
+		if (JSON.stringify(members) !== JSON.stringify(['data.tar'])) {
+			throw new Error(`gen-verify failed: sample.deb members ${members}`);
+		}
+		const inner = Object.keys(await sevenZipEntries('data.tar', dataTar));
+		if (!inner.some((p) => p.endsWith('hello.txt'))) {
+			throw new Error(`gen-verify failed: sample.deb payload ${inner}`);
+		}
+		await write('sample.deb', deb);
+		manifest['sample.deb'] = { chain: ['data.tar'], payloadEntry: 'hello.txt' };
+	}
+
+	// 45. cpio (newc) — hand-written; rpm payloads use this shape.
+	{
+		const cpio = cpioNewc([
+			{ name: 'first.txt', bytes: enc('first cpio entry\n') },
+			{ name: 'dir/second.txt', bytes: enc('second cpio entry\n') }
+		]);
+		const entries = Object.keys(await sevenZipEntries('sample.cpio', new Uint8Array(cpio)));
+		if (entries.length !== 2) throw new Error(`gen-verify failed: sample.cpio entries ${entries}`);
+		await write('sample.cpio', cpio);
+		manifest['sample.cpio'] = { entries: ['first.txt', 'second.txt'] };
+	}
+}
+
 // -------------------------------------------------------------------- audio
 
 async function generateAudio() {
@@ -1647,6 +1896,8 @@ console.log('  color + giants ✓');
 
 await generateZip();
 console.log('  pdfs ✓');
+await generateArchives();
+console.log('  archives ✓');
 await generateExifFixtures();
 console.log('  exif ✓');
 const fontWoff2Available = await generateFonts();

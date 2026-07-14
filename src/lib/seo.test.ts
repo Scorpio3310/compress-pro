@@ -51,13 +51,14 @@ describe('seo entries', () => {
 });
 
 describe('converter entries', () => {
-	it('presets live on their hosting tab (image/svg/video/pdf/font)', () => {
+	it('presets live on their hosting tab (image/svg/video/pdf/font/archive)', () => {
 		for (const c of CONVERTERS) {
 			if (c.preset.kind === 'image') expect(c.preset.tab, c.path).toBe(c.format);
 			else if (c.preset.kind === 'svg') expect(c.format, c.path).toBe('svg');
 			else if (c.preset.kind === 'video') expect(c.format, c.path).toBe('video');
 			else if (c.preset.kind === 'audio') expect(c.format, c.path).toBe('audio');
 			else if (c.preset.kind === 'font') expect(c.format, c.path).toBe('font');
+			else if (c.preset.kind === 'archive') expect(c.format, c.path).toBe('zip');
 			else expect(c.format, c.path).toBe('pdf');
 		}
 	});
@@ -69,12 +70,16 @@ describe('converter entries', () => {
 		}
 	});
 
-	it('curates exactly twenty converters into the footer', () => {
-		expect(CONVERTERS.filter((c) => c.inFooter)).toHaveLength(20);
+	it('curates exactly twenty-two converters into the footer', () => {
+		expect(CONVERTERS.filter((c) => c.inFooter)).toHaveLength(22);
 	});
 
 	it('uses "-to-" slugs that never collide with compress slugs', () => {
-		for (const c of CONVERTERS) expect(c.path, c.path).toMatch(/^\/[a-z0-9]+-to-[a-z0-9]+$/);
+		// Segments may be compound (tar-gz-to-zip) — the ONE "-to-" stays load-bearing.
+		for (const c of CONVERTERS) {
+			expect(c.path, c.path).toMatch(/^\/[a-z0-9]+(?:-[a-z0-9]+)*-to-[a-z0-9]+(?:-[a-z0-9]+)*$/);
+			expect(c.path.match(/-to-/g), c.path).toHaveLength(1);
+		}
 	});
 });
 
@@ -88,9 +93,16 @@ describe('tool entries (standalone pages)', () => {
 			else if (t.preset.kind === 'video') expect(t.format, t.path).toBe('video');
 			else if (t.preset.kind === 'audio') expect(t.format, t.path).toBe('audio');
 			else if (t.preset.kind === 'font-op') expect(t.format, t.path).toBe('font');
+			else if (t.preset.kind === 'archive') expect(t.format, t.path).toBe('zip');
 			else expect(t.format, t.path).toBe('pdf');
 			expect(t.feature.length, t.path).toBeGreaterThan(0);
-			expect(t.accept?.length ?? 0, t.path).toBeGreaterThan(0);
+			// Archive-create pages accept ANYTHING — an explicit '' (rendered as
+			// accept-everything) instead of a non-empty list.
+			if (t.preset.kind === 'archive' && t.preset.op === 'create') {
+				expect(t.accept, t.path).toBe('');
+			} else {
+				expect(t.accept?.length ?? 0, t.path).toBeGreaterThan(0);
+			}
 		}
 	});
 

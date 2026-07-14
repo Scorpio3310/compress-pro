@@ -24,6 +24,13 @@ apply to you directly:
 | FFmpeg native AAC encoder             | LGPL-2.1-or-later                       | `@mediabunny/aac-encoder` |
 | HEIC codecs (libheif + libde265/x265) | LGPL/GPL family — see upstream projects | `icodec`                  |
 | libimagequant / pngquant (lossy PNG)  | GPL-3.0-or-later (commercial dual-lic.) | `icodec`                  |
+| 7-Zip (`7zz` CLI, archive engine)     | LGPL-2.1-or-later + unRAR restriction   | `7z-wasm`                 |
+
+One non-copyleft restriction rides along with 7-Zip: its RAR decoder derives
+from Alexander Roshal's unRAR sources, whose license forbids using that code to
+re-create the proprietary RAR _compression_ algorithm. This app only ever
+decompresses RAR — creating RAR archives is impossible in any software that
+respects that license — and this notice states the restriction as required.
 
 ## Full package table
 
@@ -44,6 +51,7 @@ apply to you directly:
 | `@mediabunny/aac-encoder`                | 1.50.8  | MPL-2.0         | [FFmpeg](https://ffmpeg.org) native AAC encoder (libavcodec) → LGPL-2.1-or-later (per upstream; not restated in package)                                                     |
 | `gifenc`                                 | 1.0.3   | MIT             | —                                                                                                                                                                            |
 | `fflate`                                 | 0.8.3   | MIT             | —                                                                                                                                                                            |
+| `7z-wasm`                                | 1.2.0   | (engine's)      | [7-Zip](https://www.7-zip.org) 24.09 `7zz` CLI → LGPL-2.1-or-later; RAR decoder → unRAR license (decompress-only restriction) — both texts shipped in the package            |
 | `fonteditor-core`                        | 2.6.3   | MIT             | [Google woff2](https://github.com/google/woff2) → MIT; [Brotli](https://github.com/google/brotli) → MIT (compiled into its `woff2.wasm`)                                     |
 | `harfbuzzjs`                             | 1.4.0   | MIT             | [HarfBuzz](https://github.com/harfbuzz/harfbuzz) → "Old MIT" (compiled into its `harfbuzz-subset.wasm`)                                                                      |
 | `svgo`                                   | 4.0.1   | MIT             | —                                                                                                                                                                            |

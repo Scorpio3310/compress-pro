@@ -1,0 +1,79 @@
+{
+	"sample-v4.rar": {
+		"format": "rar4",
+		"entries": ["test.txt", "test.txt", "testlink"],
+		"sample": {
+			"entry": "test.txt",
+			"text": "test text document\r\n"
+		}
+	},
+	"sample-locked-v4.rar": {
+		"format": "rar4",
+		"password": "12345678",
+		"entries": ["bar.txt", "foo.txt"],
+		"sample": {
+			"entry": "foo.txt",
+			"text": "data of foo.txt\n"
+		}
+	},
+	"sample-v5.rar": {
+		"format": "rar5",
+		"entries": ["test.bin"],
+		"sample": null
+	},
+	"sample-v5-multi.rar": {
+		"format": "rar5",
+		"entries": ["test1.bin", "test2.bin", "test3.bin", "test4.bin"],
+		"sample": null
+	},
+	"sample-locked-v5.rar": {
+		"format": "rar5",
+		"password": "password",
+		"headerEncrypted": true,
+		"entries": ["a.txt", "b.txt", "c.txt", "d.txt"],
+		"sample": {
+			"entry": "a.txt",
+			"text": "This is from a.txt"
+		}
+	},
+	"sample.cab": {
+		"format": "cab",
+		"entries": ["empty", "file1", "file2"],
+		"sample": null
+	},
+	"sample.lzh": {
+		"format": "lzh",
+		"entries": ["file1", "file2"],
+		"sample": null
+	},
+	"sample.rpm": {
+		"format": "rpm",
+		"chain": ["rpmsample-1.0.0-1.noarch.cpio"],
+		"entries": ["file1", "file2", "file3"],
+		"sample": null
+	},
+	"sample.iso": {
+		"format": "iso",
+		"entries": ["inside.txt", "iso-readme.txt"],
+		"sample": {
+			"entry": "inside.txt",
+			"text": "nested iso entry\n"
+		}
+	},
+	"sample.txt.Z": {
+		"format": "z",
+		"entries": ["sample.txt"],
+		"sample": {
+			"entry": "sample.txt",
+			"text": "unix compress fixture for compress-pro. unix compress fixture for compress-pro. unix compress fixture for compress-pro. unix compress fixture for compress-pro. unix compress fixture for compress-pro. unix compress fixture for compress-pro. unix compress fixture for compress-pro. unix compress fixture for compress-pro. unix compress fixture for compress-pro. unix compress fixture for compress-pro. unix compress fixture for compress-pro. unix compress fixture for compress-pro. unix compress fixture for compress-pro. unix compress fixture for compress-pro. unix compress fixture for compress-pro. unix compress fixture for compress-pro. unix compress fixture for compress-pro. unix compress fixture for compress-pro. unix compress fixture for compress-pro. unix compress fixture for compress-pro. unix compress fixture for compress-pro. unix compress fixture for compress-pro. unix compress fixture for compress-pro. unix compress fixture for compress-pro. unix compress fixture for compress-pro. unix compress fixture for compress-pro. unix compress fixture for compress-pro. unix compress fixture for compress-pro. unix compress fixture for compress-pro. unix compress fixture for compress-pro. unix compress fixture for compress-pro. unix compress fixture for compress-pro. unix compress fixture for compress-pro. unix compress fixture for compress-pro. unix compress fixture for compress-pro. unix compress fixture for compress-pro. unix compress fixture for compress-pro. unix compress fixture for compress-pro. unix compress fixture for compress-pro. unix compress fixture for compress-pro. "
+		}
+	},
+	"sample.arj": {
+		"format": "arj",
+		"entries": ["hello.txt", "second.txt"],
+		"sample": {
+			"entry": "hello.txt",
+			"text": "hello from the compress-pro arj fixture\n"
+		}
+	}
+}

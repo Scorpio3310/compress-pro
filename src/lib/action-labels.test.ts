@@ -47,7 +47,14 @@ const audio = (over: Partial<SettingsMap['audio']> = {}): SettingsMap['audio'] =
 	...over
 });
 
-const zip = (op: 'create' | 'extract'): SettingsMap['zip'] => ({ op, level: 6 });
+const zip = (over: Partial<SettingsMap['zip']> = {}): SettingsMap['zip'] => ({
+	op: 'create',
+	outputFormat: 'zip',
+	level: 6,
+	password: '',
+	encryptNames: false,
+	...over
+});
 
 const font = (over: Partial<SettingsMap['font']> = {}): SettingsMap['font'] => ({
 	op: 'convert',
@@ -72,8 +79,15 @@ describe('actionLabel', () => {
 		expect(actionLabel('font', font(), 2)).toBe('Convert 2 files');
 		expect(actionLabel('font', font({ op: 'subset' }), 2)).toBe('Subset 2 fonts');
 		expect(actionLabel('font', font({ op: 'subset' }), 1)).toBe('Subset 1 font');
-		expect(actionLabel('zip', zip('create'), 4)).toBe('Create ZIP from 4 files');
-		expect(actionLabel('zip', zip('extract'), 1)).toBe('Extract 1 archive');
+		expect(actionLabel('zip', zip(), 4)).toBe('Create ZIP from 4 files');
+		expect(actionLabel('zip', zip({ outputFormat: '7z' }), 4)).toBe('Create 7Z from 4 files');
+		expect(actionLabel('zip', zip({ outputFormat: 'tgz' }), 1)).toBe('Create TAR.GZ from 1 file');
+		// Stream formats never bundle — the label must not promise one archive.
+		expect(actionLabel('zip', zip({ outputFormat: 'gz' }), 3)).toBe('Compress 3 files to GZ');
+		expect(actionLabel('zip', zip({ op: 'extract' }), 1)).toBe('Extract 1 archive');
+		expect(actionLabel('zip', zip({ op: 'convert', outputFormat: 'zip' }), 2)).toBe(
+			'Convert 2 archives to ZIP'
+		);
 	});
 
 	it('labels PDF ops', () => {
@@ -94,7 +108,7 @@ describe('busyLabel', () => {
 		expect(busyLabel('audio', audio())).toBe('Converting…');
 		expect(busyLabel('font', font({ outputFormat: 'ttf' }))).toBe('Converting…');
 		expect(busyLabel('font', font({ op: 'subset' }))).toBe('Subsetting…');
-		expect(busyLabel('zip', zip('create'))).toBe('Working…');
+		expect(busyLabel('zip', zip())).toBe('Working…');
 		expect(busyLabel('pdf', pdf({ op: 'merge' }))).toBe('Working…');
 		expect(busyLabel('pdf', pdf())).toBe('Compressing…');
 		expect(busyLabel('jpg', image())).toBe('Compressing…');

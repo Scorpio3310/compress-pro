@@ -54,6 +54,34 @@ describe('routeFileToFormat', () => {
 		expect(routeFileToFormat(file('BUNDLE.ZIP', ''))).toBe('zip');
 	});
 
+	it('routes the whole archive family to the zip tab (blank MIMEs)', () => {
+		for (const name of [
+			'a.7z',
+			'a.rar',
+			'a.tar',
+			'a.tar.gz',
+			'a.tgz',
+			'a.bz2',
+			'a.tbz2',
+			'a.txz',
+			'a.xz',
+			'a.iso',
+			'a.cab',
+			'a.deb',
+			'a.rpm',
+			'a.cpio',
+			'a.lha',
+			'a.lzh',
+			'a.arj',
+			'a.Z', // unix compress — uppercase in the wild
+			'a.lzma'
+		]) {
+			expect(routeFileToFormat(file(name, ''))).toBe('zip');
+		}
+		expect(routeFileToFormat(file('a.rar', 'application/vnd.rar'))).toBe('zip');
+		expect(routeFileToFormat(file('a.7z', 'application/x-7z-compressed'))).toBe('zip');
+	});
+
 	it('routes fonts to the font tab (pickers usually blank the MIME)', () => {
 		expect(routeFileToFormat(file('Inter.ttf', ''))).toBe('font');
 		expect(routeFileToFormat(file('Inter.WOFF2', ''))).toBe('font');
