@@ -51,6 +51,7 @@
 		"fixtures": "node scripts/generate-fixtures.mjs",
 		"og": "node scripts/generate-og.mjs",
 		"icons": "node scripts/generate-icons.mjs",
+		"dns:aid": "node scripts/dns-aid.mjs",
 		"test:e2e": "playwright test",
 		"test:e2e:smoke": "playwright test --grep @smoke",
 		"test:e2e:quick": "E2E_QUICK=1 playwright test --grep-invert @slow",

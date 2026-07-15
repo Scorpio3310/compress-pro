@@ -19,7 +19,11 @@ const config = {
 		// See https://svelte.dev/docs/kit/adapters for more information about adapters.
 		// persist: false — the app has no stateful bindings (ASSETS only), and the
 		// default on-disk .wrangler/state SQLite can crash workerd on CI (SQLITE_BUSY).
-		adapter: adapter({ platformProxy: { persist: false } }),
+		// config: adapter-cloudflare writes (and rimrafs) the generated worker at
+		// the `main` of the wrangler config it reads. Point it at a dedicated build
+		// config so it never clobbers our negotiation wrapper (wrangler.jsonc's
+		// `main: worker/index.js`). See wrangler.adapter.jsonc.
+		adapter: adapter({ config: 'wrangler.adapter.jsonc', platformProxy: { persist: false } }),
 		csp: {
 			// Prerendered pages (all of them) get per-page script hashes in a
 			// <meta http-equiv> tag; dev + runtime-rendered 404s get a header with

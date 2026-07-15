@@ -1,0 +1,16 @@
+{
+	// Adapter-only build config. `svelte.config.js` points adapter-cloudflare
+	// here (adapter `{ config: 'wrangler.adapter.jsonc' }`) so it emits — and
+	// rimraf-clears — the generated SvelteKit worker at THIS `main` path. The
+	// real deploy config (wrangler.jsonc) has `main: worker/index.js` (our
+	// negotiation wrapper); if the adapter read that, it would overwrite the
+	// wrapper. Keep `assets` here in sync with wrangler.jsonc.
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "compress-pro",
+	"main": ".svelte-kit/cloudflare/_worker.js",
+	"compatibility_date": "2026-07-01",
+	"assets": {
+		"directory": ".svelte-kit/cloudflare",
+		"binding": "ASSETS"
+	}
+}

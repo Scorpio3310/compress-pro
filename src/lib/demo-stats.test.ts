@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { readFileSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import sharp from 'sharp';
 import statsJson from './demo-stats.json';
@@ -58,6 +58,20 @@ const SPEC: Record<
 };
 const KINDS = Object.keys(SPEC) as DemoKind[];
 
+// Source fixtures live in the gitignored tests/fixtures/real (see .gitignore and
+// ci.yml) — large local samples that `pnpm demo-assets` consumes to write the
+// committed assets + manifest. Present locally, absent in CI, so the byte-for-byte
+// source check self-skips there, like woff2-patch/real-fonts do for their fixtures.
+const SOURCE_NAMES = KINDS.flatMap((kind) => {
+	const s = ALL[kind];
+	return kind === 'archive' ? s.display.archive!.entries.map((e) => e.name) : [s.input.name];
+});
+const HAVE_FIXTURES = SOURCE_NAMES.every((n) => existsSync(join(FIXTURES, n)));
+if (!HAVE_FIXTURES)
+	console.warn(
+		'demo-stats.test: source fixtures absent under tests/fixtures/real — skipping byte-for-byte source check'
+	);
+
 describe('demo stats manifest', () => {
 	it('carries every kind', () => {
 		expect(Object.keys(ALL).sort()).toEqual([...KINDS].sort());
@@ -74,7 +88,7 @@ describe('demo stats manifest', () => {
 		);
 	});
 
-	it.each(KINDS)('%s: matches the committed source fixture byte for byte', (kind) => {
+	it.skipIf(!HAVE_FIXTURES).each(KINDS)('%s: matches the source fixture byte for byte', (kind) => {
 		const s = ALL[kind];
 		if (kind === 'archive') {
 			// The "fixture" is a whole folder — every entry must exist and the

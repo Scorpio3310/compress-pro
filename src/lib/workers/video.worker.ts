@@ -167,20 +167,13 @@ expose<WorkerContracts['video']>({
 		// size — otherwise a downscale that would succeed is refused up front.
 		const fitted = fitDimensions(width, height, maxDimension ?? null);
 		const probeDims = { width: fitted.width, height: fitted.height };
-		const [mp4Codec, webmCodec, aacOk] = await Promise.all([
+		// AAC encodability is decided at CONVERT time (it re-registers the wasm
+		// encoder and verifies), so the probe no longer speculatively fetches the
+		// ~1 MB encoder chunk here — that Promise.all race is what produced the
+		// flaky aacEncodable answer on Linux Chromium in the first place.
+		const [mp4Codec, webmCodec] = await Promise.all([
 			getFirstEncodableVideoCodec(['avc', 'hevc'], probeDims),
-			getFirstEncodableVideoCodec(['vp9', 'vp8'], probeDims),
-			// Register the wasm fallback before asking (no-op when AAC encodes
-			// natively) — otherwise Firefox reports false here, decideAudio drops
-			// the track, and the answer flips once an audio-tab M4A job happens
-			// to have registered the encoder. Gated on an audio track existing,
-			// so the ~1 MB encoder chunk is only fetched when the answer matters.
-			audio
-				? ensureAacEncoder().then(
-						() => canEncodeAudio('aac'),
-						() => false
-					)
-				: false
+			getFirstEncodableVideoCodec(['vp9', 'vp8'], probeDims)
 		]);
 		const isobmffCodec = mp4Codec === 'avc' || mp4Codec === 'hevc' ? mp4Codec : null;
 
@@ -201,16 +194,26 @@ expose<WorkerContracts['video']>({
 				mov: isobmffCodec, // MOV shares MP4's codec policy — only the wrapper differs
 				webm: webmCodec === 'vp9' || webmCodec === 'vp8' ? webmCodec : null
 			},
-			aacEncodable: aacOk,
 			audioDecodable
 		};
 		return { result };
 	},
 
 	convert: async ({ jobId, file, container, video, audio }, progress) => {
-		// The probe that promised aacEncodable may have run on a different
-		// pooled instance — registration is per-worker, so re-ensure it here.
-		if (audio.kind === 'encode' && audio.codec === 'aac') await ensureAacEncoder();
+		// The convert worker is authoritative for "can this browser produce this
+		// audio codec": it registers the wasm encoder sequentially (unlike the
+		// probe's racy Promise.all) and verifies before muxing, so an Opus source
+		// re-encodes to AAC even on Linux Chromium, where the native encoder is
+		// absent and the probe-time capability answer flapped.
+		if (audio.kind === 'encode') {
+			if (audio.codec === 'aac') await ensureAacEncoder();
+			if (!(await canEncodeAudio(audio.codec))) {
+				throw new Error(
+					`This browser can’t produce ${audio.codec.toUpperCase()} audio for ` +
+						`${container.toUpperCase()} — choose WebM to keep the audio track`
+				);
+			}
+		}
 		const input = openInput(file);
 		const target = new BufferTarget();
 		const output = new Output({
@@ -248,6 +251,22 @@ expose<WorkerContracts['video']>({
 		);
 		if (videoDropped) {
 			throw new Error(undecodableMessage(await videoDropped.track.getCodec().catch(() => null)));
+		}
+		// An audio-only drop leaves isValid === true (the video track still carries
+		// the file), so the check below won't catch it — a silent, audio-less
+		// download is exactly the XB-06 defect. Name the reason instead of shipping
+		// it. Gated on `encode` so `discard` (removeAudio) and `copy` are untouched.
+		if (audio.kind === 'encode') {
+			const audioDropped = conversion.discardedTracks.find((d) => d.track.isAudioTrack());
+			if (audioDropped) {
+				throw new Error(
+					audioDropped.reason === 'undecodable_source_codec' ||
+						audioDropped.reason === 'unknown_source_codec'
+						? 'This browser can’t read the source audio — choose WebM, or turn on Remove audio'
+						: `This browser can’t produce ${audio.codec.toUpperCase()} audio for ` +
+								`${container.toUpperCase()} — choose WebM to keep the audio track`
+				);
+			}
 		}
 		if (!conversion.isValid) {
 			const reasons = conversion.discardedTracks.map((d) => d.reason).join(', ');

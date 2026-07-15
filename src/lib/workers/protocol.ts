@@ -92,7 +92,6 @@ export interface VideoProbeResult {
 		mov: 'avc' | 'hevc' | null;
 		webm: 'vp9' | 'vp8' | null;
 	};
-	aacEncodable: boolean;
 	/** Whether THIS browser can decode the source audio (false when no audio). */
 	audioDecodable: boolean;
 }

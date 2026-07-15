@@ -31,6 +31,27 @@ test('AR-01: tool pages have markdown twins with the right MIME', async ({ reque
 	expect(missing.status()).toBe(404);
 });
 
+test('AR-04: Accept: text/markdown negotiates HTML pages to their twin', async ({ request }) => {
+	test.skip(!process.env.E2E_PREVIEW, 'needs the built worker + run_worker_first');
+
+	// Same URL as the HTML page, but the markdown Accept header gets the twin.
+	const md = await request.get('/compress-jpg', { headers: { Accept: 'text/markdown' } });
+	expect(md.status()).toBe(200);
+	expect(md.headers()['content-type']).toMatch(/text\/markdown/);
+	expect(md.headers()['vary']).toMatch(/Accept/i);
+	expect(Number(md.headers()['x-markdown-tokens'])).toBeGreaterThan(0);
+	expect(await md.text()).toContain('# Compress JPG images.');
+
+	// The homepage negotiates to /index.md.
+	const home = await request.get('/', { headers: { Accept: 'text/markdown' } });
+	expect(home.headers()['content-type']).toMatch(/text\/markdown/);
+	expect(await home.text()).toContain('## All tools');
+
+	// Browsers (no markdown Accept) still get HTML at the same URL.
+	const html = await request.get('/compress-jpg');
+	expect(html.headers()['content-type']).toMatch(/text\/html/);
+});
+
 test('AR-02: agent-skills index parses and its digest matches the served skill', async ({
 	request
 }) => {

@@ -1,7 +1,11 @@
 {
 	"$schema": "node_modules/wrangler/config-schema.json",
 	"name": "compress-pro",
-	"main": ".svelte-kit/cloudflare/_worker.js",
+	// worker/index.js wraps the adapter-generated worker to add Accept:
+	// text/markdown negotiation. The adapter still emits its worker to
+	// .svelte-kit/cloudflare/_worker.js (via wrangler.adapter.jsonc), which the
+	// wrapper imports and delegates to.
+	"main": "worker/index.js",
 	"routes": [{ "pattern": "compress-pro.com", "custom_domain": true }],
 	// workers.dev hosts would serve indexable duplicate content next to the real domain.
 	"workers_dev": false,
@@ -10,7 +14,31 @@
 	"compatibility_flags": ["nodejs_als"],
 	"assets": {
 		"directory": ".svelte-kit/cloudflare",
-		"binding": "ASSETS"
+		"binding": "ASSETS",
+		// Run worker/index.js first for HTML navigations + runtime routes (so it
+		// can negotiate Accept: text/markdown), but let the asset layer serve the
+		// high-volume sub-resources directly — immutable /_app/*, images, the .md
+		// twins agents fetch directly, and the root icons/manifest/sw. Do NOT add
+		// a broad "!/*.txt": /robots.txt is a runtime (prerender=false) route that
+		// must reach the worker. Excludes match the real surface in static/.
+		"run_worker_first": [
+			"/*",
+			"!/_app/*",
+			"!/og/*",
+			"!/.well-known/*",
+			"!/*.md",
+			"!/llms.txt",
+			"!/llms-full.txt",
+			"!/sitemap.xml",
+			"!/favicon.ico",
+			"!/favicon.svg",
+			"!/apple-touch-icon.png",
+			"!/icon-192.png",
+			"!/icon-512.png",
+			"!/og.jpg",
+			"!/site.webmanifest",
+			"!/service-worker.js"
+		]
 	},
 	"observability": { "enabled": true }
 }

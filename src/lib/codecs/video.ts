@@ -47,23 +47,19 @@ function decideAudio(
 
 	if (settings.container === 'mp4' || settings.container === 'mov') {
 		const target = settings.container.toUpperCase();
+		// AAC/MP3 are already legal and Apple-friendly → transmux untouched.
 		if (source === 'aac' || source === 'mp3') return { kind: 'copy' };
-		// Opus in ISOBMFF is spec-legal but Safari/QuickTime won't play it — the
-		// UI promises Apple compatibility, so re-encode to AAC when this browser can.
-		if (source === 'opus') {
-			if (probe.aacEncodable && probe.audioDecodable) {
-				return { kind: 'encode', codec: 'aac', bitrate: AUDIO_BITRATE };
-			}
-			warnings.push(
-				`Opus audio kept as-is — this ${target} may play without sound in Safari/QuickTime. Choose WebM for full compatibility.`
-			);
-			return { kind: 'copy' };
-		}
-		if (probe.aacEncodable && probe.audioDecodable) {
+		// Everything else (Opus, Vorbis, PCM…) is re-encoded to AAC: Opus in
+		// ISOBMFF is spec-legal but silent in Safari/QuickTime, and the rest
+		// aren't legal here at all. The CONVERT step is authoritative for "can
+		// this browser really produce AAC" (it re-registers the wasm encoder and
+		// verifies), so we no longer gate on the probe's unreliable aacEncodable —
+		// only on whether we can READ the source track.
+		if (probe.audioDecodable) {
 			return { kind: 'encode', codec: 'aac', bitrate: AUDIO_BITRATE };
 		}
 		warnings.push(
-			`Audio removed — this browser can’t convert ${source.toUpperCase()} audio for ${target}. Choose WebM to keep it.`
+			`Audio removed — this browser can’t read the ${source.toUpperCase()} audio track for ${target}. Choose WebM to keep it.`
 		);
 		return { kind: 'discard' };
 	}
