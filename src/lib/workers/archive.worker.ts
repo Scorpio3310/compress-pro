@@ -8,11 +8,11 @@ import {
 	buildCreateArgs,
 	buildExtractArgs,
 	buildListArgs,
+	createListCounter,
 	createStages,
 	isEntryLine,
 	mapSevenZipError,
 	nextChainStep,
-	parseListOutput,
 	sanitizeEntryName
 } from '$lib/codecs/sevenzip-args';
 
@@ -22,26 +22,40 @@ import {
  * encrypted-header paths throw C++ exceptions straight through callMain,
  * which leaves the C++ runtime in an undefined state, and a fresh instance
  * also releases the wasm heap between jobs (archives can be huge). The wasm
- * BYTES are fetched once and reused; per-run compilation is millisecond
- * noise next to the compression itself.
+ * is fetched and COMPILED once (cached WebAssembly.Module — same pattern as
+ * font.worker's hb cache); each run only instantiates from it, so isolation
+ * no longer costs a 1.65 MB recompile per run (2-6 runs per user operation).
  */
 
-let wasmBytesPromise: Promise<ArrayBuffer> | null = null;
+let wasmModulePromise: Promise<WebAssembly.Module> | null = null;
 
-function getWasmBytes(): Promise<ArrayBuffer> {
-	wasmBytesPromise ??= (async () => {
+function getWasmModule(): Promise<WebAssembly.Module> {
+	wasmModulePromise ??= (async () => {
 		try {
-			const response = await fetch(sevenZipWasmUrl);
-			if (!response.ok) throw new Error(`7z engine download failed (${response.status})`);
-			return await response.arrayBuffer();
+			try {
+				return await WebAssembly.compileStreaming(fetch(sevenZipWasmUrl));
+			} catch {
+				// Fallback when the server didn't send application/wasm.
+				const response = await fetch(sevenZipWasmUrl);
+				if (!response.ok) throw new Error(`7z engine download failed (${response.status})`);
+				return await WebAssembly.compile(await response.arrayBuffer());
+			}
 		} catch (error) {
-			// A failed chunk fetch must not poison every later job (offline blip).
-			wasmBytesPromise = null;
+			// A failed fetch must not poison every later job (offline blip).
+			wasmModulePromise = null;
 			throw error;
 		}
 	})();
-	return wasmBytesPromise;
+	return wasmModulePromise;
 }
+
+/** The shipped d.ts predates the emscripten hook — extend it locally. */
+type SevenZipFactoryOptions = Parameters<typeof SevenZipFactory>[0] & {
+	instantiateWasm?: (
+		imports: WebAssembly.Imports,
+		done: (instance: WebAssembly.Instance) => void
+	) => Record<string, never>;
+};
 
 interface RunResult {
 	exit: number | null;
@@ -55,13 +69,13 @@ interface RunResult {
 /** Input keys may be nested paths ("dir/file.txt") — parents are created.
  *  OWNERSHIP: `inputs` is consumed destructively — each entry is deleted as
  *  soon as MEMFS holds the copy, so callers must pass a fresh record per run.
- *  `mount` exposes a Blob/File read-only at /src/<name> via WORKERFS (lazy
- *  FileReaderSync chunk reads — the archive never enters the JS heap whole). */
+ *  `mounts` exposes Blobs/Files read-only at /src/<name> via WORKERFS (lazy
+ *  FileReaderSync chunk reads — the sources never enter the JS heap whole). */
 async function runSevenZip(
 	args: string[],
 	inputs: Record<string, Uint8Array>,
 	onLine?: (line: string) => void,
-	mount?: { name: string; data: Blob }
+	mounts?: { name: string; data: Blob }[]
 ): Promise<RunResult> {
 	const ring: string[] = [];
 	const push = (line: string) => {
@@ -69,20 +83,29 @@ async function runSevenZip(
 		if (ring.length > 60) ring.shift();
 		onLine?.(line);
 	};
-	const wasmBinary = await getWasmBytes();
-	const sz = await SevenZipFactory({
-		wasmBinary,
+	const wasmModule = await getWasmModule();
+	const options: SevenZipFactoryOptions = {
+		// Instantiate from the pre-compiled module — the hook wins over
+		// wasmBinary in the glue and skips its per-call WebAssembly.instantiate
+		// (bytes) compile. No rejection channel exists here; with the module
+		// pre-awaited the only failure left is an instantiate OOM, which the
+		// no-progress watchdog turns into a worker restart.
+		instantiateWasm: (imports, done) => {
+			void WebAssembly.instantiate(wasmModule, imports).then((instance) => done(instance));
+			return {};
+		},
 		print: push,
 		printErr: push,
 		// EOF forever — with -y and an explicit -p, 7zz must never wait on a
 		// prompt; the d.ts wants `number` but emscripten treats null as EOF.
 		stdin: (() => null) as unknown as () => number
-	});
+	};
+	const sz = await SevenZipFactory(options);
 	sz.FS.mkdir('/in');
 	sz.FS.mkdir('/out');
-	if (mount) {
+	if (mounts?.length) {
 		sz.FS.mkdir('/src');
-		sz.FS.mount(sz.WORKERFS, { blobs: [mount] }, '/src');
+		sz.FS.mount(sz.WORKERFS, { blobs: mounts }, '/src');
 	}
 	for (const path of Object.keys(inputs)) {
 		const dir = path.split('/').slice(0, -1).join('/');
@@ -127,14 +150,26 @@ interface OutEntry {
 
 /** Collects every file under /out, paths relative to it. FS.readFile copies
  *  out of the wasm heap, and each MEMFS node is freed the moment it is copied
- *  (unlink/rmdir) — so the extracted output exists once in memory, not twice. */
-function walkOut(fs: SevenZipModule['FS'], dir = '/out'): OutEntry[] {
+ *  (unlink/rmdir) — so the extracted output exists once in memory, not twice.
+ *  Symbolic links (7zz recreates tar/deb link entries as real MEMFS symlinks)
+ *  are counted and skipped: lstat-first is load-bearing, because following a
+ *  link would re-read — or ENOENT-crash on — a target this walk already
+ *  freed, and a link can't be represented in a flat per-file download anyway. */
+function walkOut(fs: SevenZipModule['FS'], dir: string, skipped: { links: number }): OutEntry[] {
 	const entries: OutEntry[] = [];
 	for (const name of fs.readdir(dir)) {
 		if (name === '.' || name === '..') continue;
 		const full = `${dir}/${name}`;
-		if (fs.isDir(fs.stat(full).mode)) {
-			entries.push(...walkOut(fs, full));
+		const mode = fs.lstat(full).mode;
+		if (fs.isLink(mode)) {
+			skipped.links++;
+			try {
+				fs.unlink(full);
+			} catch {
+				// Best-effort — freeing is an optimization, never a failure.
+			}
+		} else if (fs.isDir(mode)) {
+			entries.push(...walkOut(fs, full, skipped));
 			try {
 				fs.rmdir(full);
 			} catch {
@@ -147,6 +182,13 @@ function walkOut(fs: SevenZipModule['FS'], dir = '/out'): OutEntry[] {
 		}
 	}
 	return entries;
+}
+
+/** Extraction-note suffix so skipped links are visible, not silent. */
+function withLinkNote(note: string | null, links: number): string | null {
+	if (links === 0) return note;
+	const suffix = `${links} symbolic link${links === 1 ? '' : 's'} skipped`;
+	return note ? `${note} · ${suffix}` : suffix;
 }
 
 /** /in-side names must be flat and unique; collisions get " (n)" suffixes. */
@@ -218,6 +260,7 @@ async function extractAll(
 		source
 	};
 	let note: string | null = null;
+	const skipped = { links: 0 };
 
 	for (let hop = 0; ; hop++) {
 		// The user's File is read through a zero-copy WORKERFS mount; inner
@@ -226,21 +269,23 @@ async function extractAll(
 		// while `current.source` keeps the bytes alive across list + extract.
 		const viaMount = current.source instanceof Blob;
 		const archivePath = viaMount ? `/src/${current.name}` : `/in/${current.name}`;
-		const mount = viaMount ? { name: current.name, data: current.source as Blob } : undefined;
+		const mounts = viaMount ? [{ name: current.name, data: current.source as Blob }] : undefined;
 		const inputsFor = () => (viaMount ? {} : { [current.name]: current.source as Uint8Array });
 
 		// Listing is best-effort: it feeds the entry-count fraction and nothing
 		// else, so a failure here (encrypted headers throw!) just means
 		// indeterminate progress until the extract itself reports the error.
+		// Counted per line — the run's `tail` ring is far too short for -slt.
 		let entryCount: number | null = null;
 		try {
+			const counter = createListCounter();
 			const list = await runSevenZip(
 				buildListArgs(archivePath, password),
 				inputsFor(),
-				undefined,
-				mount
+				counter.onLine,
+				mounts
 			);
-			if (!list.thrown) entryCount = parseListOutput(list.tail.split('\n')).entryCount;
+			if (!list.thrown) entryCount = counter.count();
 		} catch {
 			entryCount = null;
 		}
@@ -257,23 +302,25 @@ async function extractAll(
 					detail: line.slice(2)
 				});
 			},
-			mount
+			mounts
 		);
 		throwIfFailed(run, password !== '');
 
-		const entries = walkOut(run.fs);
+		const entries = walkOut(run.fs, '/out', skipped);
 		if (entries.length === 0) {
-			throw new Error('The archive contains no extractable files');
+			throw new Error(
+				skipped.links > 0
+					? 'The archive contains only symbolic links — there are no regular files to extract'
+					: 'The archive contains no extractable files'
+			);
 		}
 
 		const chain = nextChainStep(
 			entries.map((e) => ({ path: e.path, size: e.size })),
 			hop
 		);
-		if (!chain) return { entries, note };
-
-		const inner = entries.find((e) => e.path === chain.keep);
-		if (!inner) return { entries, note };
+		const inner = chain && entries.find((e) => e.path === chain.keep);
+		if (!chain || !inner) return { entries, note: withLinkNote(note, skipped.links) };
 		note = chain.note ?? note;
 		progress({ fraction: null, detail: `unpacking ${inner.path.split('/').pop()}` });
 		current = {
@@ -283,11 +330,18 @@ async function extractAll(
 	}
 }
 
-/** Bundle a set of (possibly nested) paths into `output`, two passes for tar.*.
- *  OWNERSHIP: `files` is consumed destructively at entry — the caller must not
- *  retain another reference to the array or its byte buffers. */
+/** Stage-1 source of a create/repack run. `mounts` = the user's own Files,
+ *  read zero-copy through WORKERFS (flat, pre-uniqued names). `files` = plain
+ *  bytes via MEMFS /in with relative paths preserved (convert's repack of
+ *  extracted entries — folder structure survives).
+ *  OWNERSHIP (bytes mode): `files` is consumed destructively at entry — the
+ *  caller must not retain another reference to the array or its buffers. */
+type CreateSource =
+	{ mounts: { name: string; data: Blob }[] } | { files: { path: string; bytes: Uint8Array }[] };
+
+/** Bundle the source into `output`, two passes for tar.* targets. */
 async function createArchive(
-	files: { path: string; bytes: Uint8Array }[],
+	source: CreateSource,
 	output: WorkerContracts['archive']['create']['payload']['output'],
 	opts: { level: 0 | 1 | 6 | 9; password: string; encryptNames: boolean },
 	baseName: string,
@@ -298,27 +352,40 @@ async function createArchive(
 	const finalName = `${baseName}${ARCHIVE_OUTPUT_EXT[output]}`;
 	const tarName = `${baseName}.tar`;
 
-	// Inputs keep their relative paths (convert preserves folder structure);
-	// 7zz recurses into the top-level directories it is handed.
-	const inputs: Record<string, Uint8Array> = {};
-	const topLevel = new Set<string>();
-	for (const file of files) {
-		const parts = file.path.split('/').filter(Boolean);
-		topLevel.add(parts[0]);
-		inputs[parts.join('/')] = file.bytes;
+	const stage1Inputs: Record<string, Uint8Array> = {};
+	let stage1Mounts: { name: string; data: Blob }[] | undefined;
+	let stage1Operands: string[];
+	let total: number;
+	if ('mounts' in source) {
+		// Operands are absolute (/src is the read-only mount; cwd stays /in so
+		// any 7zz scratch writes land on writable MEMFS). 7zz stores file
+		// operands by basename, so entry names match the mount names.
+		stage1Mounts = source.mounts;
+		stage1Operands = source.mounts.map((m) => `/src/${m.name}`);
+		total = source.mounts.length;
+	} else {
+		// 7zz recurses into the top-level directories it is handed.
+		const topLevel = new Set<string>();
+		for (const file of source.files) {
+			const parts = file.path.split('/').filter(Boolean);
+			topLevel.add(parts[0]);
+			stage1Inputs[parts.join('/')] = file.bytes;
+		}
+		// From here `stage1Inputs` is the single owner of the byte buffers, and
+		// runSevenZip drops each entry once MEMFS has it — so stage 2 of a tar.*
+		// create no longer pins the original inputs alongside the tar.
+		total = source.files.length;
+		source.files.length = 0;
+		stage1Operands = [...topLevel];
 	}
-	// From here `inputs` is the single owner of the byte buffers, and
-	// runSevenZip drops each entry once MEMFS has it — so stage 2 of a tar.*
-	// create no longer pins the original inputs alongside the tar.
-	const total = files.length;
-	files.length = 0;
 
 	let added = 0;
 	const runStage = async (
 		type: ReturnType<typeof createStages>[number],
 		stageInputs: Record<string, Uint8Array>,
 		names: string[],
-		outPath: string
+		outPath: string,
+		mounts?: { name: string; data: Blob }[]
 	) => {
 		const run = await runSevenZip(
 			buildCreateArgs(type, opts, outPath, names),
@@ -330,19 +397,33 @@ async function createArchive(
 					fraction: scale(Math.min((added / total) * 0.9, 0.9)),
 					detail: line.slice(2)
 				});
-			}
+			},
+			mounts
 		);
 		throwIfFailed(run, opts.password !== '');
 		return run.fs.readFile(outPath);
 	};
 
 	if (stages.length === 1) {
-		const bytes = await runStage(stages[0], inputs, [...topLevel], `/out/${finalName}`);
+		const bytes = await runStage(
+			stages[0],
+			stage1Inputs,
+			stage1Operands,
+			`/out/${finalName}`,
+			stage1Mounts
+		);
 		return { bytes, name: finalName, mimeType: ARCHIVE_OUTPUT_MIME[output] };
 	}
 
-	// tar.* targets: tar the inputs first, then compress that tar.
-	const tarBytes = await runStage('tar', inputs, [...topLevel], `/out/${tarName}`);
+	// tar.* targets: tar the inputs first, then compress that tar (stage 2's
+	// input is the intermediate tar — plain bytes via /in, never a mount).
+	const tarBytes = await runStage(
+		'tar',
+		stage1Inputs,
+		stage1Operands,
+		`/out/${tarName}`,
+		stage1Mounts
+	);
 	progress({ fraction: scale(0.95), detail: `compressing ${tarName}` });
 	const bytes = await runStage(stages[1], { [tarName]: tarBytes }, [tarName], `/out/${finalName}`);
 	return { bytes, name: finalName, mimeType: ARCHIVE_OUTPUT_MIME[output] };
@@ -350,13 +431,12 @@ async function createArchive(
 
 expose<WorkerContracts['archive']>({
 	async create(payload, progress) {
+		// The user's Files are read zero-copy through a WORKERFS mount; names
+		// must be flat and unique on the mount (collisions get " (n)" suffixes).
 		const names = uniqueInputNames(payload.files.map((f) => f.name));
-		const files = payload.files.map((f, i) => ({ path: names[i], bytes: new Uint8Array(f.bytes) }));
-		// The views above alias the transferred ArrayBuffers; drop the payload's
-		// wrappers so `files` (consumed destructively below) is the only owner.
-		payload.files.length = 0;
+		const mounts = payload.files.map((f, i) => ({ name: names[i], data: f.data }));
 		const result = await createArchive(
-			files,
+			{ mounts },
 			payload.output,
 			{ level: payload.level, password: payload.password, encryptNames: payload.encryptNames },
 			payload.baseName,
@@ -403,7 +483,7 @@ expose<WorkerContracts['archive']>({
 		const mapped = entries.map((e) => ({ path: e.path, bytes: e.bytes }));
 		entries.length = 0;
 		const result = await createArchive(
-			mapped,
+			{ files: mapped },
 			payload.output,
 			// The repacked archive is intentionally unencrypted — the password
 			// belongs to the SOURCE; encrypt-on-convert would silently produce

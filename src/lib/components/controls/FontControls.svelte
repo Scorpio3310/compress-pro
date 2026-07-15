@@ -145,6 +145,13 @@
 								max={axis.max}
 								step="any"
 								bind:value={settings.axisValues[axis.tag]}
+								onblur={() => {
+									// An emptied field binds null — snap it back to the axis
+									// default so the box always shows the value that will pin
+									// (mid-edit nulls are additionally dropped in font.ts).
+									if (!Number.isFinite(settings.axisValues[axis.tag]))
+										settings.axisValues[axis.tag] = axis.def;
+								}}
 								class="row-span-2 h-10 w-28 justify-self-end rounded-field border border-line-strong bg-card px-3 text-right font-mono text-base text-ink transition-colors tabular-nums focus-visible:border-accent sm:text-sm"
 							/>
 							<p class="mt-0.5 self-start hint font-mono text-faint">

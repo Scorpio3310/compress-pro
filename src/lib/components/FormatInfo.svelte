@@ -1,15 +1,27 @@
 <script lang="ts">
-	import { seoFor, type SeoEntry } from '$lib/seo';
+	import type { Component } from 'svelte';
+	import type { DemoKind } from '$lib/types';
+	import { seoFor, type SeoBody, type SeoEntry } from '$lib/seo';
 	import { pasteKey } from '$lib/paste-key.svelte';
 	import { resolve } from '$app/paths';
-	import ToolDirectory from './ToolDirectory.svelte';
-	import DemoCompare from './DemoCompare.svelte';
 
 	interface Props {
 		entry: SeoEntry;
+		/** The page's long-form copy (intro/guide/faq) — a lazy per-group chunk,
+		 *  load-awaited in +page.ts so SSR renders it like it always did. */
+		body: SeoBody;
+		/** Page-split chunks: +page.ts loads these only for pages that render
+		 *  them, so the other ~80 pages don't hydrate the demo/directory copy. */
+		demoCompare?: Component<{ kind?: DemoKind; hero?: boolean }> | null;
+		toolDirectory?: Component | null;
 	}
 
-	let { entry }: Props = $props();
+	let {
+		entry,
+		body,
+		demoCompare: DemoCompare = null,
+		toolDirectory: ToolDirectory = null
+	}: Props = $props();
 
 	// Prose may carry `[text](/path)` internal links and `**bold**` emphasis — parsed
 	// into segments here (never {@html}) and rendered with the content-link / strong
@@ -47,7 +59,7 @@
 				Your files never leave your device.
 			</h2>
 			<p class="mt-5 max-w-2xl text-sm leading-relaxed sm:text-base">
-				{@render prose(entry.intro)}
+				{@render prose(body.intro)}
 			</p>
 			<p class="mt-3 max-w-2xl text-sm leading-relaxed sm:text-base">
 				No cookies, no analytics, no tracking — the server only ships this page’s static files.
@@ -66,20 +78,24 @@
 			</p>
 		</div>
 
-		<DemoCompare kind="photo" hero />
+		{#if DemoCompare}
+			<DemoCompare kind="photo" hero />
+		{/if}
 
-		<ToolDirectory />
+		{#if ToolDirectory}
+			<ToolDirectory />
+		{/if}
 	{:else}
 		<!-- Datasheet lede — the annex abstract. The wrapper is full-width so the
 		     section divider under it runs edge to edge; max-w lives on the <p>. -->
 		<div>
 			<p class="max-w-2xl text-sm leading-relaxed text-ink sm:text-base">
-				{@render prose(entry.intro)}
+				{@render prose(body.intro)}
 			</p>
 		</div>
 	{/if}
 
-	{#if entry.demo}
+	{#if entry.demo && DemoCompare}
 		<div class="spec-row">
 			<h2 class="microlabel text-muted">Before / after</h2>
 			<div class="mt-5 md:pt-[2px]">
@@ -104,7 +120,7 @@
 		</ol>
 	</div>
 
-	{#each entry.guide ?? [] as section (section.heading)}
+	{#each body.guide ?? [] as section (section.heading)}
 		<div class="spec-row">
 			<h2 class="microlabel text-muted">{section.heading}</h2>
 			{#each section.paragraphs ?? [] as paragraph (paragraph)}
@@ -135,11 +151,11 @@
 		</div>
 	{/each}
 
-	{#if entry.faq.length > 0}
+	{#if body.faq.length > 0}
 		<div class="spec-row">
 			<h2 class="microlabel text-muted">Frequently asked questions</h2>
 			<div class="mt-3 space-y-4">
-				{#each entry.faq as item (item.q)}
+				{#each body.faq as item (item.q)}
 					<div>
 						<h3 class="font-medium text-ink">{item.q}</h3>
 						<p class="mt-1">{item.a}</p>

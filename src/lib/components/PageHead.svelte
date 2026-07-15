@@ -10,12 +10,14 @@
 		type?: 'WebPage' | 'AboutPage';
 		/** Maintainer surfaced as the page's mainEntity (about-page E-E-A-T). */
 		person?: { name: string; url: string };
+		/** Per-page OG image path under static/ — falls back to the generic card. */
+		image?: string;
 	}
 
-	let { title, description, path, type = 'WebPage', person }: Props = $props();
+	let { title, description, path, type = 'WebPage', person, image = '/og.jpg' }: Props = $props();
 
 	const canonical = $derived(SITE_URL + path);
-	const ogImage = SITE_URL + '/og.jpg';
+	const ogImage = $derived(SITE_URL + image);
 
 	const schema = $derived({
 		'@context': 'https://schema.org',

@@ -361,6 +361,9 @@ expose<WorkerContracts['video']>({
 		// Frame 0 is decoded once up front (dims + fps proxy) and reused as the
 		// first encode-loop frame; consumed there or closed in the finally.
 		let firstImage: VideoFrame | null = null;
+		// Hoisted so the catch below can reach it — this hand-rolled pipeline
+		// has no Conversion wrapper to self-cancel on failure.
+		let output: Output | null = null;
 		active.set(jobId, {
 			cancel: () => {
 				flag.cancelled = true;
@@ -390,7 +393,7 @@ expose<WorkerContracts['video']>({
 			const bitrate = qualityToBitrate(quality, width, height, fps, codec);
 
 			const target = new BufferTarget();
-			const output = new Output({
+			output = new Output({
 				format: VIDEO_OUTPUT[container].format(),
 				target
 			});
@@ -426,6 +429,17 @@ expose<WorkerContracts['video']>({
 				result: { bytes: out, mimeType: VIDEO_OUTPUT[container].mime },
 				transfer: [out]
 			};
+		} catch (error) {
+			// A mid-loop cancel/decode failure leaves the CanvasSource's
+			// VideoEncoder open inside this pooled worker until GC — cancel()
+			// force-closes encoder + target (what Conversion does internally on
+			// its own failures). Throws if already finalized; nothing left then.
+			try {
+				await output?.cancel();
+			} catch {
+				// best-effort cleanup — the original error is what matters
+			}
+			throw error;
 		} finally {
 			firstImage?.close(); // error before the loop consumed it (close is idempotent)
 			decoder.close();

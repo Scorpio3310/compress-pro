@@ -13,3 +13,51 @@ index 13b9f13f41c7f3e9269d18944fd1335ec9547e50..96f673ed9ba46a1046283dbfba547f2d
    },
    "type": "commonjs",
    "devDependencies": {
+diff --git a/woff2/index.js b/woff2/index.js
+index 393f23c3a755cd0129f1d92b0c80511158c28258..50b9f257533594a2322c6aa56a8f480d2835b40f 100644
+--- a/woff2/index.js
++++ b/woff2/index.js
+@@ -9,11 +9,23 @@
+ const woff2ModuleLoader = require('./woff2');
+ 
+ function convertFromVecToUint8Array(vector) {
+-    const arr = [];
+-    for (let i = 0, l = vector.size(); i < l; i++) {
+-        arr.push(vector.get(i));
++    // PATCHED: woff2Enc/woff2Dec return an embind std::vector HANDLE that owns
++    // its bytes inside the wasm heap. The upstream code copied the bytes out
++    // (via a transient js number array, ~8x the size) and dropped the handle —
++    // and this emscripten glue has no working finalizer (it probes the never-
++    // shipped `FinalizationGroup` API), so every call leaked its whole payload
++    // in the wasm heap forever. Copy tightly, then delete() the vector.
++    try {
++        const size = vector.size();
++        const arr = new Uint8Array(size);
++        for (let i = 0; i < size; i++) {
++            arr[i] = vector.get(i);
++        }
++        return arr;
++    }
++    finally {
++        vector.delete();
+     }
+-    return new Uint8Array(arr);
+ }
+ 
+ // Define as a named object that can be exported with CommonJS
+@@ -99,6 +111,15 @@ const woff2Module = {
+         const ttfbuff = this.woff2Module.woff2Dec(buffer, buffer.byteLength);
+         return convertFromVecToUint8Array(ttfbuff);
+     },
++
++    /**
++     * PATCHED addition: drop the emscripten instance so its wasm heap —
++     * grown by huge encodes/decodes and never shrunk — can be GC'd.
++     * The next init() creates a fresh instance from the same wasm URL.
++     */
++    dispose() {
++        this.woff2Module = null;
++    },
+ };
+ 
+ // Export for CommonJS

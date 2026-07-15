@@ -16,10 +16,11 @@ it('svelte.config prerender entries match TOOL_SLUGS exactly', () => {
 	expect([...entries].sort()).toEqual(TOOL_SLUGS.map((slug) => `/${slug}`).sort());
 });
 
-it('generate-og PAGES cover TOOL_SLUGS exactly, plus the home og.jpg', () => {
+it('generate-og PAGES cover TOOL_SLUGS exactly, plus home/about/privacy', () => {
 	const source = readFileSync('scripts/generate-og.mjs', 'utf8');
 	const slugs = [...source.matchAll(/'og\/([a-z0-9-]+)\.jpg'/g)].map((m) => m[1]);
 	expect(slugs.length, 'duplicate OG entries').toBe(new Set(slugs).size);
-	expect([...slugs].sort()).toEqual([...TOOL_SLUGS].sort());
+	// about/privacy are static routes (PageHead), not registry tools.
+	expect([...slugs].sort()).toEqual([...TOOL_SLUGS, 'about', 'privacy'].sort());
 	expect(source).toContain("'og.jpg'"); // the home card
 });

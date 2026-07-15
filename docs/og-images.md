@@ -108,3 +108,5 @@ each entry in `src/lib/seo.ts` — pages without one fall back to `/og.jpg`.
 | `/eot-to-ttf`              | EOT → TTF           | Fonts rescued from legacy EOT files. Locally.                  |
 | `/subset-font`             | Subset fonts.       | Keep only the glyphs you use — subset locally.                 |
 | `/variable-font-to-static` | Variable → static   | Pin the axes, ship one static font. Locally.                   |
+| `/about`                   | About Compress Pro. | Free, open source — and your files never leave your device.    |
+| `/privacy`                 | Privacy.            | No uploads, no cookies, no analytics — nothing to leak.        |

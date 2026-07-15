@@ -1001,6 +1001,35 @@ function cpioNewc(files) {
 	return Buffer.concat(parts);
 }
 
+/** Minimal ustar writer. 7zz's own tar WRITER never emits symlink entries on
+ *  MEMFS, but its reader recreates them as real FS.symlink nodes — so the one
+ *  fixture that needs links (typeflag '2') is hand-written, like cpio/ar. */
+function tarUstar(entries) {
+	const octal = (n, len) => n.toString(8).padStart(len - 1, '0') + '\0';
+	const blocks = [];
+	for (const e of entries) {
+		const bytes = e.bytes ?? new Uint8Array(0);
+		const header = Buffer.alloc(512);
+		header.write(e.name, 0, 'latin1');
+		header.write(octal(e.linkTo ? 0o777 : 0o644, 8), 100, 'latin1'); // mode
+		header.write(octal(0, 8), 108, 'latin1'); // uid
+		header.write(octal(0, 8), 116, 'latin1'); // gid
+		header.write(octal(bytes.length, 12), 124, 'latin1'); // size
+		header.write(octal(0, 12), 136, 'latin1'); // mtime — deterministic
+		header.write('        ', 148, 'latin1'); // chksum: spaces while summing
+		header.write(e.linkTo ? '2' : '0', 156, 'latin1'); // typeflag
+		if (e.linkTo) header.write(e.linkTo, 157, 'latin1');
+		header.write('ustar', 257, 'latin1'); // magic ("ustar\0" — byte 262 stays 0)
+		header.write('00', 263, 'latin1'); // version
+		let sum = 0;
+		for (const byte of header) sum += byte;
+		header.write(sum.toString(8).padStart(6, '0') + '\0 ', 148, 'latin1');
+		blocks.push(header, Buffer.from(bytes), Buffer.alloc((512 - (bytes.length % 512)) % 512));
+	}
+	blocks.push(Buffer.alloc(1024)); // two zero blocks = end of archive
+	return Buffer.concat(blocks);
+}
+
 async function generateArchives() {
 	const enc = (s) => new TextEncoder().encode(s);
 	const CONTENTS = {
@@ -1146,6 +1175,37 @@ async function generateArchives() {
 		if (entries.length !== 2) throw new Error(`gen-verify failed: sample.cpio entries ${entries}`);
 		await write('sample.cpio', cpio);
 		manifest['sample.cpio'] = { entries: ['first.txt', 'second.txt'] };
+	}
+
+	// 46. tar.gz with symlinks — real-world tarballs (node/python dists, deb
+	// data.tars) carry them; the app must SKIP links (walkOut's lstat guard)
+	// and still deliver every regular file. Covers all the nasty orders: link
+	// before its target, link after it (the target is already freed by then),
+	// dangling, and absolute (7zz rebases it under the output dir → dangling).
+	{
+		const tar = tarUstar([
+			{ name: 'link-first.txt', linkTo: 'target.txt' },
+			{ name: 'target.txt', bytes: enc('the link target — a regular file\n') },
+			{ name: 'link-after.txt', linkTo: 'target.txt' },
+			{ name: 'dangling.txt', linkTo: 'missing.txt' },
+			{ name: 'abs.txt', linkTo: '/etc/hosts' },
+			{ name: 'docs/nested.txt', bytes: enc('regular file after the links\n') }
+		]);
+		// gen-verify: 7zz must extract cleanly AND materialize the links as real
+		// MEMFS symlinks — the exact condition walkOut has to survive.
+		const sz = await sevenZip(['x', '-y', '-p', '-o/out', '--', '/in/links.tar'], {
+			'links.tar': new Uint8Array(tar)
+		});
+		const top = sz.FS.readdir('/out').filter((n) => n !== '.' && n !== '..');
+		const links = top.filter((n) => sz.FS.isLink(sz.FS.lstat(`/out/${n}`).mode));
+		if (links.length !== 4) {
+			throw new Error(`gen-verify failed: links.tar should yield 4 symlinks, got [${links}]`);
+		}
+		if (!top.includes('target.txt') || !sz.FS.readdir('/out/docs').includes('nested.txt')) {
+			throw new Error('gen-verify failed: links.tar regular files missing');
+		}
+		await write('links.tar.gz', Buffer.from(gzipSync(new Uint8Array(tar), { level: 6 })));
+		manifest['links.tar.gz'] = { files: ['target.txt', 'nested.txt'], links: 4 };
 	}
 }
 

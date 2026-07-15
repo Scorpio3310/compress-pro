@@ -154,7 +154,13 @@ const PAGES = [
 		'og/variable-font-to-static.jpg',
 		'Variable → static',
 		'Pin the axes, ship one static font. Locally.'
-	]
+	],
+	[
+		'og/about.jpg',
+		'About Compress Pro.',
+		'Free, open source — and your files never leave your device.'
+	],
+	['og/privacy.jpg', 'Privacy.', 'No uploads, no cookies, no analytics — nothing to leak.']
 ];
 
 // favicon.svg glyph with the light-scheme colors hardcoded (no media queries here).

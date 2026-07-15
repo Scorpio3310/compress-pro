@@ -13,6 +13,21 @@ export type Handlers<C extends Methods> = {
  * Worker-side runtime: wires handlers to the request/response protocol.
  * Instantiate with the worker's contract, e.g. `expose<WorkerContracts['image']>({...})`.
  */
+/** Wire-safe message for anything a handler can throw. Non-Error throws are
+ *  real here: emscripten's ErrnoError is a plain class (String() would post
+ *  "[object Object]" to the UI) and wasm code throws numbers — dig out the
+ *  most descriptive field instead. */
+function errorText(error: unknown): string {
+	if (error instanceof Error) return error.message;
+	if (typeof error === 'object' && error !== null) {
+		const e = error as { message?: unknown; name?: unknown; errno?: unknown };
+		if (typeof e.message === 'string' && e.message) return e.message;
+		const name = typeof e.name === 'string' && e.name ? e.name : 'Unexpected worker error';
+		return typeof e.errno === 'number' ? `${name} (errno ${e.errno})` : name;
+	}
+	return String(error);
+}
+
 export function expose<C extends Methods>(handlers: Handlers<C>): void {
 	const scope = self as unknown as Worker;
 	// The wire carries untyped payloads; this is the single cast at the
@@ -36,7 +51,7 @@ export function expose<C extends Methods>(handlers: Handlers<C>): void {
 			const { result, transfer } = await handler(payload, (p) => post({ id, progress: p }));
 			post({ id, ok: true, result }, transfer ?? []);
 		} catch (error) {
-			post({ id, ok: false, error: error instanceof Error ? error.message : String(error) });
+			post({ id, ok: false, error: errorText(error) });
 		}
 	};
 }

@@ -7,11 +7,11 @@ import {
 	buildCreateArgs,
 	buildExtractArgs,
 	buildListArgs,
+	createListCounter,
 	createStages,
 	isEntryLine,
 	mapSevenZipError,
 	nextChainStep,
-	parseListOutput,
 	sanitizeEntryName
 } from './sevenzip-args';
 
@@ -97,7 +97,7 @@ describe('extract/list args', () => {
 	});
 });
 
-describe('parseListOutput', () => {
+describe('createListCounter', () => {
 	const listing = [
 		'Listing archive: /in/a.7z',
 		'--',
@@ -119,16 +119,40 @@ describe('parseListOutput', () => {
 		''
 	];
 
-	it('extracts type, encryption flag and the file-only entry count', () => {
-		expect(parseListOutput(listing)).toEqual({ format: '7z', encrypted: true, entryCount: 2 });
+	const feed = (lines: string[]) => {
+		const counter = createListCounter();
+		for (const line of lines) counter.onLine(line);
+		return counter;
+	};
+
+	it('counts file entries only — folders and the archive header block do not', () => {
+		expect(feed(listing).count()).toBe(2);
 	});
 
-	it('returns null count when the listing never reached the separator', () => {
-		expect(parseListOutput(['Listing archive: x', 'ERROR: oops'])).toEqual({
-			format: null,
-			encrypted: false,
-			entryCount: null
-		});
+	it('returns null when the listing never reached the separator', () => {
+		expect(feed(['Listing archive: x', 'ERROR: oops']).count()).toBeNull();
+	});
+
+	it('counts the final block even without a trailing line', () => {
+		expect(feed(['----------', 'Path = only.txt', 'Size = 3']).count()).toBe(1);
+	});
+
+	it('is stable across repeated count() calls', () => {
+		const counter = feed(listing);
+		expect(counter.count()).toBe(2);
+		expect(counter.count()).toBe(2);
+	});
+
+	it('handles listings far beyond the worker tail ring (the frozen-bar bug)', () => {
+		// 40 entries × ~18 lines ≈ 720 lines — the old tail-parse saw only the
+		// last 60 and returned null; incremental counting must not care.
+		const lines = ['preamble', '----------'];
+		for (let i = 0; i < 40; i++) {
+			lines.push(`Path = file-${i}.txt`, 'Size = 10', 'Packed Size = 5');
+			for (let pad = 0; pad < 15; pad++) lines.push(`Field${pad} = value`);
+			lines.push('');
+		}
+		expect(feed(lines).count()).toBe(40);
 	});
 });
 

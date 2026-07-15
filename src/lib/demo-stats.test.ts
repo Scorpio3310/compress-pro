@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import sharp from 'sharp';
 import statsJson from './demo-stats.json';
 import { FORMATS, TOOLS } from './seo';
+import { fullSeoFor } from './seo-full.server';
 import type { DemoKind, DemoStats } from './types';
 
 // Drift guards for the before/after demos: manifest, shipped display assets
@@ -302,7 +303,8 @@ describe('demo stats manifest', () => {
 
 	it.each(KINDS)('%s: engine names appear in the page’s Under the hood copy', (kind) => {
 		const s = ALL[kind];
-		const entry = [...FORMATS, ...TOOLS].find((e) => e.path === s.tool)!;
+		const entry = fullSeoFor(s.tool.slice(1));
+		expect(entry.path, `${s.tool} must be a real page`).toBe(s.tool);
 		const section = entry.guide?.find((g) => g.heading === 'Under the hood');
 		expect(section, `${s.tool} Under the hood`).toBeDefined();
 		const prose = section!.paragraphs!.join(' ');

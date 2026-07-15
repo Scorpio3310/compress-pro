@@ -31,6 +31,17 @@ export function fontIdleTimeoutMs(totalBytes: number): number {
 	);
 }
 
+/** A cleared axis <input type="number"> binds `null` (Svelte's empty-string →
+ *  null rule), which would cross the wire, coerce to 0 at the wasm boundary
+ *  and get clamped to the axis MINIMUM (wght 100 instead of 400). Dropping
+ *  non-finite entries lets hb's pin_all_axes_to_default supply the fvar
+ *  default for that axis instead. */
+export function finiteAxisValues(axisValues: Record<string, number>): Record<string, number> {
+	return Object.fromEntries(
+		Object.entries(axisValues).filter(([, v]) => typeof v === 'number' && Number.isFinite(v))
+	);
+}
+
 export interface FontOutput {
 	blob: Blob;
 	/** Container actually written (the flavor rule can override the request). */
@@ -90,8 +101,9 @@ export async function subsetFont(
 			to: settings.outputFormat,
 			codepoints,
 			keepHinting: settings.keepHinting,
-			// Plain-object snapshot — the store proxy must not cross the wire.
-			pinAxes: settings.variableMode === 'static' ? { ...settings.axisValues } : null
+			// Fresh plain-object snapshot (the store proxy must not cross the
+			// wire), with cleared/NaN inputs dropped — see finiteAxisValues.
+			pinAxes: settings.variableMode === 'static' ? finiteAxisValues(settings.axisValues) : null
 		},
 		[bytes, ...(codepoints ? [codepoints.buffer] : [])],
 		undefined,

@@ -9,6 +9,7 @@
 	description="What Compress Pro is, how the in-browser compression works, and who builds it. Free, open source, and files never leave your device."
 	path="/about"
 	type="AboutPage"
+	image="/og/about.jpg"
 	person={{ name: 'Nik Klemenc', url: 'https://klemenc.si' }}
 />
 

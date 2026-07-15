@@ -1,13 +1,24 @@
 <script lang="ts">
-	import { SITE_URL, SITE_NAME, FORMATS, FEATURED_PATHS, seoFor, type SeoEntry } from '$lib/seo';
+	import {
+		SITE_URL,
+		SITE_NAME,
+		FORMATS,
+		FEATURED_PATHS,
+		seoFor,
+		type SeoEntry,
+		type SeoFaq
+	} from '$lib/seo';
 
 	interface Props {
 		entry: SeoEntry;
+		/** The page's FAQ (lazy body, load-awaited in +page.ts) — feeds the
+		 *  FAQPage JSON-LD, so it must be present at SSR and hydration alike. */
+		faq: SeoFaq[];
 		/** Live document title — may carry a `(NN%)` progress prefix while compressing. */
 		title: string;
 	}
 
-	let { entry, title }: Props = $props();
+	let { entry, faq, title }: Props = $props();
 
 	// Canonical is built from the seo entry, never from page.url — during
 	// prerendering the origin is a placeholder, not the real domain.
@@ -75,7 +86,7 @@
 	// Mirrors the visible FAQ section; answers are plain strings, safe as Answer.text.
 	const faqPage = $derived({
 		'@type': 'FAQPage',
-		mainEntity: entry.faq.map((f) => ({
+		mainEntity: faq.map((f) => ({
 			'@type': 'Question',
 			name: f.q,
 			acceptedAnswer: { '@type': 'Answer', text: f.a }
@@ -87,7 +98,7 @@
 		'@graph': [
 			webApplication,
 			...(entry.path === '/' ? [webSite, featuredList] : [breadcrumbList]),
-			...(entry.faq.length > 0 ? [faqPage] : [])
+			...(faq.length > 0 ? [faqPage] : [])
 		]
 	});
 	const jsonLd = $derived(JSON.stringify(schema).replace(/</g, '\\u003c'));

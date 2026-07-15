@@ -123,6 +123,14 @@ function pdfFraction(p: PdfProgress): number {
 	return Math.min(pageFraction, 0.98);
 }
 
+/** Per-file monotonic clamp (the archive paths' lastFraction pattern):
+ *  Ghostscript re-reports pages 1..N on the low-DPI two-pass and on the
+ *  %%EOF-truncation retry — without the held peak the bar saws back down. */
+function heldPeak(): (fraction: number) => number {
+	let peak = 0;
+	return (fraction) => (peak = Math.max(peak, fraction));
+}
+
 export interface PdfToolOutput {
 	results: CompressedFile[];
 	failures: FileFailure[];
@@ -500,6 +508,7 @@ export async function runPdfTool(
 			let warning: string | null = null;
 			if (settings.mergeCompress) {
 				const merged = new File([blob], 'merged.pdf', { type: 'application/pdf' });
+				const peak = heldPeak();
 				// compressPdf keeps the smaller of input/output itself.
 				const out = await compressPdf(
 					merged,
@@ -507,7 +516,7 @@ export async function runPdfTool(
 					(p) =>
 						onProgress({
 							...base,
-							fileFraction: 0.2 + 0.8 * pdfFraction(p),
+							fileFraction: 0.2 + 0.8 * peak(pdfFraction(p)),
 							detail: pdfDetail(p),
 							stage: 'processing'
 						}),
@@ -804,13 +813,14 @@ export async function compressFiles(
 			resized = out.transformed;
 			outName = replaceExtension(file.name, out.nameSuffix + extMap[out.outputFormat]);
 		} else {
+			const peak = heldPeak();
 			const out = await compressPdf(
 				file.file,
 				settings as PdfCompressionSettings,
 				(p) =>
 					onProgress({
 						...base,
-						fileFraction: pdfFraction(p),
+						fileFraction: peak(pdfFraction(p)),
 						detail: pdfDetail(p),
 						stage: 'processing'
 					}),

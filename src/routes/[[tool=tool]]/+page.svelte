@@ -40,6 +40,10 @@
 	import { fade } from 'svelte/transition';
 	import { reveal, pop } from '$lib/motion/reveal';
 	import { heroSqueeze } from '$lib/motion/logo';
+	import type { PageData } from './$types';
+
+	// Page-split demo/directory chunks from +page.ts (null on pages without them).
+	let { data }: { data: PageData } = $props();
 
 	// Tabs are real routes (/compress-jpg …) sharing this one page component, so
 	// navigating between them never remounts — per-tab state below survives.
@@ -657,7 +661,13 @@
 	$effect(() => {
 		return () => {
 			for (const state of Object.values(tabStates)) {
-				for (const f of state.files) URL.revokeObjectURL(f.objectUrl);
+				for (const f of state.files) {
+					URL.revokeObjectURL(f.objectUrl);
+					// Probe metadata lives in module-level maps — after this page
+					// unmounts the ids can never be referenced again.
+					removeMeta(f.id);
+					removeFontMeta(f.id);
+				}
 				for (const r of state.results) URL.revokeObjectURL(r.objectUrl);
 				// Mid-run teardown: finished-but-uncommitted results aren't in
 				// state.results yet (they merge when the run settles).
@@ -668,7 +678,7 @@
 	});
 </script>
 
-<Seo entry={seo} title={pageTitle} />
+<Seo entry={seo} faq={data.body.faq} title={pageTitle} />
 
 <svelte:window
 	onpaste={handlePaste}
@@ -877,7 +887,12 @@
 	Everything runs in your browser, nothing touches a server — it even works offline once loaded.
 </p>
 
-<FormatInfo entry={seo} />
+<FormatInfo
+	entry={seo}
+	body={data.body}
+	demoCompare={data.demoCompare}
+	toolDirectory={data.toolDirectory}
+/>
 
 <CompareModal
 	original={compareData?.original ?? null}

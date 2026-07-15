@@ -11,8 +11,10 @@ export const prerender = false;
 // open-source tool, so search, AI answers and model training are all upside.
 export function GET({ url }: { url: URL }) {
 	const isProd = url.host === new URL(SITE_URL).host;
+	// The llms.txt lines are comments (it is not a robots directive) — a cheap
+	// redundant discovery path next to the site-wide Link header.
 	const body = isProd
-		? `User-agent: *\nContent-Signal: ai-train=yes, search=yes, ai-input=yes\nAllow: /\n\nSitemap: ${SITE_URL}/sitemap.xml\n`
+		? `User-agent: *\nContent-Signal: ai-train=yes, search=yes, ai-input=yes\nAllow: /\n\nSitemap: ${SITE_URL}/sitemap.xml\n\n# AI tool index: ${SITE_URL}/llms.txt\n# Full content: ${SITE_URL}/llms-full.txt\n`
 		: 'User-agent: *\nDisallow: /\n';
 	return new Response(body, { headers: { 'Content-Type': 'text/plain; charset=utf-8' } });
 }

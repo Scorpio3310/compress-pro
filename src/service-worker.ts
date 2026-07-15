@@ -3,11 +3,12 @@
 
 /**
  * Offline/PWA cache. Strategy:
- * - install-time precache: the app shell (fingerprinted build minus wasm),
- *   every prerendered page, and static/ files — a few MB, instant offline.
+ * - install-time precache: the app shell (fingerprinted build minus wasm and
+ *   bundled media), every prerendered page, and static/ files minus /og/ —
+ *   a few MB, instant offline.
  * - runtime cache-first: fingerprinted assets incl. the big codec wasm
  *   (gs alone is ~15 MB — precaching it would bloat install for a codec the
- *   visitor may never use; it caches on first use instead).
+ *   visitor may never use; it caches on first use instead) and the demo media.
  * - network-first navigations: HTML shells aren't fingerprinted, so online
  *   visitors always get the newest deploy; offline falls back to the cache.
  * - NEVER handled: robots.txt/sitemap.xml (host-dependent SEO endpoints must
@@ -24,15 +25,25 @@ declare const self: ServiceWorkerGlobalScope;
 
 const CACHE = `app-${version}`;
 const NEVER = new Set(['/robots.txt', '/sitemap.xml']);
-// Agent-facing docs (the ~95 .md page twins, /.well-known/*) are prerendered
-// too, but human visitors rarely fetch them — keep them out of the install
-// precache; the runtime cache still picks them up on first use.
-const isAgentDoc = (path: string) => path.endsWith('.md') || path.startsWith('/.well-known/');
+// Agent-facing docs (the ~95 .md page twins, /llms*.txt, /.well-known/*) are
+// prerendered too, but human visitors rarely fetch them — keep them out of the
+// install precache (llms-full.txt alone is ~0.5 MB); the runtime cache still
+// picks them up on first use.
+const isAgentDoc = (path: string) =>
+	path.endsWith('.md') || path.startsWith('/.well-known/') || path.startsWith('/llms');
+// Bundled media follow the wasm rule: the homepage demo alone is ~11 MB of
+// mp3/mp4/images a visitor may never scroll to — precaching it would turn the
+// install into a ~25 MB background download. Runtime cache-first picks each
+// file up on first real use. (Site webfonts are .woff2 — deliberately kept.)
+const isHeavyAsset = (path: string) =>
+	/\.(wasm|mp3|mp4|gif|jpe?g|png|webp|avif|ttf|otf)$/.test(path);
 
 const PRECACHE = [
-	...build.filter((path) => !path.endsWith('.wasm')),
+	...build.filter((path) => !isHeavyAsset(path)),
 	...prerendered.filter((path) => !NEVER.has(path) && !isAgentDoc(path)),
-	...files
+	// static/og/* (~5 MB of social previews) is fetched only by scrapers,
+	// which never run this service worker — precaching it is pure waste.
+	...files.filter((path) => !path.startsWith('/og/'))
 ];
 
 self.addEventListener('install', (event) => {
@@ -55,12 +66,20 @@ self.addEventListener('activate', (event) => {
 	);
 });
 
+/** Cache only complete 200s — `cache.put` REJECTS partial 206es (media
+ *  elements send Range requests), and a failed put must never take the
+ *  response down with it (an awaited rejection would fail respondWith). */
+async function cachePut(cache: Cache, request: Request, response: Response): Promise<void> {
+	if (response.status !== 200) return;
+	await cache.put(request, response.clone()).catch(() => {});
+}
+
 async function cacheFirst(request: Request): Promise<Response> {
 	const cache = await caches.open(CACHE);
 	const hit = await cache.match(request);
 	if (hit) return hit;
 	const response = await fetch(request);
-	if (response.ok) await cache.put(request, response.clone());
+	await cachePut(cache, request, response);
 	return response;
 }
 
@@ -68,7 +87,7 @@ async function networkFirstNavigation(request: Request): Promise<Response> {
 	const cache = await caches.open(CACHE);
 	try {
 		const response = await fetch(request);
-		if (response.ok) await cache.put(request, response.clone());
+		await cachePut(cache, request, response);
 		return response;
 	} catch {
 		// Offline: this page if we have it, else the home shell.

@@ -220,7 +220,14 @@ export async function pixelDiff(
 }
 
 /**
- * PSNR in dB over RGB (alpha excluded — decodeRaw's ensureAlpha pads 255).
+ * PSNR in dB over coverage-weighted RGB: each channel is premultiplied by its
+ * pixel's alpha before differencing, so fully transparent pixels contribute
+ * nothing and LOSING coverage itself still counts (255·1 vs x·0). Straight-
+ * alpha decoders keep whatever RGB the encoder happened to store under
+ * alpha=0 (white mattes; canvas round-trips store zeros) — unweighted RGB
+ * would punish differences no human can see (measured: the watercolor PNG
+ * fixture scored 12.8 dB purely from invisible pixels). Opaque images are
+ * unaffected (weight 1 everywhere).
  * Integrates error magnitude across ALL pixels, so it catches uniform
  * sub-threshold degradation (banding, over-smoothing, slight level shifts)
  * that the pixelmatch ratio is blind to. Identical pixels → Infinity.
@@ -232,13 +239,29 @@ export function psnrRaw(a: RawImage, b: RawImage): number {
 	let sum = 0;
 	const n = a.width * a.height;
 	for (let i = 0; i < n * 4; i += 4) {
-		const dr = a.data[i] - b.data[i];
-		const dg = a.data[i + 1] - b.data[i + 1];
-		const db = a.data[i + 2] - b.data[i + 2];
+		const wa = a.data[i + 3] / 255;
+		const wb = b.data[i + 3] / 255;
+		const dr = a.data[i] * wa - b.data[i] * wb;
+		const dg = a.data[i + 1] * wa - b.data[i + 1] * wb;
+		const db = a.data[i + 2] * wa - b.data[i + 2] * wb;
 		sum += dr * dr + dg * dg + db * db;
 	}
 	const mse = sum / (n * 3);
 	return mse === 0 ? Infinity : 10 * Math.log10((255 * 255) / mse);
+}
+
+/** Copy with RGB premultiplied by alpha — for metrics (SSIM) that read the
+ *  RGB planes naively; see psnrRaw for why invisible pixels must not count. */
+function premultiplied(raw: RawImage): RawImage {
+	const data = Buffer.from(raw.data);
+	for (let i = 0; i < data.length; i += 4) {
+		const alpha = data[i + 3];
+		if (alpha === 255) continue;
+		data[i] = Math.round((data[i] * alpha) / 255);
+		data[i + 1] = Math.round((data[i + 1] * alpha) / 255);
+		data[i + 2] = Math.round((data[i + 2] * alpha) / 255);
+	}
+	return { data, width: raw.width, height: raw.height };
 }
 
 export interface CropRegion {
@@ -305,7 +328,8 @@ export async function qualityMetrics(
 			width: raw.width,
 			height: raw.height
 		});
-		ssim = ssimFn(asImageData(orig), asImageData(out)).mssim;
+		// ssim.js reads RGB naively — weight by coverage like psnrRaw does.
+		ssim = ssimFn(asImageData(premultiplied(orig)), asImageData(premultiplied(out))).mssim;
 	}
 	return { ...diff, psnr: Math.min(psnrRaw(orig, out), 99), ssim };
 }

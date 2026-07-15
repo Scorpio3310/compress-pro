@@ -1,5 +1,6 @@
 import type { EntryGenerator, RequestHandler } from './$types';
-import { TOOL_SLUGS, seoFor } from '$lib/seo';
+import { TOOL_SLUGS } from '$lib/seo';
+import { fullSeoFor } from '$lib/seo-full.server';
 import { toolMarkdown } from '$lib/markdown';
 
 export const prerender = true;
@@ -10,6 +11,6 @@ export const prerender = true;
 export const entries: EntryGenerator = () => TOOL_SLUGS.map((tool) => ({ tool }));
 
 export const GET: RequestHandler = ({ params }) =>
-	new Response(toolMarkdown(seoFor(params.tool)), {
+	new Response(toolMarkdown(fullSeoFor(params.tool)), {
 		headers: { 'Content-Type': 'text/markdown; charset=utf-8' }
 	});

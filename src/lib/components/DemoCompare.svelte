@@ -15,7 +15,22 @@
 		const face = new FontFace(DEMO_FONT_FAMILY, `url(${afterSrc}) format('woff2-variations')`, {
 			weight: '200 800'
 		});
-		face.load().then((loaded) => document.fonts.add(loaded));
+		let cancelled = false;
+		face.load().then(
+			(loaded) => {
+				if (!cancelled) document.fonts.add(loaded);
+			},
+			() => {
+				// The serif fallback IS the failure signal — an unhandled
+				// rejection here would only add console noise.
+			}
+		);
+		return () => {
+			// document.fonts is a document-global Set keyed by OBJECT identity —
+			// without delete, every visit to the demo stacks another decoded copy.
+			cancelled = true;
+			document.fonts.delete(face);
+		};
 	});
 
 	// Static before/after proof. Everything shown here — images AND numbers —

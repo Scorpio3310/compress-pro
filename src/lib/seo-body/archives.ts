@@ -1,0 +1,759 @@
+// Long-form page bodies (intro/guide/faq) for the 'archives' tool group —
+// extracted verbatim from the pre-split seo.ts (parity was pinned by the
+// migration snapshot). This is now the authoring source for this copy;
+// loaded lazily via seo-body/index.ts, statically by seo-full.server.ts.
+import type { SeoBody } from '$lib/seo';
+import { PRIVACY_A_ARCHIVE, PRIVACY_A_EXTRACT } from './shared';
+
+export const BODIES: Record<string, SeoBody> = {
+	'zip-files': {
+		intro:
+			'Bundle any files into one archive — ZIP, 7Z, TAR, TAR.GZ and more, with optional AES-256 password protection — or drop an archive (ZIP, RAR, 7Z, TAR, ISO, CAB…) and pull its contents out: each file becomes its own download. Everything runs in your browser, so **even huge archives never leave your machine**.',
+		guide: [
+			{
+				heading: 'Compression levels',
+				table: {
+					columns: ['Level', 'What it does'],
+					rows: [
+						['Store', 'No compression — instant, right for already-compressed files'],
+						['Fast', 'Light compression — quick, modest savings'],
+						['Balanced', 'The usual default'],
+						['Max', 'Smallest output, noticeably slower on big batches']
+					]
+				}
+			},
+			{
+				heading: 'What actually compresses',
+				paragraphs: [
+					'ZIP compression loves redundancy: text, code, CSVs, logs and office documents often shrink 60–90%. Photos, video and audio are already compressed — zipping them mostly just bundles bytes, so pick Store and save the time. A mixed folder lands somewhere in between, and the per-file rows show exactly where the savings came from. When the contents themselves need to shrink, run them through the [image](/compress-jpg), [video](/compress-video) or [PDF](/compress-pdf) compressors first — then Store the results.'
+				]
+			},
+			{
+				heading: 'One archive, or files out of one',
+				paragraphs: [
+					'Zipping shines when the point is a single attachment: a project folder, a batch of scans, a handoff. Extraction works the other way — drop an archive (ZIP, [RAR](/extract-rar), [7Z](/extract-7z), [tarball](/extract-tar-gz), [ISO](/extract-iso), CAB, DEB, RPM, CPIO, LHA, ARJ or .Z) and every file inside becomes its own row, downloadable individually or all at once, without the archive ever leaving your machine. Convert switches container without touching content — [RAR to ZIP](/rar-to-zip) is the classic trip.'
+				]
+			},
+			{
+				heading: 'Under the hood',
+				paragraphs: [
+					'Archives here are handled by 7-Zip 24.09 itself — the real desktop engine, compiled to WebAssembly — so 7Z creation gets the same LZMA2 ratios and the same AES-256 encryption you would get from the app, and extraction reads every format 7-Zip reads. For everyday ZIP and gzip work, the bundled fflate library takes the fast path. Nothing is ever uploaded.'
+				]
+			}
+		],
+		faq: [
+			{
+				q: 'Why do my photos barely shrink in a ZIP?',
+				a: 'JPGs, PNGs, videos and PDFs are already compressed — ZIP’s compression can only shave a percent or two off them. ZIP shines for text, code, spreadsheets and for bundling many files into one attachment. 7Z squeezes hardest of the formats offered here, but the same physics applies.'
+			},
+			{
+				q: 'Is there a size limit?',
+				a: 'No server means no upload cap — the practical limit is your device’s memory. Multi-gigabyte archives work, they just take a moment.'
+			},
+			{
+				q: 'Can it open password-protected archives?',
+				a: 'Yes — enter the password in the panel and protected ZIP, 7Z and RAR archives extract right in your browser. The password is only used locally, never stored or sent anywhere. Creating AES-256-encrypted ZIP and 7Z archives works too.'
+			},
+			{ q: 'Is it private?', a: PRIVACY_A_ARCHIVE }
+		]
+	},
+	'remove-exif': {
+		intro:
+			'Photos carry more than pixels: GPS coordinates of where they were taken, the exact time, your camera or phone model. Drop a JPG, PNG, or WebP here to see what your files reveal — then strip it in one click. Removal is lossless byte surgery: metadata segments are cut out without re-encoding, so pixels stay exactly identical. Orientation is preserved so phone photos never turn sideways, and **nothing is ever uploaded**.',
+		guide: [
+			{
+				heading: 'What hides inside a photo',
+				paragraphs: [
+					'Cameras and phones write far more than pixels. This is what a typical photo quietly carries — and what this tool lists per file as it wipes it:'
+				],
+				table: {
+					columns: ['Data', 'Example', 'Why it matters'],
+					rows: [
+						['GPS location', '46.0511°N, 14.5051°E', 'Reveals your home, workplace or routine'],
+						['Timestamps', 'Taken 2026-05-14, 18:42', 'Places you somewhere at an exact time'],
+						['Device model', 'Apple iPhone 15 Pro', 'Narrows down who took the photo'],
+						[
+							'Editing history (XMP)',
+							'Lightroom edits, creator name',
+							'Can carry names and software trails'
+						],
+						[
+							'Comments & text chunks',
+							'Notes left by apps and tools',
+							'Often forgotten, rarely reviewed'
+						]
+					]
+				}
+			},
+			{
+				heading: 'What gets removed — and what stays',
+				paragraphs: [
+					'Removal is byte surgery, not re-encoding: metadata segments are cut out and the image data is copied verbatim, so pixels stay byte-identical and files only get smaller.'
+				],
+				table: {
+					columns: ['Item', 'What happens'],
+					rows: [
+						['EXIF — including GPS, camera, dates', 'Removed'],
+						['XMP metadata (incl. extended)', 'Removed'],
+						['Photoshop metadata', 'Removed'],
+						['Comments & PNG text/time chunks', 'Removed'],
+						['ICC color profile', 'Kept by default — toggle to remove'],
+						['Orientation', 'Preserved, re-embedded as the only remaining field'],
+						['Pixels', 'Byte-identical — completely lossless']
+					]
+				}
+			},
+			{
+				heading: 'When should you strip metadata?',
+				paragraphs: [
+					'Any time a photo leaves your control with the file intact: selling something on a marketplace, posting to a forum or blog, sending originals by email or a cloud link. One honest caveat — big social networks usually strip EXIF on upload themselves, but messengers sending “as document”, email attachments, and most forums and marketplaces do not. The safe assumption is that metadata survives unless you removed it yourself. Photos that also need to be smaller can go through [Compress JPG](/compress-jpg) afterwards — compression writes a brand-new file, so metadata stays gone. iPhone HEIC photos get the same cleanup as a side effect of [converting to JPG](/heic-to-jpg).'
+				]
+			},
+			{
+				heading: 'Under the hood',
+				paragraphs: [
+					'There is no encoder here — deliberately. Metadata removal is hand-written byte surgery: the file’s structure is parsed directly, EXIF, XMP and comment segments are cut out, and everything else is copied verbatim. Because no image engine ever decodes or re-encodes your photo, the lossless guarantee is literal — pixels are byte-identical, and files can only get smaller.'
+				]
+			}
+		],
+		faq: [
+			{
+				q: 'What do my photos reveal about me?',
+				a: 'Often more than you think: the exact GPS coordinates of your home or workplace, timestamps, device model, even editing software. This tool lists what it found in each file — GPS, camera, dates — as it wipes it.'
+			},
+			{
+				q: 'Are my photos uploaded to be cleaned?',
+				a: 'No — everything runs right in your browser, which is the whole point of a privacy tool: photos with your GPS location inside never touch a server. Close the tab and everything is gone. Want proof? Clean one photo, switch your connection off, and clean another — it still works.'
+			},
+			{
+				q: 'Is removing EXIF data lossless?',
+				a: 'Completely. Metadata lives in separate segments of the file, so they are removed byte-for-byte without re-encoding the image. Pixels stay identical — verify with the built-in compare — and files only get smaller. Orientation is written back as the only remaining field, so phone photos keep displaying upright everywhere.'
+			},
+			{
+				q: 'Is the color profile removed too?',
+				a: 'Not by default — the ICC profile affects how colors render, so it is kept. Enable “Also remove color profile” to strip it as well; EXIF, GPS, XMP and comments are always removed.'
+			}
+		]
+	},
+	'rar-to-zip': {
+		intro:
+			'RAR needs WinRAR or 7-Zip; ZIP opens with a double-click on every Windows, Mac and Linux machine made this century. Drop a RAR, get the same files repacked as a ZIP — extraction and repacking run entirely in your browser, so **the archive never touches a server**.',
+		guide: [
+			{
+				heading: 'Folder structure survives the trip',
+				paragraphs: [
+					'The conversion unpacks the RAR in memory and rebuilds the same tree as a ZIP — nested folders, file names and timestamps travel along; nothing is flattened. If you only need the files themselves rather than a new archive, the [archive tool](/zip-files) extracts each entry as its own download. Prefer a smaller result over a universal one? Repack into 7Z with [ZIP to 7Z](/zip-to-7z) instead.'
+				]
+			}
+		],
+		faq: [
+			{
+				q: 'Why convert RAR to ZIP?',
+				a: 'Compatibility. ZIP opens natively everywhere — no extra software, no nag screens. RAR needs WinRAR, 7-Zip or a paid unarchiver, which is exactly the kind of thing you cannot ask a client or a colleague to install just to open one attachment.'
+			},
+			{
+				q: 'Does it handle password-protected RARs?',
+				a: 'Yes — type the password into the panel and the archive decrypts locally, both RAR4 and RAR5 encryption. The repacked ZIP itself is not encrypted; protect it again on the archive tab if you need to.'
+			},
+			{
+				q: 'Why is there no ZIP to RAR converter?',
+				a: 'RAR compression is proprietary — its author licenses decompression freely but has never released the compressor, so no website or library anywhere can legally create RAR files. Every honest tool converts out of RAR, never into it. 7Z is the free format that compresses comparably.'
+			},
+			{ q: 'Is it private?', a: PRIVACY_A_ARCHIVE }
+		]
+	},
+	'7z-to-zip': {
+		intro:
+			'7Z compresses harder, but plenty of computers cannot open it without extra software. Drop a 7Z, get a ZIP with the same files and folders — every machine from the office PC to a locked-down work laptop opens it natively. **The whole conversion runs in your browser**.',
+		guide: [
+			{
+				heading: 'When to keep 7Z instead',
+				paragraphs: [
+					'If everyone involved has 7-Zip, keep the 7Z — it is the better compressor. Convert to ZIP when the recipient is unknown, the file goes to a web form that only accepts .zip, or an old tool chokes on 7Z. The reverse trip lives at [ZIP to 7Z](/zip-to-7z); creating fresh archives from loose files is the [archive tool](/zip-files).'
+				]
+			}
+		],
+		faq: [
+			{
+				q: 'Will the ZIP be bigger than my 7Z?',
+				a: 'Usually a little — 7Z (LZMA2) compresses tighter than ZIP (deflate). For already-compressed content like photos or video the difference is a rounding error; for text and code expect the ZIP to grow some percent. That is the price of a format everything can open.'
+			},
+			{
+				q: 'Do encrypted 7Z archives work?',
+				a: 'Yes — enter the password and the archive decrypts locally, including 7Z files with encrypted file lists (-mhe). The resulting ZIP is unencrypted by design, so the recipient does not need the password.'
+			},
+			{
+				q: 'Does the folder structure survive?',
+				a: 'Fully. The 7Z is unpacked in memory and the same tree is rebuilt inside the ZIP — nested folders, names and paths stay exactly as they were.'
+			},
+			{ q: 'Is it private?', a: PRIVACY_A_ARCHIVE }
+		]
+	},
+	'zip-to-7z': {
+		intro:
+			'ZIP is universal; 7Z is efficient. Repacking a ZIP as 7Z re-compresses the same files with LZMA2, which routinely lands noticeably smaller on documents, code and mixed folders. **The conversion runs entirely in your browser** — drop a ZIP, download a 7Z.',
+		guide: [
+			{
+				heading: 'Deflate vs LZMA2 in one breath',
+				paragraphs: [
+					'ZIP compresses every file on its own with deflate, a 1990s algorithm tuned for speed. 7Z packs files into one solid stream and runs LZMA2 with a real dictionary over it, finding repetition across files — that is where the extra percent comes from, and why 7Z is slower to build. Going the other way is [7Z to ZIP](/7z-to-zip); starting from loose files, the [archive tool](/zip-files) creates either format directly.'
+				]
+			}
+		],
+		faq: [
+			{
+				q: 'How much smaller does 7Z get?',
+				a: 'Depends on the content. Text, code, spreadsheets and databases often shrink 20-40% versus ZIP; photos, video and other already-compressed files barely move. The output size shows next to the input, so the verdict is immediate.'
+			},
+			{
+				q: 'What opens 7Z files?',
+				a: '7-Zip on Windows (free), Keka or The Unarchiver on macOS, p7zip on Linux — and any modern archive manager. What does NOT open them is the built-in Windows Explorer extractor before Windows 11 24H2, so know your recipient.'
+			},
+			{
+				q: 'Can I make the 7Z password-protected?',
+				a: 'Conversion keeps the output unencrypted so it opens without friction. To create an encrypted 7Z, use the Create op on the archive tab — it offers AES-256, optionally with hidden file names.'
+			},
+			{ q: 'Is it private?', a: PRIVACY_A_ARCHIVE }
+		]
+	},
+	'tar-gz-to-zip': {
+		intro:
+			'Tarballs are the lingua franca of unix and the bane of Windows — Explorer will not open a .tar.gz without help. Drop one here and get a ZIP with the same files: **the gzip layer and the tar layer are both unpacked in your browser** and repacked as a plain ZIP anyone can open.',
+		guide: [
+			{
+				heading: 'Two layers, one archive',
+				paragraphs: [
+					'A .tar.gz is two formats stacked: tar glues files into one stream, gzip squeezes that stream. That is why Windows needs two rounds to open one — and why this converter unwraps both layers before building the ZIP. Source releases, GitHub downloads and node module tarballs all come this shape; convert them once and forget the trivia.'
+				]
+			}
+		],
+		faq: [
+			{
+				q: 'Which tarball flavors are supported?',
+				a: 'tar.gz and .tgz, plus plain .tar, tar.bz2 and tar.xz — the decompressor recognizes the layer stack automatically, so a double-wrapped archive unwraps all the way down to the files before the ZIP is built.'
+			},
+			{
+				q: 'What happens to unix permissions and symlinks?',
+				a: 'ZIP has no real place for them, so permissions are dropped and symlinks are skipped — same as every tar-to-zip converter. For moving source code or documents that is irrelevant; for deployable server artifacts, keep the tarball.'
+			},
+			{
+				q: 'Can it go the other way?',
+				a: 'Yes — the ZIP to TAR.GZ converter repacks a ZIP as a tarball for toolchains that expect one, and the archive tab creates tar, tar.gz, tar.bz2 or tar.xz from loose files directly.'
+			},
+			{ q: 'Is it private?', a: PRIVACY_A_ARCHIVE }
+		]
+	},
+	'iso-to-zip': {
+		intro:
+			'An ISO is a snapshot of a whole disc; sometimes all you want is the files inside without mounting anything. Drop the image here and its file tree is read in your browser and repacked as an ordinary ZIP — **no virtual drives, no admin rights, no upload**.',
+		guide: [
+			{
+				heading: 'ISO is an archive that pretends to be a disc',
+				paragraphs: [
+					'File managers treat ISOs specially because they emulate optical media, but structurally an ISO is just a read-only archive with a filesystem inside. Reading it as one — the way this converter does — skips the whole mount-extract-unmount dance. The files land in a [ZIP](/zip-files) that opens anywhere, or convert onward to [7Z](/zip-to-7z) if size matters more.'
+				]
+			}
+		],
+		faq: [
+			{
+				q: 'Will the ZIP still be bootable like the ISO?',
+				a: 'No — boot sectors and disc metadata are not files, so they do not survive any ISO-to-ZIP conversion. This is for getting at the CONTENT of an image. To write a bootable USB stick, use the original ISO with a tool like Rufus or balenaEtcher.'
+			},
+			{
+				q: 'Which ISO variants are readable?',
+				a: 'Standard ISO9660 with Joliet and Rock Ridge extensions — which covers software discs, driver CDs and most downloads. UDF-based video DVDs generally read too; copy-protected commercial discs do not.'
+			},
+			{
+				q: 'Can I just browse the ISO without making a ZIP?',
+				a: 'Yes — the Extract op on the archive tab lists every file in the image as its own download, no repacking involved. This page is the one-click version for when a single ZIP is the goal.'
+			},
+			{ q: 'Is it private?', a: PRIVACY_A_ARCHIVE }
+		]
+	},
+	'zip-to-tar-gz': {
+		intro:
+			'Docker contexts, CI pipelines, Linux servers and package tooling all speak tar.gz; the file you were sent is a ZIP. Drop it here and the same tree comes back as a gzipped tarball — **unpacked and repacked entirely in your browser, nothing installed and nothing uploaded**.',
+		guide: [
+			{
+				heading: 'Pick the right tarball compressor',
+				paragraphs: [
+					'gzip is the default for a reason: universal and quick. bzip2 lands a bit smaller, xz smaller still at real CPU cost — worth it for release artifacts downloaded thousands of times, overkill for a one-off transfer. The reverse direction is [TAR.GZ to ZIP](/tar-gz-to-zip); building tarballs from loose files lives in the [archive tool](/zip-files).'
+				]
+			}
+		],
+		faq: [
+			{
+				q: 'Why do unix tools prefer tar.gz over ZIP?',
+				a: 'tar predates ZIP and is woven into unix workflows — it streams, it concatenates, it preserves permissions and it compresses as one solid stream, which squeezes source trees tighter than per-file ZIP deflate. When a Makefile or a server script expects a tarball, handing it a ZIP just adds friction.'
+			},
+			{
+				q: 'Are file permissions restored in the tarball?',
+				a: 'Files arrive with standard default permissions — a ZIP made on Windows never contained unix modes to begin with, so there is nothing to restore. For executables, run chmod +x after unpacking on the target machine.'
+			},
+			{
+				q: 'Can I pick tar.bz2 or tar.xz instead?',
+				a: 'Yes — this page presets tar.gz, and the format pills switch to TAR.BZ2, TAR.XZ or plain TAR before you convert. xz compresses smallest, gzip stays the fastest and most compatible.'
+			},
+			{ q: 'Is it private?', a: PRIVACY_A_ARCHIVE }
+		]
+	},
+	'create-7z': {
+		intro:
+			'7Z out-compresses ZIP on almost everything and encrypts with AES-256 when you set a password — it can even hide the file names inside. Drop any files, pick a compression level, download one .7z. The whole build runs locally, so **your files never leave the machine**.',
+		guide: [
+			{
+				heading: '7Z or ZIP — a one-line decision',
+				paragraphs: [
+					'Sending to an unknown recipient or a web form: [ZIP](/zip-files), because everything opens it. Archiving for yourself, moving big text-heavy folders, or encrypting properly: 7Z. Already have a ZIP and want it smaller? [ZIP to 7Z](/zip-to-7z) repacks it; the reverse trip is [7Z to ZIP](/7z-to-zip).'
+				]
+			}
+		],
+		faq: [
+			{
+				q: 'How is 7Z better than ZIP?',
+				a: 'Stronger compression (LZMA2 with a real dictionary vs per-file deflate), solid archiving that exploits similarity between files, and proper AES-256 encryption with optional hidden file names. The trade-off is compatibility: recipients need 7-Zip, Keka or another modern unarchiver.'
+			},
+			{
+				q: 'How does the password protection work?',
+				a: 'Set a password and the archive encrypts with AES-256 as it is built — on your device, so the password never travels anywhere. Tick "hide file names" and even the list of contents is unreadable without it.'
+			},
+			{
+				q: 'Which compression level should I pick?',
+				a: 'Balanced is right for almost everything. Max squeezes a few extra percent out of text-heavy content at a real speed cost; Store skips compression entirely — the right call when the inputs are already-compressed photos or video and you only want one file.'
+			},
+			{ q: 'Is it private?', a: PRIVACY_A_ARCHIVE }
+		]
+	},
+	'create-tar': {
+		intro:
+			'A tar file glues many files into one stream without compressing them — the format unix tooling has expected since the tape-drive era. Drop files, download one .tar. **Built entirely in your browser**; combine it with gzip or xz here too if you want it compressed.',
+		guide: [
+			{
+				heading: 'tar, tar.gz, tgz — the family tree',
+				paragraphs: [
+					'tar bundles; gzip/bzip2/xz compress the bundle. tar.gz (or .tgz — same thing) is the everyday combination, and [Create TAR.GZ](/create-tar-gz) builds it in one step. A plain tar from this page can also be compressed later with [Gzip](/gzip-files) — the result is byte-for-byte a tar.gz.'
+				]
+			}
+		],
+		faq: [
+			{
+				q: 'Why is my tar as big as the inputs combined?',
+				a: 'Because tar does not compress — it only concatenates files with headers. That is by design: compression is a separate layer (gzip, bzip2, xz) applied over the tar. Pick TAR.GZ on this page instead if you want the compressed kind.'
+			},
+			{
+				q: 'When is a plain uncompressed tar actually right?',
+				a: 'When the consumer expects one: docker build contexts, some upload APIs, streaming pipelines, and cases where the content is already compressed (photos, video) so a gzip layer would only waste time.'
+			},
+			{
+				q: 'Does it preserve folder structure?',
+				a: 'Files land at the archive root with their names — the browser does not hand websites full folder trees on drop. For nested structure, tar an existing archive after converting it, or accept the flat layout most transfers actually need.'
+			},
+			{ q: 'Is it private?', a: PRIVACY_A_ARCHIVE }
+		]
+	},
+	'create-tar-gz': {
+		intro:
+			'The tarball is how source code, releases and server payloads travel in the unix world. Drop files, get one .tar.gz — **tarred and gzipped entirely in your browser**. The format pills switch to tar.bz2 for a smaller file or tar.xz for the smallest, when the extra build time is worth it.',
+		guide: [
+			{
+				heading: 'One stream beats many small ones',
+				paragraphs: [
+					'ZIP compresses each file separately, so a thousand small source files each pay the overhead alone. A tarball compresses the whole tar as one stream, letting the compressor exploit repetition ACROSS files — that is why source releases ship as .tar.gz. Already have a ZIP? [ZIP to TAR.GZ](/zip-to-tar-gz) converts it; the other direction is [TAR.GZ to ZIP](/tar-gz-to-zip).'
+				]
+			}
+		],
+		faq: [
+			{
+				q: 'tar.gz or .tgz — is there a difference?',
+				a: 'None — .tgz is just the DOS-era short spelling of .tar.gz. Every tool that opens one opens the other; this page names outputs .tar.gz, the long form most tooling writes today.'
+			},
+			{
+				q: 'gzip, bzip2 or xz for my tarball?',
+				a: 'gzip is the compatibility-and-speed default. bzip2 lands a bit smaller and slower. xz compresses smallest of the three at a real CPU cost — the usual pick for release artifacts that get downloaded many times but built once.'
+			},
+			{
+				q: 'Why a tarball instead of a ZIP?',
+				a: 'Unix toolchains, Makefiles, CI pipelines and package managers expect tarballs — and compressing the whole bundle as one stream squeezes source trees tighter than per-file ZIP compression. For sending files to people rather than machines, ZIP stays the friendlier pick.'
+			},
+			{ q: 'Is it private?', a: PRIVACY_A_ARCHIVE }
+		]
+	},
+	'gzip-files': {
+		intro:
+			'Gzip compresses a single file into a single .gz — no bundling, no archive semantics, just the exact stream format web servers, log rotators and unix tools speak. Drop files and each one comes back as its own .gz, **compressed entirely on your device**.',
+		guide: [
+			{
+				heading: 'Stream formats vs archives',
+				paragraphs: [
+					'gzip, bzip2 and xz compress ONE stream; tar, zip and 7z hold MANY files. The unix convention stacks them — tar bundles, gzip compresses, giving tar.gz. When one download containing everything is the goal, [Create TAR.GZ](/create-tar-gz) or the [archive tool](/zip-files) is the right shape; when a pipeline wants file.gz, this page is.'
+				]
+			}
+		],
+		faq: [
+			{
+				q: 'Why did I get three .gz files instead of one archive?',
+				a: 'Because gzip is a stream compressor, not an archive format — one input, one output, no file list inside. That is the correct behavior: report.csv becomes report.csv.gz. To bundle many files into ONE download, create a tar.gz or a ZIP instead.'
+			},
+			{
+				q: 'What actually shrinks with gzip?',
+				a: 'Text of every kind — logs, CSV, JSON, SQL dumps, SVG, HTML — routinely drops 70-90%. Already-compressed formats (JPG, MP4, ZIP) barely move; gzipping those just costs time.'
+			},
+			{
+				q: 'Will servers and command-line tools accept these files?',
+				a: 'Yes — the output is standard RFC 1952 gzip, identical to what the gzip command produces. gunzip, zcat, pandas, nginx and every HTTP client that speaks Content-Encoding: gzip read it directly.'
+			},
+			{ q: 'Is it private?', a: PRIVACY_A_ARCHIVE }
+		]
+	},
+	'bzip2-files': {
+		intro:
+			'Bzip2 sits between gzip and xz: noticeably smaller output than gzip on text, without the xz build times. Drop files and each comes back as its own .bz2, **compressed on your device** — the exact format bunzip2 and every unix toolchain expect.',
+		guide: [
+			{
+				heading: 'The three unix compressors, ranked',
+				paragraphs: [
+					'gzip: fastest, universal, good-enough ratios. bzip2: slower, ~10-20% smaller on text. xz: slowest, smallest, the modern archival pick — [XZ files](/xz-files) builds those. All three wrap around tar the same way; [Create TAR.GZ](/create-tar-gz) offers each as a one-step tarball.'
+				]
+			}
+		],
+		faq: [
+			{
+				q: 'When is bzip2 the right pick?',
+				a: 'When a consumer specifically expects .bz2 (plenty of scientific datasets, Wikipedia dumps and older pipelines do), or when you want better-than-gzip text compression and xz feels slow. For new greenfield choices, gzip for speed or xz for size are the usual endpoints.'
+			},
+			{
+				q: 'Why is my .bz2 not smaller than a .gz of the same file?',
+				a: 'On already-compressed content (media, archives) no compressor helps — all of them hover near the original size. Bzip2 wins on text and structured data; that is where its block-sorting algorithm gets traction.'
+			},
+			{
+				q: 'One file in, one file out — where is the archive?',
+				a: 'Bzip2 is a stream compressor like gzip: no bundling, no file list. Each input becomes input.bz2. For one archive holding everything, build a tar.bz2 on the Create TAR.GZ page (switch the format pill) or a ZIP.'
+			},
+			{ q: 'Is it private?', a: PRIVACY_A_ARCHIVE }
+		]
+	},
+	'xz-files': {
+		intro:
+			'XZ is the strongest of the classic unix compressors — the same LZMA2 engine 7Z uses, wrapped in a single-file stream. Drop files and each returns as its own .xz, **built locally**. Expect the smallest results on text and data, at the cost of more compute than gzip.',
+		guide: [
+			{
+				heading: 'Where xz earns its CPU bill',
+				paragraphs: [
+					'Compress once, download many — that is the xz sweet spot: release artifacts, datasets, backups. For quick one-off transfers [gzip](/gzip-files) finishes faster than xz starts mattering. Bundling a folder first? [Create TAR.GZ](/create-tar-gz) switches to tar.xz with one pill; a full archive with encryption is [Create 7Z](/create-7z).'
+				]
+			}
+		],
+		faq: [
+			{
+				q: 'How much smaller is xz than gzip really?',
+				a: 'On text, source code and databases, 25-40% smaller output is typical; on mixed content less; on already-compressed media, nothing — no compressor beats entropy. The Max level widens the gap further at a real time cost.'
+			},
+			{
+				q: 'What opens .xz files?',
+				a: 'xz and unxz on every unix, 7-Zip and modern archive managers on Windows, The Unarchiver or Keka on macOS. It has been the default compression of kernel releases and many Linux packages for over a decade — support is everywhere that matters.'
+			},
+			{
+				q: 'Why not just use 7Z?',
+				a: 'Same engine, different wrapper: .xz holds exactly one stream and slots into unix pipelines (tar.xz, xz -d, streaming); .7z is a full archive with a file list, encryption and per-file access. Machines usually want xz, humans usually want 7z.'
+			},
+			{ q: 'Is it private?', a: PRIVACY_A_ARCHIVE }
+		]
+	},
+	'extract-rar': {
+		intro:
+			'Someone sent a .rar and Windows just shrugs. Drop it here instead: every file inside becomes its own download, straight in your browser — RAR v4 and v5, password-protected ones too. No WinRAR trial, no sketchy installer, **no upload to a stranger with a server**.',
+		guide: [
+			{
+				heading: 'Out of RAR, into anything',
+				paragraphs: [
+					'Extraction gives you the files; sometimes you want them back in an archive that opens everywhere. [RAR to ZIP](/rar-to-zip) does exactly that in one step. The [archive tool](/zip-files) is the general-purpose version of this page — every format, create and extract, one place.'
+				]
+			}
+		],
+		faq: [
+			{
+				q: 'Do password-protected RARs work?',
+				a: 'Yes — enter the password in the panel and the archive decrypts locally, including RAR5 archives with encrypted file names. A wrong password gets a clear message, not a folder of corrupted files.'
+			},
+			{
+				q: 'Is this legal without WinRAR?',
+				a: 'Completely. RAR decompression is freely licensed — that is why 7-Zip and every unarchiver can open RARs. Only CREATING rar files requires WinRAR, because the compressor is proprietary.'
+			},
+			{
+				q: 'What about multi-part archives (.part1.rar, .r00)?',
+				a: 'Multi-volume sets need every volume present at once, which browser file handling does not guarantee — single-file archives are the supported case. Join the set with a desktop tool once, then any single .rar works here.'
+			},
+			{ q: 'Is it private?', a: PRIVACY_A_EXTRACT }
+		]
+	},
+	'extract-7z': {
+		intro:
+			'A .7z on a machine without 7-Zip is a locked box. This page is the key: drop the archive and each file inside becomes its own download, **decompressed entirely in your browser** — LZMA2, encrypted archives, even ones whose file list is hidden behind the password.',
+		guide: [
+			{
+				heading: 'Loose files or a friendlier archive',
+				paragraphs: [
+					'Need the contents once? Extract here and grab the files. Passing the archive along? [7Z to ZIP](/7z-to-zip) rebuilds it as a ZIP anyone can open, and [Create 7Z](/create-7z) makes fresh 7Z archives — with AES-256 if you set a password.'
+				]
+			}
+		],
+		faq: [
+			{
+				q: 'Do encrypted 7Z archives open?',
+				a: 'Yes — both flavors. Data-encrypted archives list their contents and ask the password to extract; header-encrypted ones (-mhe) reveal nothing until the password is right. Either way decryption happens locally.'
+			},
+			{
+				q: 'Why do people ship 7Z instead of ZIP anyway?',
+				a: 'Compression. On text, code and databases 7Z routinely lands 20-40% smaller than ZIP — worth the compatibility tax inside teams that all run 7-Zip. This page removes that tax for everyone else.'
+			},
+			{
+				q: 'Can I turn the 7Z into a ZIP instead of loose files?',
+				a: 'Yes — the 7Z to ZIP converter repacks the whole archive in one step, folders intact, so you get a single file that opens everywhere instead of individual downloads.'
+			},
+			{ q: 'Is it private?', a: PRIVACY_A_EXTRACT }
+		]
+	},
+	'extract-tar-gz': {
+		intro:
+			'A .tar.gz is two wrappers deep — gzip around tar around your files — which is why double-clicking one on Windows goes nowhere. Drop it here and **both layers unwrap automatically**; plain .tar, .tar.bz2 and .tar.xz work the same way. Each file inside becomes its own download.',
+		guide: [
+			{
+				heading: 'The tarball, translated',
+				paragraphs: [
+					'Source releases, GitHub archive downloads and node package tarballs all arrive as .tar.gz. Want a single Windows-friendly file instead of loose downloads? [TAR.GZ to ZIP](/tar-gz-to-zip) repacks in one step. Building tarballs from scratch is [Create TAR.GZ](/create-tar-gz).'
+				]
+			}
+		],
+		faq: [
+			{
+				q: 'Why does Windows open tar.gz in two steps?',
+				a: 'Because it really is two formats: unzipping the gzip layer yields a .tar, which needs opening again. This page runs the whole chain in one pass — you never see the intermediate tar.'
+			},
+			{
+				q: 'Which tarball variants unpack here?',
+				a: 'tar.gz and .tgz, plain .tar, tar.bz2 and tar.xz — the layer stack is detected from the bytes, not the file name, so mislabeled downloads unpack fine too.'
+			},
+			{
+				q: 'What happens to file permissions and symlinks?',
+				a: 'Browsers have no concept of unix permissions, so files download with defaults and symlinks are skipped. For source code and documents that is irrelevant; to deploy something executable, unpack on the target machine instead.'
+			},
+			{ q: 'Is it private?', a: PRIVACY_A_EXTRACT }
+		]
+	},
+	'extract-gz': {
+		intro:
+			'Log rotations, database dumps and API exports land as .gz — one compressed file, no archive inside. Drop them here and the original comes back: access.log.gz turns into access.log, **decompressed entirely on your device**. A .tar.gz unwraps all the way to its files automatically.',
+		guide: [
+			{
+				heading: 'gunzip, minus the terminal',
+				paragraphs: [
+					'On a machine with a shell, gunzip does this in a keystroke; on a locked-down laptop or a phone, this page is the shell-free equivalent. The reverse — making .gz files — is [Gzip files](/gzip-files); bundling many files into one compressed download is [Create TAR.GZ](/create-tar-gz).'
+				]
+			}
+		],
+		faq: [
+			{
+				q: 'Is .gz the same as .zip?',
+				a: 'No — gzip compresses exactly one file and holds no file list. ZIP is an archive of many. The confusion comes from tar.gz, where a tar bundle rides inside the gzip; this page recognizes that case and unpacks both layers.'
+			},
+			{
+				q: 'Can I open huge server logs this way?',
+				a: 'Yes — the practical ceiling is your device memory, not an upload cap, because nothing uploads. A multi-hundred-MB log.gz decompresses in seconds; the browser downloads the result like any file.'
+			},
+			{
+				q: 'What about .bz2 and .xz files?',
+				a: 'Same story, different compressor — and the same answer: drop them on this page or the archive tab and they decompress locally. All three families share one engine here.'
+			},
+			{ q: 'Is it private?', a: PRIVACY_A_EXTRACT }
+		]
+	},
+	'extract-iso': {
+		intro:
+			'An ISO wants to be mounted as a virtual disc before it shows its files — an odd ceremony when you just need one installer or driver out of it. Drop the image here and **its file tree reads directly in your browser**: every file becomes its own download, no drive letters involved.',
+		guide: [
+			{
+				heading: 'What survives, what cannot',
+				paragraphs: [
+					'Every FILE on the disc extracts byte-perfect. What does not survive is bootability — boot sectors are disc plumbing, not files, so extracting (or [converting to ZIP](/iso-to-zip)) never yields a bootable copy. To write a bootable USB, hand the original ISO to Rufus or balenaEtcher and let it do its thing.'
+				]
+			}
+		],
+		faq: [
+			{
+				q: 'Do I need admin rights or a virtual drive?',
+				a: 'No — that is the point. The image is parsed as a file, in the browser sandbox; nothing touches the operating system, so it works on locked-down work machines where mounting is blocked.'
+			},
+			{
+				q: 'Which disc formats read correctly?',
+				a: 'ISO9660 with Joliet and Rock Ridge — the shape of software discs, driver CDs and OS images — plus UDF-based media in most cases. Copy-protected commercial video discs are the exception.'
+			},
+			{
+				q: 'Can I make the ISO into a ZIP instead?',
+				a: 'Yes — the ISO to ZIP converter repacks the whole image as one ZIP in a single step, which beats downloading files one by one when you want everything.'
+			},
+			{ q: 'Is it private?', a: PRIVACY_A_EXTRACT }
+		]
+	},
+	'extract-cab': {
+		intro:
+			'CAB is the archive format Windows itself ships in — drivers, installers and updates all travel as cabinets. When you need one file out of a driver package (or you are just curious), drop the .cab here: **contents extract in your browser**, each file its own download.',
+		guide: [
+			{
+				heading: 'From cabinet to anywhere',
+				paragraphs: [
+					'Extracted driver files usually go straight to Device Manager, but when a set of files should travel on, repack them via the [archive tool](/zip-files) into a [ZIP](/zip-files) or [7Z](/create-7z). Old software archives often nest formats — a CAB inside a ZIP inside an ISO all opens here, one layer per drop.'
+				]
+			}
+		],
+		faq: [
+			{
+				q: 'Where do CAB files even come from?',
+				a: 'Driver downloads, Windows Update payloads, installer internals (.msi files often embed cabinets) and printer packages. Vendors still ship raw .cab driver bundles, and manually extracting one INF or DLL from them is the classic use case.'
+			},
+			{
+				q: 'Which CAB compression variants are supported?',
+				a: 'MSZIP and LZX — which covers essentially every cabinet Microsoft tooling produces. Multi-part cabinet SETS (spanning several .cab files) need all parts and are not supported; single cabinets, the overwhelmingly common case, extract fine.'
+			},
+			{
+				q: 'Can it open .msi or .exe installers too?',
+				a: 'Not directly — those are container formats around cabinets. If you can get the .cab out (many installers unpack with /extract or similar switches), it opens here.'
+			},
+			{ q: 'Is it private?', a: PRIVACY_A_EXTRACT }
+		]
+	},
+	'extract-deb': {
+		intro:
+			'A .deb is an archive-in-an-archive: an ar wrapper holding control metadata and a data tarball with the actual files. Drop one here and **the chain unwraps automatically down to the real payload** — binaries, configs, docs — each file its own download, no Linux machine required.',
+		guide: [
+			{
+				heading: 'deb and rpm are cousins',
+				paragraphs: [
+					'Both package formats are thin wrappers around a standard archive — deb wraps a tar, [rpm](/extract-rpm) wraps a cpio. That is why one engine opens both, and why the files inside look so ordinary once unwrapped. For repacking extracted files, the [archive tool](/zip-files) builds any format.'
+				]
+			}
+		],
+		faq: [
+			{
+				q: 'Why do other tools show me data.tar.xz instead of files?',
+				a: 'Because they stop at the ar layer. A .deb holds data.tar.(gz|xz|zst) inside; this page detects that payload and unpacks it in the same pass, so you land on the files, not on another archive.'
+			},
+			{
+				q: 'Does extracting a deb install anything?',
+				a: 'No — installation is what dpkg does with the payload plus its maintainer scripts. Extraction here just reads files out; nothing runs, nothing touches your system. It is the safe way to inspect a package before trusting it.'
+			},
+			{
+				q: 'What are the control files it mentions skipping?',
+				a: 'Package metadata — dependency lists, maintainer scripts, checksums — that lives in a separate control tarball. The extraction focuses on the data payload where the actual files are; the note just tells you the metadata was left out.'
+			},
+			{ q: 'Is it private?', a: PRIVACY_A_EXTRACT }
+		]
+	},
+	'extract-rpm': {
+		intro:
+			'Fedora, RHEL and SUSE ship software as .rpm — a header stapled to a compressed cpio payload. The classic unix answer is rpm2cpio piped through cpio; **the browser answer is this page**. Drop the package and the payload unwraps to its actual files automatically.',
+		guide: [
+			{
+				heading: 'rpm2cpio, retired',
+				paragraphs: [
+					'The rpm payload chain (rpm → cpio.xz → cpio → files) is exactly the kind of nesting the extractor chases automatically — same as [deb packages](/extract-deb) and [tarballs](/extract-tar-gz). Plain [cpio archives](/extract-cpio) open directly too.'
+				]
+			}
+		],
+		faq: [
+			{
+				q: 'Why does my rpm show a .cpio file in other tools?',
+				a: 'Those tools peel only the first layer. The payload inside an rpm is a cpio archive (gzip-, xz- or zstd-compressed); this page detects it and unpacks that too, so you get files instead of homework.'
+			},
+			{
+				q: 'Can I extract an rpm on Windows or macOS?',
+				a: 'That is exactly the point — no rpm tooling exists there by default, and installing a Linux VM to peek at one package is absurd. Everything runs in the browser, on any OS.'
+			},
+			{
+				q: 'Does this install or run the package?',
+				a: 'No — scripts and triggers inside packages never execute. Files are read out passively, which makes this a safe way to audit what a package would put on disk.'
+			},
+			{ q: 'Is it private?', a: PRIVACY_A_EXTRACT }
+		]
+	},
+	'extract-cpio': {
+		intro:
+			'cpio is tar’s older sibling — still underneath rpm packages, initramfs images and plenty of unix backup scripts. Drop a .cpio (or a .cpio.gz) here and **its files extract right in the browser**, no pipe incantations required.',
+		guide: [
+			{
+				heading: 'The pipeline, without the pipes',
+				paragraphs: [
+					'The terminal recipe — gunzip | cpio -idmv — assumes a shell, the right flags and some scar tissue. Dropping the file here is the flat-pack version. Related plumbing: [rpm packages](/extract-rpm) unwrap to cpio automatically, and [tarballs](/extract-tar-gz) get the same treatment on their side of the family.'
+				]
+			}
+		],
+		faq: [
+			{
+				q: 'Where would I even meet a cpio file?',
+				a: 'Inside rpm packages (their payload is cpio), Linux initramfs/initrd images, some firmware update bundles and old-school backup scripts. When one surfaces, this page opens it without remembering cpio flag soup.'
+			},
+			{
+				q: 'Which cpio variants are readable?',
+				a: 'The common ones — newc/SVR4 (what rpm and initramfs use) and the classic formats. Compressed variants like .cpio.gz unwrap their compression layer automatically first.'
+			},
+			{
+				q: 'Why does the unix world have both tar and cpio?',
+				a: 'History — they solved the same problem in different 1970s corners. tar won the human-facing war; cpio survives embedded in formats that picked it decades ago and never needed to change.'
+			},
+			{ q: 'Is it private?', a: PRIVACY_A_EXTRACT }
+		]
+	},
+	'extract-lha': {
+		intro:
+			'LHA (.lzh) ruled Japanese software distribution and the Amiga scene long before ZIP won globally — and retro archives, abandonware collections and old game mods still carry it. Drop one here and **its files extract in your browser**, no vintage tooling required.',
+		guide: [
+			{
+				heading: 'Rescuing old archives',
+				paragraphs: [
+					'Retro collections mix formats freely — LHA next to [ARJ](/extract-arj) next to early ZIP. Everything opens on the same [archive tab](/zip-files), and once extracted, repacking into a modern [7Z](/create-7z) keeps the bytes and drops the archaeology.'
+				]
+			}
+		],
+		faq: [
+			{
+				q: 'LHA or LZH — which is it?',
+				a: 'The same format: LHA is the archiver, .lzh its usual extension (with .lha common on Amiga). Both extensions open identically here.'
+			},
+			{
+				q: 'Do Japanese file names decode correctly?',
+				a: 'Usually — but archives from 90s Japanese systems often store names in Shift-JIS, which no modern tool can always guess right. File CONTENT extracts perfectly either way; a garbled name is cosmetic and can be fixed after download.'
+			},
+			{
+				q: 'What made LHA special back then?',
+				a: 'It was free with source code when PKZIP was shareware — so Japanese vendors, id Software (DOOM shipped in LHA!) and the Amiga community standardized on it. A nice reminder that formats win on licensing as much as on ratio.'
+			},
+			{ q: 'Is it private?', a: PRIVACY_A_EXTRACT }
+		]
+	},
+	'extract-arj': {
+		intro:
+			'ARJ compressed half the BBS scene and a generation of floppy backups before ZIP took the crown. The files still exist; the tooling mostly does not. Drop an .arj here and **its contents extract right in your browser** — old family backups included.',
+		guide: [
+			{
+				heading: 'Digital archaeology, in a tab',
+				paragraphs: [
+					'ARJ sits alongside [LHA](/extract-lha) and early ZIP in most retro collections — all three open here. Once rescued, files worth keeping deserve a modern container: [7Z with AES](/create-7z) for private archives, [ZIP](/zip-files) for anything meant to be shared.'
+				]
+			}
+		],
+		faq: [
+			{
+				q: 'Why would I have ARJ files in 2026?',
+				a: 'Old backups, BBS-era downloads, shareware CDs and files inherited from a DOS machine. ARJ was mainstream from roughly 1991 to 1995 — anything archived then has decent odds of wearing this extension.'
+			},
+			{
+				q: 'Are multi-volume ARJ sets (.a01, .a02) supported?',
+				a: 'No — split sets were designed for floppy spanning and need every volume joined in order. Single .arj files, which is what most surviving archives are, extract fine.'
+			},
+			{
+				q: 'Is the extraction faithful to the original bytes?',
+				a: 'Yes — ARJ stored CRCs per file and the decoder verifies them, so what comes out is exactly what went in three decades ago, or you get an error instead of silent corruption.'
+			},
+			{ q: 'Is it private?', a: PRIVACY_A_EXTRACT }
+		]
+	}
+};

@@ -288,6 +288,10 @@
 					<p class="mt-0.5 font-mono text-[11px] text-muted tabular-nums">
 						{formatBytes(extra.compressedSize)}
 					</p>
+					{#if extra.info}
+						<!-- Extraction notes ride the first entry row (chain hops, skipped symlinks). -->
+						<p data-testid="row-info" class="mt-0.5 hint text-muted">{extra.info}</p>
+					{/if}
 				</div>
 				{#if !busy}
 					<button

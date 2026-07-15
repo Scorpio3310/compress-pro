@@ -230,7 +230,9 @@ export interface ArchiveEntryOut {
 }
 
 export interface ArchiveCreatePayload {
-	files: { name: string; bytes: ArrayBuffer }[];
+	/** Files clone without copying their data; 7zz reads them lazily through a
+	 *  read-only WORKERFS mount, so inputs are never buffered in RAM whole. */
+	files: { name: string; data: File }[];
 	output: ArchiveOutputFormat;
 	level: 0 | 1 | 6 | 9;
 	/** '' = unencrypted. Only zip/7z can honor it. */

@@ -6,12 +6,16 @@ import {
 	SITE_URL,
 	TOOLS,
 	seoFor,
+	type FullSeoEntry,
 	type SeoEntry
 } from '$lib/seo';
 
 // Markdown twins of the tool pages (`/<slug>.md`, `/index.md`) — the
-// agent-facing render of the same seo.ts entries the HTML pages are built
+// agent-facing render of the same seo entries the HTML pages are built
 // from. Presentation mirrors FormatInfo.svelte; keep the two in sync.
+// Callers supply FULL entries (index + lazy body): the prerender routes via
+// seo-full.server.ts, webmcp via `await seoBodyFor` — this module must never
+// import the bodies itself or they'd ride into the client bundle with it.
 
 // FormatInfo's generic How-it-works trio, with the runtime pasteKey() pinned
 // to a static spelling — the markdown is prerendered once for every platform.
@@ -38,7 +42,7 @@ function tableMarkdown(table: { columns: string[]; rows: string[][] }): string {
 const pageName = (e: SeoEntry) => e.h1.replace(/\.$/, '');
 
 /** The page as an ordered list of markdown blocks (joined with blank lines). */
-function blocks(entry: SeoEntry): string[] {
+function blocks(entry: FullSeoEntry): string[] {
 	const out: string[] = [
 		[
 			'---',
@@ -81,16 +85,36 @@ const FOOTER =
 	`. Full tool index: [llms.txt](${SITE_URL}/llms.txt)`;
 
 /** The markdown twin of one tool page (`/<slug>.md`). */
-export function toolMarkdown(entry: SeoEntry): string {
+export function toolMarkdown(entry: FullSeoEntry): string {
 	return [...blocks(entry), FOOTER].join('\n\n') + '\n';
 }
 
+/**
+ * `/llms-full.txt` (llmstxt.org) — the whole site's content in one markdown
+ * document, for agents that want the corpus in a single fetch instead of
+ * walking the per-page `.md` twins. Frontmatter is replaced by a plain
+ * `Canonical:` line (YAML frontmatter is only valid at the very top of a file).
+ * `pages` = seo-full.server.ts's FULL_PAGES (canonical order).
+ */
+export function llmsFullMarkdown(pages: readonly FullSeoEntry[]): string {
+	const header = [
+		`# ${SITE_NAME} — full content`,
+		`> ${HOME.description}`,
+		`Tool index: ${SITE_URL}/llms.txt · every page below also exists as a standalone ` +
+			'markdown twin at `<canonical url>.md`.'
+	];
+	const rendered = pages.map((entry) =>
+		['---', `Canonical: ${SITE_URL}${entry.path}`, ...blocks(entry).slice(1)].join('\n\n')
+	);
+	return [...header, ...rendered].join('\n\n') + '\n';
+}
+
 /** `/index.md` — the homepage twin plus the full grouped tool directory. */
-export function homeMarkdown(): string {
+export function homeMarkdown(home: FullSeoEntry): string {
 	const line = (e: SeoEntry) =>
 		`- [${e.title.split(' | ')[0]}](${SITE_URL}${e.path}): ${e.description}`;
 	return [
-		...blocks(HOME),
+		...blocks(home),
 		'## All tools',
 		'### Compress',
 		FORMATS.map(line).join('\n'),

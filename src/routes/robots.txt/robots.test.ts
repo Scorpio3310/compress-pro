@@ -11,6 +11,8 @@ describe('robots.txt', () => {
 			'User-agent: *\nContent-Signal: ai-train=yes, search=yes, ai-input=yes\nAllow: /'
 		);
 		expect(text).toContain(`Sitemap: ${SITE_URL}/sitemap.xml`);
+		expect(text).toContain(`# AI tool index: ${SITE_URL}/llms.txt`);
+		expect(text).toContain(`# Full content: ${SITE_URL}/llms-full.txt`);
 		expect(text).not.toContain('Disallow');
 	});
 
@@ -19,5 +21,6 @@ describe('robots.txt', () => {
 		expect(text).toContain('User-agent: *\nDisallow: /');
 		expect(text).not.toContain('Content-Signal');
 		expect(text).not.toContain('Sitemap');
+		expect(text).not.toContain('llms');
 	});
 });

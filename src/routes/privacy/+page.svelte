@@ -6,6 +6,7 @@
 <PageHead
 	title="Privacy — Compress Pro"
 	description="Compress Pro’s privacy in plain words: files never leave your device, nothing is stored server-side, no ads, no cookies, no analytics, no third parties."
+	image="/og/privacy.jpg"
 	path="/privacy"
 />
 

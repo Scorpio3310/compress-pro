@@ -109,6 +109,23 @@ describe('font call sites arm the scaled watchdog', () => {
 		vi.useRealTimers();
 	});
 
+	it('subsetFont drops cleared (null/NaN) axis inputs from pinAxes', async () => {
+		// A cleared <input type="number"> binds null; posting it would pin the
+		// axis at 0 → clamped to the axis MINIMUM instead of its fvar default.
+		const settings: FontConversionSettings = {
+			...SETTINGS,
+			op: 'subset',
+			variableMode: 'static',
+			axisValues: { wght: 700, wdth: null as unknown as number, opsz: Number.NaN }
+		};
+		watch(subsetFont(bigFont(), settings));
+		await vi.advanceTimersByTimeAsync(0);
+		const posted = StubWorker.instances[0].posted[0] as unknown as {
+			payload: { pinAxes: Record<string, number> | null };
+		};
+		expect(posted.payload.pinAxes).toEqual({ wght: 700 });
+	});
+
 	for (const [name, run] of [
 		['convertFont', () => convertFont(bigFont(), SETTINGS)],
 		['subsetFont', () => subsetFont(bigFont(), SETTINGS)]

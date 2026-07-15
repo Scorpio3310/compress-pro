@@ -13,5 +13,6 @@ describe('llms.txt', () => {
 		expect(body).toContain(`${SITE_URL}/about`);
 		expect(body).toContain(`${SITE_URL}/privacy`);
 		expect(body, 'markdown-twin hint').toContain(`${SITE_URL}/index.md`);
+		expect(body, 'full-corpus hint').toContain(`${SITE_URL}/llms-full.txt`);
 	});
 });

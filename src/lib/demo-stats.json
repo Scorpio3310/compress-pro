@@ -249,7 +249,7 @@
 			"fps": 30
 		},
 		"originalBytes": 40240259,
-		"compressedBytes": 10313345,
+		"compressedBytes": 10308621,
 		"savingsPercent": 74,
 		"display": {
 			"before": "video-before.webp",
@@ -264,7 +264,7 @@
 				"height": 1012
 			},
 			"still": {
-				"atSec": 6.516666666666667
+				"atSec": 6.25
 			},
 			"clip": {
 				"file": "video-clip.mp4",

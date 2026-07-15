@@ -25,9 +25,27 @@ interface Woff2 {
 	init(wasmUrl: string): Promise<unknown>;
 	encode(buffer: Uint8Array | ArrayBuffer): Uint8Array;
 	decode(buffer: Uint8Array | ArrayBuffer): Uint8Array;
+	/** pnpm-patched addition — drops the emscripten instance (see patches/). */
+	dispose(): void;
 }
 
 let woff2Promise: Promise<Woff2> | null = null;
+
+// Everyday webfonts are well under 2 MB; past this the job's working set
+// (brotli-q11 window on encode, the decompressed sfnt on decode) has grown
+// the emscripten heap in power-of-two steps that NEVER shrink — and the
+// worker is pooled for the whole session. Same rationale as the archive
+// worker's fresh-instance-per-run: release the heap between huge jobs.
+const WOFF2_RELEASE_BYTES = 8 * 1024 * 1024;
+
+/** Drop the woff2 instance after a huge job so its heap high-water is
+ *  released; the next job re-inits (HTTP-cached fetch + ~712 KB recompile —
+ *  milliseconds, and only ever paid right after a multi-second encode). */
+function releaseWoff2IfHuge(woff2: Woff2, ...byteSizes: number[]): void {
+	if (Math.max(...byteSizes) <= WOFF2_RELEASE_BYTES) return;
+	woff2.dispose();
+	woff2Promise = null;
+}
 
 /** Lazy: the ~710 KB wasm (+ CJS glue) loads only when a woff2 endpoint is hit. */
 function getWoff2(): Promise<Woff2> {
@@ -36,7 +54,8 @@ function getWoff2(): Promise<Woff2> {
 		// has neither, and the node path would try fs. The shim is scoped to
 		// this single-purpose worker.
 		(globalThis as { window?: unknown }).window ??= globalThis;
-		const mod = (await import('fonteditor-core/woff2')).default as Woff2;
+		// unknown hop: dispose() is a pnpm-patched addition the shipped d.ts lacks.
+		const mod = (await import('fonteditor-core/woff2')).default as unknown as Woff2;
 		await mod.init(woff2WasmUrl);
 		return mod;
 	})().catch((error) => {
@@ -127,6 +146,7 @@ async function toSfnt(bytes: Uint8Array, container: FontFormat): Promise<Uint8Ar
 		case 'woff2': {
 			const woff2 = await getWoff2();
 			const sfnt = woff2.decode(bytes);
+			releaseWoff2IfHuge(woff2, bytes.byteLength, sfnt?.length ?? 0);
 			if (!sfnt?.length) throw new Error('WOFF2 decoding failed — the file may be corrupted');
 			return sfnt;
 		}
@@ -165,6 +185,7 @@ async function packageSfnt(
 			: null;
 		const woff2 = await getWoff2();
 		const bytes = woff2.encode(sfnt);
+		releaseWoff2IfHuge(woff2, sfnt.byteLength, bytes?.length ?? 0);
 		if (!bytes?.length) throw new Error('WOFF2 encoding failed — the file may be corrupted');
 		return { bytes, outputFormat: 'woff2', note };
 	}

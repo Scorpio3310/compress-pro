@@ -155,6 +155,23 @@ test('AR-06: deb and tar.gz chain-unwrap to the real files', async ({ page }) =>
 	}
 });
 
+// Symlink-bearing tarballs are the real-world norm (node/python dists, deb
+// data.tars). 7zz recreates the links as MEMFS symlinks; the app must skip
+// them with a visible note — and still extract every regular file.
+test('AR-06b: tar.gz with symlinks skips the links, keeps the files', async ({ page }) => {
+	const meta = fxMeta<{ files: string[]; links: number }>('links.tar.gz');
+	await gotoTab(page, 'zip');
+	await setOp(page, 'Extract');
+	await upload(page, fx('links.tar.gz'));
+	await compress(page, { timeout: 120_000 });
+	// 1 upload row + one row per REGULAR file — links must not produce rows.
+	await expect(rows(page)).toHaveCount(1 + meta.files.length);
+	for (const entry of meta.files) {
+		await expect(rowByName(page, entry).first()).toBeVisible();
+	}
+	await expect(page.getByText(`${meta.links} symbolic links skipped`)).toBeVisible();
+});
+
 test('AR-07: password-protected 7Z — friendly error, then success', async ({ page }) => {
 	await gotoTab(page, 'zip');
 	await setOp(page, 'Extract');

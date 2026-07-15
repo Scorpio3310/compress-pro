@@ -1,6 +1,7 @@
 import { goto } from '$app/navigation';
 import { resolve } from '$app/paths';
 import { CONVERTERS, FORMATS, TOOLS, TOOL_SLUGS, seoFor } from '$lib/seo';
+import { seoBodyFor } from '$lib/seo-body';
 import { toolMarkdown } from '$lib/markdown';
 
 // Minimal WebMCP surface (https://webmachinelearning.github.io/webmcp/):
@@ -73,8 +74,10 @@ function buildTools(): ModelContextTool[] {
 				if (slug && !TOOL_SLUGS.includes(slug)) {
 					return text(`${location.pathname} is not a tool page — call list_tools.`);
 				}
-				// The page's markdown twin, rendered from the same seo.ts entry.
-				return text(toolMarkdown(seoFor(slug || undefined)));
+				// The page's markdown twin, rendered from the same seo entry — the
+				// long-form body is a lazy per-group chunk, awaited here on demand.
+				const tool = slug || undefined;
+				return text(toolMarkdown({ ...seoFor(tool), ...(await seoBodyFor(tool)) }));
 			}
 		}
 	];

@@ -144,31 +144,45 @@ export function buildListArgs(archivePath: string, password: string): string[] {
 	return ['l', '-slt', '-y', `-p${password}`, '--', archivePath];
 }
 
-export interface ListInfo {
-	/** Container type 7zz detected ("7z", "Rar5", "Iso", …), null if unparsed. */
-	format: string | null;
-	/** True when any entry (or the header) is flagged encrypted. */
-	encrypted: boolean;
-	/** File entries only (folders excluded); null when listing failed. */
-	entryCount: number | null;
-}
-
-/** Parses `l -slt` stdout. The listing has one "Path = …" block per entry
- *  after the "----------" separator; the archive's own block sits before it. */
-export function parseListOutput(stdout: string[]): ListInfo {
-	const text = stdout.join('\n');
-	const format = /^Type = (.+)$/m.exec(text)?.[1]?.trim() ?? null;
-	const encrypted = /^Encrypted = \+$/m.test(text);
-	const sep = stdout.findIndex((l) => l.startsWith('----------'));
-	if (sep < 0) return { format, encrypted, entryCount: null };
-	// One block per entry after the separator; folders don't count as files.
-	const flags: boolean[] = [];
-	for (const line of stdout.slice(sep + 1)) {
-		if (line.startsWith('Path = ')) flags.push(false);
-		else if (flags.length && (/^Folder = \+/.test(line) || /^Attributes = D/.test(line)))
-			flags[flags.length - 1] = true;
-	}
-	return { format, encrypted, entryCount: flags.filter((isFolder) => !isFolder).length };
+/** Incremental `l -slt` entry counter. The worker keeps only a short tail
+ *  ring of 7zz output (error mapping), and `-slt` prints 10-19 lines PER
+ *  entry — parsing the tail after the fact only ever saw the "----------"
+ *  separator on ~3-entry archives, so counting has to happen per line. One
+ *  "Path = …" block per entry after the separator; folder blocks
+ *  (Folder = + / Attributes = D…) don't count as files. */
+export function createListCounter(): {
+	onLine: (line: string) => void;
+	/** File-only entry count; null when the separator never appeared (unparsed). */
+	count: () => number | null;
+} {
+	let seenSeparator = false;
+	let files = 0;
+	let inBlock = false;
+	let blockIsFolder = false;
+	const closeBlock = () => {
+		if (inBlock && !blockIsFolder) files++;
+		inBlock = false;
+	};
+	return {
+		onLine(line: string) {
+			if (!seenSeparator) {
+				if (line.startsWith('----------')) seenSeparator = true;
+				return;
+			}
+			if (line.startsWith('Path = ')) {
+				closeBlock();
+				inBlock = true;
+				blockIsFolder = false;
+			} else if (inBlock && (/^Folder = \+/.test(line) || /^Attributes = D/.test(line))) {
+				blockIsFolder = true;
+			}
+		},
+		count(): number | null {
+			if (!seenSeparator) return null;
+			closeBlock();
+			return files;
+		}
+	};
 }
 
 /** True when this stdout line is a -bb1 per-entry marker ("- path"). */

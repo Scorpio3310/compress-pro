@@ -9,7 +9,7 @@ overrides:
 
 patchedDependencies:
   fonteditor-core@2.6.3:
-    hash: 285c33c6394d04e542ad672c625fece77289d987c090b4c212a540f52daf4bdc
+    hash: 0d10d34d4de21fd6eb1d6dda2da062c098b9037885856eedc0d6dd0d8dcaef73
     path: patches/fonteditor-core@2.6.3.patch
   harfbuzzjs@1.4.0:
     hash: 22da4d9fc862790869d96ad4397d773cc9332e85592edb3c24a401de9df345de
@@ -60,7 +60,7 @@ importers:
         version: 0.8.3
       fonteditor-core:
         specifier: ^2.6.3
-        version: 2.6.3(patch_hash=285c33c6394d04e542ad672c625fece77289d987c090b4c212a540f52daf4bdc)
+        version: 2.6.3(patch_hash=0d10d34d4de21fd6eb1d6dda2da062c098b9037885856eedc0d6dd0d8dcaef73)
       gifenc:
         specifier: ^1.0.3
         version: 1.0.3
@@ -3465,7 +3465,7 @@ snapshots:
 
   flatted@3.4.2: {}
 
-  fonteditor-core@2.6.3(patch_hash=285c33c6394d04e542ad672c625fece77289d987c090b4c212a540f52daf4bdc):
+  fonteditor-core@2.6.3(patch_hash=0d10d34d4de21fd6eb1d6dda2da062c098b9037885856eedc0d6dd0d8dcaef73):
     dependencies:
       '@xmldom/xmldom': 0.8.13
 

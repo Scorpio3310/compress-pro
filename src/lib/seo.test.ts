@@ -11,6 +11,9 @@ import {
 	pathFor,
 	seoFor
 } from './seo';
+// Body assertions (faq/guide/intro) go through the server-side assembly —
+// the light index above no longer carries the long-form copy.
+import { FULL_PAGES, fullSeoFor } from './seo-full.server';
 
 const ALL = [HOME, ...FORMATS, ...CONVERTERS, ...TOOLS];
 
@@ -38,7 +41,7 @@ describe('seo entries', () => {
 	});
 
 	it('every non-home page has a 3–4 item FAQ', () => {
-		for (const e of [...FORMATS, ...CONVERTERS, ...TOOLS]) {
+		for (const e of FULL_PAGES.filter((p) => p.format !== null)) {
 			expect(e.faq.length, `${e.path} faq`).toBeGreaterThanOrEqual(3);
 			expect(e.faq.length, `${e.path} faq`).toBeLessThanOrEqual(4);
 		}
@@ -171,14 +174,16 @@ describe('engine copy', () => {
 
 	it('every format page names its engine in an "Under the hood" section', () => {
 		for (const e of FORMATS) {
-			const section = e.guide?.find((s) => s.heading === 'Under the hood');
+			const section = fullSeoFor(e.path.slice(1)).guide?.find(
+				(s) => s.heading === 'Under the hood'
+			);
 			expect(section, e.path).toBeDefined();
 			expect(section!.paragraphs?.join(' '), e.path).toMatch(ENGINE_BY_PAGE[e.path]);
 		}
 	});
 
 	it('the universal image tool names its routed encoders', () => {
-		const section = seoFor('compress-image').guide?.find((s) => s.heading === 'Under the hood');
+		const section = fullSeoFor('compress-image').guide?.find((s) => s.heading === 'Under the hood');
 		expect(section).toBeDefined();
 		expect(section!.paragraphs?.join(' ')).toMatch(/MozJPEG[\s\S]*libwebp/);
 	});
@@ -233,7 +238,7 @@ describe('related links', () => {
 describe('guide links', () => {
 	it('point at real tool pages and never at the page itself', () => {
 		const valid = new Set([...FORMATS, ...CONVERTERS, ...TOOLS].map((e) => e.path));
-		for (const e of ALL) {
+		for (const e of FULL_PAGES) {
 			for (const section of e.guide ?? []) {
 				for (const paragraph of section.paragraphs ?? []) {
 					for (const match of paragraph.matchAll(/\[[^\]]+\]\((\/[a-z0-9-]+)\)/g)) {
@@ -249,7 +254,7 @@ describe('guide links', () => {
 		// FAQ answers feed the JSON-LD FAQPage verbatim and tables render as
 		// plain text — `[text](/path)` must stay a guide-paragraph-only feature.
 		const hasLink = (s: string) => /\[[^\]]+\]\(\/[a-z0-9-]+\)/.test(s);
-		for (const e of ALL) {
+		for (const e of FULL_PAGES) {
 			const plain = [
 				e.title,
 				e.description,
