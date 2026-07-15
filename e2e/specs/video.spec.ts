@@ -7,6 +7,7 @@
 import { readFileSync } from 'node:fs';
 import { basename } from 'node:path';
 import { assertFloor, expect, fx, fxVideo, realFile, test, videoFixtures } from '../fixtures';
+import { MJPEG_NAME, MJPEG_SPEC } from '../mjpeg-fixture';
 import {
 	compress,
 	downloadRow,
@@ -760,4 +761,56 @@ test('V-20: /video-to-gif presets the GIF container and gif fps options', async 
 	await expect(page.locator('button[data-seg="original"]')).toHaveCount(0);
 	// And hides audio + target controls (meaningless for GIF).
 	await expect(page.getByLabel('Remove audio')).toHaveCount(0);
+});
+
+test('V-30: Motion-JPEG .mov → mp4 (mediabunny can’t decode it — frames re-encoded)', async ({
+	page,
+	rec
+}) => {
+	// The 'jpeg' sample entry gives mediabunny a null codec, so this used to fail
+	// with "This browser can’t decode this video". convertMjpeg pulls the raw
+	// JPEG frames instead and re-encodes to H.264, keeping the audio.
+	const input = readFileSync(fxVideo(MJPEG_NAME));
+	await gotoTab(page, 'video');
+	await upload(page, fxVideo(MJPEG_NAME));
+	await setContainer(page, 'mp4');
+	const run = await compress(page);
+	expect(run.error).toBeNull();
+	expect(run.warnings).toEqual([]);
+	const art = await downloadRow(page);
+	expect(art.name).toBe('v-mjpeg-96x64.mp4');
+	const info = await videoInfo(art.bytes);
+	expect(info.videoCodec).toBe('avc');
+	expect([info.width, info.height]).toEqual([MJPEG_SPEC.width, MJPEG_SPEC.height]);
+	// PCM isn’t MP4-legal → transcoded to AAC, never silently dropped.
+	expect(info.audioCodec, 'audio preserved as AAC').toBe('aac');
+	expect(info.trackCount).toBe(2);
+	expect(info.durationSec).toBeGreaterThan(1);
+	expect(info.durationSec).toBeLessThan(1.6);
+	rec.record({
+		id: 'V-30',
+		title: 'Motion-JPEG .mov re-encoded to H.264 mp4 (audio kept)',
+		settings: { tab: 'video', container: 'mp4', source: 'mjpeg' },
+		input: { name: MJPEG_NAME, bytes: input.length },
+		output: { name: art.name, bytes: art.bytes.length },
+		metrics: { videoCodec: info.videoCodec ?? '', audioCodec: info.audioCodec ?? '' },
+		assets: { output: rec.saveAsset('V-30', 'output', art.name, art.bytes) }
+	});
+});
+
+test('V-31: Motion-JPEG .mov → webm downscaled, audio kept as Opus', async ({ page }) => {
+	await gotoTab(page, 'video');
+	await upload(page, fxVideo(MJPEG_NAME));
+	await setContainer(page, 'webm');
+	await setMaxDimension(page, 48);
+	const run = await compress(page);
+	expect(run.error).toBeNull();
+	const art = await downloadRow(page);
+	expect(art.name).toBe('v-mjpeg-96x64.webm');
+	const info = await videoInfo(art.bytes);
+	expect(['vp9', 'vp8']).toContain(info.videoCodec);
+	// Longest side 96 → 48, aspect kept, even dims.
+	expect([info.width, info.height]).toEqual([48, 32]);
+	expect(info.audioCodec, 'PCM → Opus for WebM').toBe('opus');
+	expect(info.trackCount).toBe(2);
 });

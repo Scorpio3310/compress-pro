@@ -94,6 +94,9 @@ export interface VideoProbeResult {
 	};
 	/** Whether THIS browser can decode the source audio (false when no audio). */
 	audioDecodable: boolean;
+	/** Motion-JPEG source (MOV/AVI 'jpeg' sample entry): mediabunny can't decode
+	 *  it, but its frames are raw JPEGs we decode ourselves — see convertMjpeg. */
+	mjpeg?: boolean;
 }
 
 export interface VideoConvertPayload {
@@ -317,6 +320,14 @@ export interface WorkerContracts {
 			progress: never;
 		};
 		convert: {
+			payload: VideoConvertPayload;
+			result: VideoConvertResult;
+			progress: VideoConvertProgress;
+		};
+		/** Motion-JPEG re-encode: mediabunny yields the raw JPEG frames (its
+		 *  decoder can't), we decode each with the browser + re-encode. Same
+		 *  payload/result as convert. */
+		convertMjpeg: {
 			payload: VideoConvertPayload;
 			result: VideoConvertResult;
 			progress: VideoConvertProgress;

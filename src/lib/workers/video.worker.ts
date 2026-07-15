@@ -8,11 +8,15 @@ import {
 } from '$lib/codecs/video-math';
 import {
 	ALL_FORMATS,
+	AudioSampleSink,
+	AudioSampleSource,
 	BlobSource,
 	BufferTarget,
 	CanvasSink,
 	CanvasSource,
 	Conversion,
+	EncodedAudioPacketSource,
+	EncodedPacketSink,
 	FlacOutputFormat,
 	Input,
 	MovOutputFormat,
@@ -25,6 +29,7 @@ import {
 	canEncodeAudio,
 	getFirstEncodableVideoCodec,
 	type AudioCodec,
+	type InputVideoTrack,
 	type OutputFormat
 } from 'mediabunny';
 import { isLosslessAudioFormat, type AudioConversionSettings } from '$lib/types';
@@ -49,6 +54,23 @@ function undecodableMessage(codec: string | null): string {
 		`This browser can’t decode ${name} video — try Chrome, ` +
 		'or convert on the device that recorded it'
 	);
+}
+
+/**
+ * Motion-JPEG detection. mediabunny has no MJPEG codec, so its demuxer leaves a
+ * 'jpeg' sample-entry track with `codec === null` (logging only a warning) and
+ * `canDecode() === false`. But every packet is a whole JPEG file, so a null-codec
+ * track whose first frame starts with the JPEG SOI marker (FF D8 FF) is MJPEG we
+ * decode frame-by-frame ourselves (convertMjpeg) instead of rejecting.
+ */
+async function isMotionJpeg(video: InputVideoTrack): Promise<boolean> {
+	try {
+		const first = await new EncodedPacketSink(video).getFirstPacket();
+		const d = first?.data;
+		return !!d && d.length >= 3 && d[0] === 0xff && d[1] === 0xd8 && d[2] === 0xff;
+	} catch {
+		return false;
+	}
 }
 
 /** Container → muxer + result MIME. MOV is MP4's ISOBMFF sibling — same codecs. */
@@ -145,8 +167,11 @@ expose<WorkerContracts['video']>({
 		]);
 		// Encode support alone isn't enough — an undecodable source (HEVC on
 		// Firefox, ProRes anywhere) would otherwise die mid-conversion with a
-		// useless generic error.
-		if (!(await video.canDecode().catch(() => false))) {
+		// useless generic error. Motion-JPEG is the exception: mediabunny can't
+		// decode it (null codec) but we can, so route it to convertMjpeg instead.
+		const canDecode = await video.canDecode().catch(() => false);
+		const mjpeg = !canDecode && videoCodec === null && (await isMotionJpeg(video));
+		if (!canDecode && !mjpeg) {
 			throw new Error(undecodableMessage(videoCodec));
 		}
 		const stats = await video.computePacketStats(120);
@@ -182,7 +207,9 @@ expose<WorkerContracts['video']>({
 			width,
 			height,
 			frameRate: stats.averagePacketRate > 0 ? stats.averagePacketRate : null,
-			videoCodec,
+			// Label MJPEG (mediabunny reports null) so the UI and bitrate helpers
+			// have a source codec; convertMjpeg is selected off `mjpeg` below.
+			videoCodec: mjpeg ? 'mjpeg' : videoCodec,
 			codecString,
 			videoBitrate: stats.averageBitrate > 0 ? stats.averageBitrate : null,
 			audioCodec,
@@ -194,7 +221,8 @@ expose<WorkerContracts['video']>({
 				mov: isobmffCodec, // MOV shares MP4's codec policy — only the wrapper differs
 				webm: webmCodec === 'vp9' || webmCodec === 'vp8' ? webmCodec : null
 			},
-			audioDecodable
+			audioDecodable,
+			mjpeg
 		};
 		return { result };
 	},
@@ -289,6 +317,142 @@ expose<WorkerContracts['video']>({
 			result: { bytes, mimeType: VIDEO_OUTPUT[container].mime },
 			transfer: [bytes]
 		};
+	},
+
+	// Motion-JPEG re-encode. mediabunny can't decode the 'jpeg' track (null codec),
+	// but EncodedPacketSink still yields each frame's raw JPEG bytes, which the
+	// browser decodes. Mirrors the fromGif low-level pipeline, plus audio (GIFs are
+	// silent): decode frames → CanvasSource, and copy/transcode the audio track into
+	// the same Output. Video is streamed frame-by-frame so a multi-GB source never
+	// lands in memory whole.
+	convertMjpeg: async ({ jobId, file, container, video: v, audio }, progress) => {
+		// Same authoritative audio-encoder guard as `convert`.
+		if (audio.kind === 'encode') {
+			if (audio.codec === 'aac') await ensureAacEncoder();
+			if (!(await canEncodeAudio(audio.codec))) {
+				throw new Error(
+					`This browser can’t produce ${audio.codec.toUpperCase()} audio for ` +
+						`${container.toUpperCase()} — choose WebM to keep the audio track`
+				);
+			}
+		}
+
+		const input = openInput(file);
+		const videoTrack = await input.getPrimaryVideoTrack();
+		if (!videoTrack) throw new Error('No video track found in this file');
+		const audioTrack = audio.kind === 'discard' ? null : await input.getPrimaryAudioTrack();
+
+		const [duration, dw, dh] = await Promise.all([
+			input.computeDuration(),
+			videoTrack.getDisplayWidth(),
+			videoTrack.getDisplayHeight()
+		]);
+		// Main thread only forwards dims when it downscaled; otherwise fit to even
+		// numbers here (encoders reject odd dimensions).
+		const { width, height } =
+			v.width && v.height ? { width: v.width, height: v.height } : fitDimensions(dw, dh, null);
+
+		const flag = { cancelled: false };
+		let output: Output | null = null;
+		active.set(jobId, {
+			cancel: () => {
+				flag.cancelled = true;
+			}
+		});
+		try {
+			const target = new BufferTarget();
+			output = new Output({ format: VIDEO_OUTPUT[container].format(), target });
+
+			const canvas = new OffscreenCanvas(width, height);
+			const ctx = canvas.getContext('2d');
+			if (!ctx) throw new Error('OffscreenCanvas 2d context unavailable');
+			const videoSource = new CanvasSource(canvas, { codec: v.codec, bitrate: v.bitrate });
+			output.addVideoTrack(videoSource);
+
+			// Audio: copy (transmux) when the source codec is container-legal, else
+			// transcode; decideAudio already made that call, so honour its `kind`.
+			let audioSource: EncodedAudioPacketSource | AudioSampleSource | null = null;
+			if (audioTrack && audio.kind === 'copy') {
+				const srcCodec = await audioTrack.getCodec();
+				if (srcCodec) {
+					audioSource = new EncodedAudioPacketSource(srcCodec as AudioCodec);
+					output.addAudioTrack(audioSource);
+				}
+			} else if (audioTrack && audio.kind === 'encode') {
+				audioSource = new AudioSampleSource({ codec: audio.codec, bitrate: audio.bitrate });
+				output.addAudioTrack(audioSource);
+			}
+
+			await output.start();
+
+			// Pump audio and video concurrently so mediabunny interleaves by
+			// timestamp; each source applies its own encoder backpressure.
+			const pumpAudio = async () => {
+				if (!audioTrack || !audioSource) return;
+				if (audio.kind === 'copy' && audioSource instanceof EncodedAudioPacketSource) {
+					const meta = { decoderConfig: (await audioTrack.getDecoderConfig()) ?? undefined };
+					let first = true;
+					for await (const packet of new EncodedPacketSink(audioTrack).packets()) {
+						if (flag.cancelled) throw new JobCancelledError();
+						await audioSource.add(packet, first ? meta : undefined);
+						first = false;
+					}
+				} else if (audio.kind === 'encode' && audioSource instanceof AudioSampleSource) {
+					for await (const sample of new AudioSampleSink(audioTrack).samples()) {
+						if (flag.cancelled) throw new JobCancelledError();
+						try {
+							await audioSource.add(sample);
+						} finally {
+							sample.close();
+						}
+					}
+				}
+			};
+
+			const pumpVideo = async () => {
+				for await (const packet of new EncodedPacketSink(videoTrack).packets()) {
+					if (flag.cancelled) throw new JobCancelledError();
+					let bitmap: ImageBitmap;
+					try {
+						// Copy into a plain ArrayBuffer — under cross-origin isolation
+						// packet.data may be SharedArrayBuffer-backed, which Blob rejects.
+						bitmap = await createImageBitmap(
+							new Blob([new Uint8Array(packet.data)], { type: 'image/jpeg' })
+						);
+					} catch {
+						throw new Error('Couldn’t decode a Motion-JPEG frame — the file may be corrupt');
+					}
+					try {
+						ctx.drawImage(bitmap, 0, 0, width, height);
+						await videoSource.add(packet.timestamp, packet.duration);
+					} finally {
+						bitmap.close();
+					}
+					progress({ fraction: duration > 0 ? Math.min(packet.timestamp / duration, 0.99) : 0 });
+				}
+			};
+
+			await Promise.all([pumpVideo(), pumpAudio()]);
+			await output.finalize();
+
+			const out = target.buffer;
+			if (!out || out.byteLength === 0) throw new Error('Video conversion produced no output');
+			return {
+				result: { bytes: out, mimeType: VIDEO_OUTPUT[container].mime },
+				transfer: [out]
+			};
+		} catch (error) {
+			// Force-close the open VideoEncoder in this pooled worker (what Conversion
+			// does on its own failures); throws if already finalized — nothing left then.
+			try {
+				await output?.cancel();
+			} catch {
+				// best-effort cleanup — the original error is what matters
+			}
+			throw error;
+		} finally {
+			active.delete(jobId);
+		}
 	},
 
 	toGif: async ({ jobId, file, fps, maxDimension, quality }, progress) => {

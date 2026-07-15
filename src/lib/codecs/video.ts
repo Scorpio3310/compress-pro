@@ -166,11 +166,14 @@ export async function convertVideo(
 				);
 
 	const attemptMax = settings.mode === 'target' ? 2 : 1;
+	// Motion-JPEG can't go through mediabunny's Conversion (it can't decode the
+	// 'jpeg' track); the worker re-encodes it from raw JPEG frames instead.
+	const convertAction = probe.mjpeg ? 'convertMjpeg' : 'convert';
 	return runCancellableVideoJob(signal, async (jobId) => {
 		const run = (attempt: number) =>
 			callWorker(
 				'video',
-				'convert',
+				convertAction,
 				{
 					jobId,
 					file,
@@ -209,11 +212,16 @@ export async function convertVideo(
 			warning: warnings.filter(Boolean).join(' — ') || null,
 			container,
 			formatChanged: sniffContainer(file) !== container,
-			// removeAudio only transforms anything when there IS an audio track —
-			// otherwise a q100 re-encode of a silent clip would dodge keep-original.
+			// The keep-original guard (compress.ts) reverts to the source bytes when
+			// the output isn't smaller and nothing was "transformed". Re-encoding the
+			// audio to a container-legal codec (Opus→AAC for MP4/MOV) IS such a
+			// transform: the source codec is mute in the target (Opus in an MP4 plays
+			// silent in Safari/QuickTime), so keeping the smaller original would ship a
+			// broken file. removeAudio likewise only matters when there IS an audio track.
 			transformed:
 				dims.changed ||
 				frameRate !== undefined ||
+				audio.kind === 'encode' ||
 				(settings.removeAudio && probe.audioCodec !== null)
 		};
 	});
