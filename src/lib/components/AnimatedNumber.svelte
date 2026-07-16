@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { animate } from 'motion';
+	import { engine } from '$lib/motion/engine';
 	import { motionOK } from '$lib/motion/prefs.svelte';
 	import { SPRING_GENTLE } from '$lib/motion/tokens';
 
@@ -31,14 +31,17 @@
 		const node = el;
 		if (!node) return;
 		// Skip no-op retargets (e.g. sub-1% progress ticks) — this is the throttle.
-		if (!motionOK() || format(target) === format(current)) {
+		// Engine still cold (first ~200 ms) → settle instantly, same as reduced
+		// motion; the next value change tweens.
+		const m = engine();
+		if (!m || !motionOK() || format(target) === format(current)) {
 			controls?.stop();
 			current = target;
 			node.textContent = format(target);
 			return;
 		}
 		controls?.stop();
-		controls = animate(current, target, {
+		controls = m.animate(current, target, {
 			...(transition ?? SPRING_GENTLE),
 			onUpdate: (v: number) => {
 				current = v;

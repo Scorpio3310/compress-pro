@@ -1,6 +1,6 @@
-import { animate } from 'motion';
 import { untrack } from 'svelte';
 import type { Attachment } from 'svelte/attachments';
+import { engine } from './engine';
 import { motionOK } from './prefs.svelte';
 import { SPRING_GENTLE, SPRING_UI } from './tokens';
 
@@ -24,13 +24,23 @@ export function progressFill(getFraction: () => number): Attachment {
 			if (!done && Math.abs(f - last) < 0.01) return; // epsilon gate for chatty updates
 			last = f;
 			const x = `${(f - 1) * 100}%`;
+			const m = engine();
+			if (!m) {
+				// Pre-engine: write the transform directly — the bar still tracks
+				// progress, just without the spring. `initialized` intentionally
+				// stays false so the FIRST motion write after load is the
+				// duration-0 init set, never a spring starting from a transform
+				// motion didn't write.
+				node.style.transform = `translateX(${x})`;
+				return;
+			}
 			if (!initialized || !untrack(motionOK)) {
 				initialized = true;
-				animate(node, { x }, { duration: 0 });
+				m.animate(node, { x }, { duration: 0 });
 				return;
 			}
 			// motion auto-interrupts the previous spring and keeps its velocity
-			animate(node, { x }, SPRING_GENTLE);
+			m.animate(node, { x }, SPRING_GENTLE);
 		});
 	};
 }
@@ -46,8 +56,9 @@ export function springScale(getActive: () => boolean, activeScale = 1.01): Attac
 				initialized = true;
 				if (!active) return; // don't animate the resting state on mount
 			}
-			if (!untrack(motionOK)) return;
-			animate(node, { scale: active ? activeScale : 1 }, SPRING_UI);
+			const m = engine();
+			if (!m || !untrack(motionOK)) return;
+			m.animate(node, { scale: active ? activeScale : 1 }, SPRING_UI);
 		});
 	};
 }

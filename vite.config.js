@@ -72,6 +72,9 @@ export default defineConfig({
 		// mid-session, and Vite's "new dependencies optimized" full-reload would
 		// interrupt a running compression in dev.
 		include: [
+			// The animation engine loads ~200 ms after hydration (motion/engine.ts) —
+			// without prebundling, its first request would trigger the full-reload.
+			'motion',
 			'svgo/browser',
 			'gifenc',
 			'pdf-lib',

@@ -1,6 +1,6 @@
-import { animate } from 'motion';
 import { untrack } from 'svelte';
 import type { Attachment } from 'svelte/attachments';
+import { engine } from './engine';
 import { motionOK } from './prefs.svelte';
 import { SPRING_UI } from './tokens';
 
@@ -57,10 +57,21 @@ export function slideIndicator(getKey: () => string): Attachment {
 		function apply(pos: { x: number; width: number }, instant: boolean) {
 			if (!thumb) return;
 			thumb.style.opacity = '1';
+			const m = engine();
+			if (!m) {
+				// Pre-engine (mount / resize / font-ready inside the cold window —
+				// and the whole e2e data-ready path): position directly. No motion
+				// animation can be in flight before the module exists, so a plain
+				// style write can never fight one; once loaded, ALL writes go
+				// through motion again, so the reverse conflict can't happen.
+				thumb.style.left = `${pos.x}px`;
+				thumb.style.width = `${pos.width}px`;
+				return;
+			}
 			if (instant) {
-				animate(thumb, { left: `${pos.x}px`, width: `${pos.width}px` }, { duration: 0 });
+				m.animate(thumb, { left: `${pos.x}px`, width: `${pos.width}px` }, { duration: 0 });
 			} else {
-				animate(thumb, { left: `${pos.x}px`, width: `${pos.width}px` }, SPRING_UI);
+				m.animate(thumb, { left: `${pos.x}px`, width: `${pos.width}px` }, SPRING_UI);
 			}
 		}
 

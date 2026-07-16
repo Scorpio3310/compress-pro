@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { animate } from 'motion';
+	import { engine } from '$lib/motion/engine';
 	import { motionOK } from '$lib/motion/prefs.svelte';
 	import { SPRING_UI } from '$lib/motion/tokens';
 	import Icon from './Icon.svelte';
@@ -43,7 +43,7 @@
 	// slider is visible at mount (fires immediately, timing unchanged), but on
 	// a below-fold page section the hint would otherwise play unseen.
 	let dividerEl: HTMLDivElement | undefined = $state();
-	let hintAnim: ReturnType<typeof animate> | undefined;
+	let hintAnim: { stop: () => void } | undefined;
 	$effect(() => {
 		if (!dividerEl || !containerEl || !motionOK()) return;
 		let timer: ReturnType<typeof setTimeout> | undefined;
@@ -52,7 +52,10 @@
 				if (!entries.some((e) => e.isIntersecting)) return;
 				io.disconnect();
 				timer = setTimeout(() => {
-					hintAnim = animate(
+					// One-shot: engine still cold (slow first visit) → skip the nudge.
+					const m = engine();
+					if (!m) return;
+					hintAnim = m.animate(
 						dividerEl!,
 						{ x: [0, 7, -5, 0] },
 						{ duration: 0.9, ease: 'easeInOut' }
@@ -81,7 +84,8 @@
 		hintAnim?.stop();
 		(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
 		updatePosition(e.clientX);
-		if (handleEl && motionOK()) animate(handleEl, { scale: 1.15 }, SPRING_UI);
+		const m = engine();
+		if (handleEl && m && motionOK()) m.animate(handleEl, { scale: 1.15 }, SPRING_UI);
 	}
 
 	function handlePointerMove(e: PointerEvent) {
@@ -91,7 +95,8 @@
 
 	function handlePointerUp() {
 		isDragging = false;
-		if (handleEl && motionOK()) animate(handleEl, { scale: 1 }, SPRING_UI);
+		const m = engine();
+		if (handleEl && m && motionOK()) m.animate(handleEl, { scale: 1 }, SPRING_UI);
 	}
 </script>
 
