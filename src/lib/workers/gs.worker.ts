@@ -17,9 +17,25 @@ function getCompiledModule(): Promise<WebAssembly.Module> {
 			const response = await fetch(gsWasmUrl);
 			return WebAssembly.compile(await response.arrayBuffer());
 		}
-	})();
+	})().catch((error) => {
+		// Never memoize a rejection: a transient fetch failure during the
+		// construction-time warm compile would otherwise poison this instance —
+		// host.ts turns handler throws into {ok:false} messages (no onerror, no
+		// respawn), so every later compress would replay the stale error even
+		// after the network recovers. Reset so the next call refetches.
+		compiledPromise = null;
+		throw error;
+	});
 	return compiledPromise;
 }
+
+// Warm start: begin fetching + compiling the 15 MB wasm the moment this worker
+// is constructed, so a warmUp('gs') on PDF file-drop hides it behind the user's
+// think time before the Compress click. On success the compress handler reuses
+// the memoized module; on failure the memo self-resets (above), so the handler
+// simply retries the fetch — swallow the rejection here only to avoid an
+// unhandledrejection at init.
+getCompiledModule().catch(() => {});
 
 /** Turn Ghostscript's stdout/stderr tail into a message a user can act on. */
 function describeGsFailure(code: number, lines: string[]): string {

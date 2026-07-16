@@ -127,6 +127,20 @@ function getInstance(kind: WorkerKind): Instance {
 	return pool.reduce((a, b) => (a.pending.size <= b.pending.size ? a : b));
 }
 
+/**
+ * Pre-spawn ONE pooled worker for `kind` ahead of its first job, so the worker
+ * module — and, for gs, the 15 MB wasm it eager-compiles on construction —
+ * loads during the user's think time (e.g. between dropping a PDF and clicking
+ * Compress) instead of on the critical path after the click. No-op once the
+ * pool has an instance; the real job reuses whatever this spawned. Never grows
+ * the pool past one, unlike getInstance() under concurrent load.
+ */
+export function warmUp(kind: WorkerKind): void {
+	const pool = pools.get(kind);
+	if (pool && pool.length > 0) return;
+	getInstance(kind);
+}
+
 /** Rejection used by abortAll() so callers can tell user cancellation from real failures. */
 export class CancelledError extends Error {
 	constructor() {

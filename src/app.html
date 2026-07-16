@@ -14,6 +14,22 @@
 				var s = localStorage.getItem('theme');
 				var d = window.matchMedia('(prefers-color-scheme: dark)').matches;
 				if (s === 'dark' || (s !== 'light' && d)) document.documentElement.classList.add('dark');
+
+				// Pre-hydration drop guard: until the app hydrates and attaches its own
+				// window drag/drop handlers, a file dropped anywhere makes the browser
+				// navigate away from the page, losing the drop on a drop-centric tool.
+				// Prevent that here; +page.svelte calls window.__dropGuardOff() on mount
+				// to remove these so its real drop-to-upload routing takes over.
+				var guard = function (e) {
+					e.preventDefault();
+				};
+				window.addEventListener('dragover', guard);
+				window.addEventListener('drop', guard);
+				window.__dropGuardOff = function () {
+					window.removeEventListener('dragover', guard);
+					window.removeEventListener('drop', guard);
+					window.__dropGuardOff = null;
+				};
 			})();
 		</script>
 		%sveltekit.head%

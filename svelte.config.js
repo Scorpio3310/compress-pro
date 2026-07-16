@@ -40,7 +40,7 @@ const config = {
 				'script-src': [
 					'self',
 					'wasm-unsafe-eval',
-					'sha256-wUiu1icdgmmYsLeFT/LSXKVTnz5o9eUbN+MmRcnTTmI='
+					'sha256-Ibe0FrEc/Jsn9YP7+qVi1I1xh6uJZrU0e7pYmEDoWZ8='
 				],
 				// blob:: gifsicle-wasm-browser and fflate spawn blob: workers.
 				'worker-src': ['self', 'blob:'],

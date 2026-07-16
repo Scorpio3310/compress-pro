@@ -10,9 +10,8 @@
 		ZipSettings
 	} from '$lib/types';
 	import { IMAGE_FORMATS, isBundlingArchiveFormat, isLosslessAudioFormat } from '$lib/types';
-	import { compressFiles, runArchiveTool, runPdfTool } from '$lib/compress';
 	import { settings } from '$lib/stores/settings.svelte';
-	import { abortAll } from '$lib/workers/rpc';
+	import { abortAll, warmUp } from '$lib/workers/rpc';
 	import type { WorkerKind } from '$lib/workers/protocol';
 	import { downloadFile, downloadAllAsZip } from '$lib/download';
 	import { familyOf, matchesAccept, routeFileToFormat, TAB_ACCEPT } from '$lib/routing';
@@ -23,7 +22,6 @@
 	import * as actionLabels from '$lib/action-labels';
 	import Tabs, { type TabBadgeStatus } from '$lib/components/Tabs.svelte';
 	import FileUpload from '$lib/components/FileUpload.svelte';
-	import CompressionControls from '$lib/components/CompressionControls.svelte';
 	import CompressButton from '$lib/components/controls/CompressButton.svelte';
 	import DownloadAllZip from '$lib/components/DownloadAllZip.svelte';
 	import FileList from '$lib/components/FileList.svelte';
@@ -265,6 +263,27 @@
 		return `${failures.length} of ${fileCount} files failed — details are shown on each file`;
 	}
 
+	// The settings panel (11 format sub-panels) only renders once a file is added,
+	// so load it on demand — keeps it and its panels out of the initial per-page
+	// bundle. handleFiles kicks this off the moment a file lands.
+	type ControlsComponent = typeof import('$lib/components/CompressionControls.svelte').default;
+	let ControlsComp = $state<ControlsComponent | null>(null);
+	let controlsLoading = false;
+	function loadControls() {
+		if (ControlsComp || controlsLoading) return;
+		controlsLoading = true;
+		void import('$lib/components/CompressionControls.svelte')
+			.then((m) => {
+				ControlsComp = m.default;
+			})
+			.catch(() => {
+				// Failed chunk fetch (offline before the SW cached it): unlatch so
+				// the next file-add retries instead of leaving the panel gone for
+				// the rest of the session.
+				controlsLoading = false;
+			});
+	}
+
 	function handleFiles(files: UploadedFile[], format: FileFormat = activeTab) {
 		const state = tabStates[format];
 		if (state.isCompressing) {
@@ -277,6 +296,16 @@
 		state.files = [...state.files, ...files];
 		clearResults(state);
 		state.error = null;
+		// Warm this tab's engine now: a drop precedes the Compress click by
+		// seconds, so the worker + its wasm (the 15 MB gs module especially) load
+		// during think time instead of stalling behind a dead progress bar.
+		const warmKind = WARM_KIND[format];
+		if (warmKind) warmUp(warmKind);
+		// The settings panel + codec orchestration are interaction-gated chunks;
+		// load them now (a file just landed) so they're ready when the panel renders
+		// / the user clicks Compress, without weighing down first paint.
+		loadControls();
+		void import('$lib/compress').catch(() => {});
 		// duration/dimensions feed the live output-size estimate on these tabs
 		if (format === 'video' || format === 'audio') files.forEach(probeMedia);
 		// variable axes + glyph counts feed the subset op's axis inputs
@@ -304,6 +333,24 @@
 		pdf: ['gs', 'image'], // fromImages re-encodes pages via the image worker
 		font: ['font'], // synchronous brotli — terminate is the only mid-encode cancel
 		zip: ['archive'] // 7zz is synchronous wasm too; fflate fast paths cancel cooperatively
+	};
+
+	// The primary worker each tab warms on file-drop (see handleFiles). Only the
+	// kind on the critical path is listed — pdf warms 'gs' (15 MB, the big win),
+	// not the secondary 'image' its fromImages op may also touch. exif runs on
+	// the main thread, so it has nothing to warm.
+	const WARM_KIND: Partial<Record<FileFormat, WorkerKind>> = {
+		jpg: 'image',
+		png: 'image',
+		webp: 'image',
+		gif: 'image',
+		heic: 'image',
+		svg: 'svg',
+		pdf: 'gs',
+		video: 'video',
+		audio: 'video',
+		font: 'font',
+		zip: 'archive'
 	};
 
 	async function handleCompress() {
@@ -352,6 +399,10 @@
 		};
 
 		try {
+			// Codec orchestration loads on the click (interaction-gated) so compress.ts
+			// and every codec wrapper stay out of the initial per-page bundle; it's
+			// prefetched on file-add, so this normally resolves from cache instantly.
+			const { compressFiles, runArchiveTool, runPdfTool } = await import('$lib/compress');
 			const pdfSettings = settings.pdf;
 			if (tab === 'zip') {
 				const out = await runArchiveTool(state.files, settings.zip, onProgress, controller.signal);
@@ -659,6 +710,17 @@
 	}
 
 	$effect(() => {
+		// Retire the app.html pre-hydration drop guard now that our window ondrop
+		// handler (below) is live — the guard preventDefaults every drop, which
+		// handleWindowDrop reads as "already taken" and would skip, so leaving it on
+		// would silently break drop-to-upload. rAF keeps it on until just past
+		// hydration, so a drop in the gap is swallowed but the page never navigates.
+		requestAnimationFrame(() =>
+			(window as unknown as { __dropGuardOff?: () => void }).__dropGuardOff?.()
+		);
+	});
+
+	$effect(() => {
 		return () => {
 			for (const state of Object.values(tabStates)) {
 				for (const f of state.files) {
@@ -705,7 +767,7 @@
 <!-- THE TOOL — a stack of soft cards floating on the canvas: intake,
      settings, files, and the action card at the very bottom of the flow. -->
 <!-- Nameplate — on the paper, above the cards -->
-<div class="reveal-css mb-6 sm:mb-8" style="--reveal-i: 1">
+<div class="reveal-css reveal-css-lcp mb-6 sm:mb-8" style="--reveal-i: 1">
 	<h1 class="text-display text-ink" {@attach heroSqueeze()}>
 		{h1Parts.head}<span data-squeeze class="inline-block">{h1Parts.tail}</span>
 	</h1>
@@ -729,7 +791,7 @@
 </div>
 
 <!-- THE TOOL -->
-<div class="reveal-css space-y-3" style="--reveal-i: 2">
+<div class="reveal-css reveal-css-lcp space-y-3" style="--reveal-i: 2">
 	<!-- Intake card: tabs + dropzone -->
 	<div class="overflow-hidden rounded-card bg-card">
 		<Tabs
@@ -772,18 +834,21 @@
 	</div>
 
 	{#if currentState.files.length > 0}
-		<!-- Settings card -->
-		<div class="overflow-hidden rounded-card bg-card">
-			<CompressionControls
-				format={activeTab}
-				bind:settings={settings[activeTab]}
-				bind:advancedOpen
-				isCompressing={currentState.isCompressing}
-				{totalOriginalSize}
-				{estimatedSize}
-				{fontAxes}
-			/>
-		</div>
+		<!-- Settings card — loaded on demand (loadControls); the file list + CTA
+		     below render immediately, and this pops in a frame later on cold load. -->
+		{#if ControlsComp}
+			<div class="overflow-hidden rounded-card bg-card">
+				<ControlsComp
+					format={activeTab}
+					bind:settings={settings[activeTab]}
+					bind:advancedOpen
+					isCompressing={currentState.isCompressing}
+					{totalOriginalSize}
+					{estimatedSize}
+					{fontAxes}
+				/>
+			</div>
+		{/if}
 
 		<!-- Files + action card: the list flows straight into the CTA at the very
 		     bottom; progress appears right under the click point, and the results

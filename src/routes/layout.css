@@ -596,6 +596,18 @@
 	animation: reveal-rise 0.55s var(--ease-swift) both;
 	animation-delay: calc(var(--reveal-i, 0) * 60ms);
 }
+/* Above-the-fold elements on the LCP path must never be held at opacity:0:
+   Chrome does not record Largest Contentful Paint until the element is non-
+   transparent, so a plain reveal-css adds ~60-120ms to LCP. This variant keeps
+   the rise (transform only) so the entrance still reads, without the penalty. */
+.reveal-css-lcp {
+	animation-name: reveal-rise-opaque;
+}
+@keyframes reveal-rise-opaque {
+	from {
+		transform: translateY(12px);
+	}
+}
 
 /* ── Shimmer while compressing (add .shimmer to the card) ──────────── */
 @keyframes shimmer-sweep {
