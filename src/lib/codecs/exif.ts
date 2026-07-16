@@ -507,7 +507,10 @@ const MIME: Record<'jpeg' | 'png' | 'webp', string> = {
 
 /** Pure bytes-in/bytes-out strip — runs inside the image worker (rpc-free so
  *  the worker bundle stays lean; compress.ts owns the File→Blob framing). */
-export function stripImageMetadataBytes(bytes: Uint8Array, opts: ExifStripOptions): StripBytesResult {
+export function stripImageMetadataBytes(
+	bytes: Uint8Array,
+	opts: ExifStripOptions
+): StripBytesResult {
 	const format = sniff(bytes);
 	if (!format) throw new Error('Only JPEG, PNG and WebP files are supported');
 

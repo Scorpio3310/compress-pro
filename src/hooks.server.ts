@@ -1,6 +1,6 @@
 import type { Handle } from '@sveltejs/kit';
 import { TOOL_SLUGS } from '$lib/seo';
-import { fullSeoFor } from '$lib/seo-full.server';
+import { FULL_CONVERTERS, FULL_FORMATS, FULL_TOOLS, fullSeoFor } from '$lib/seo-full.server';
 import { toolMarkdown, homeMarkdown } from '$lib/markdown';
 
 /** COOP/COEP (SharedArrayBuffer isolation) plus the security-header set, applied
@@ -44,7 +44,14 @@ export const handle: Handle = async ({ event, resolve }) => {
 	) {
 		const slug = event.url.pathname.replace(/^\/+|\/+$/g, '');
 		if (slug === '' || TOOL_SLUGS.includes(slug)) {
-			const md = slug === '' ? homeMarkdown(fullSeoFor(undefined)) : toolMarkdown(fullSeoFor(slug));
+			const md =
+				slug === ''
+					? homeMarkdown(fullSeoFor(undefined), {
+							formats: FULL_FORMATS,
+							converters: FULL_CONVERTERS,
+							tools: FULL_TOOLS
+						})
+					: toolMarkdown(fullSeoFor(slug));
 			return new Response(event.request.method === 'HEAD' ? null : md, {
 				headers: {
 					...SECURITY_HEADERS,

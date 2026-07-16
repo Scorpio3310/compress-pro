@@ -14,7 +14,8 @@ import { seoFor, type SeoBody } from '$lib/seo';
  * consumer, and its .server suffix keeps it off the client).
  */
 
-type BodyGroup = 'home' | 'images' | 'video-audio' | 'pdf' | 'fonts' | 'archives';
+/** Shared with seo-detail/, which splits along the same partition. */
+export type BodyGroup = 'home' | 'images' | 'video-audio' | 'pdf' | 'fonts' | 'archives';
 
 /** Exhaustive by construction — a new FileFormat member fails to compile
  *  until it is mapped; index.test.ts pins congruence with TOOL_GROUPS. */

@@ -604,7 +604,12 @@ expose<WorkerContracts['image']>({
 				: b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength)
 		) as ArrayBuffer;
 		return {
-			result: { bytes: buffer, mime: out.mime, info: out.info, removedAnything: out.removedAnything },
+			result: {
+				bytes: buffer,
+				mime: out.mime,
+				info: out.info,
+				removedAnything: out.removedAnything
+			},
 			transfer: [buffer]
 		};
 	}

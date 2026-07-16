@@ -1,21 +1,19 @@
 import {
-	CONVERTERS,
-	FORMATS,
-	HOME,
 	SITE_NAME,
 	SITE_URL,
-	TOOLS,
 	seoFor,
 	type FullSeoEntry,
-	type SeoEntry
+	type SeoEntry,
+	type SeoLite
 } from '$lib/seo';
 
 // Markdown twins of the tool pages (`/<slug>.md`, `/index.md`) — the
 // agent-facing render of the same seo entries the HTML pages are built
 // from. Presentation mirrors FormatInfo.svelte; keep the two in sync.
-// Callers supply FULL entries (index + lazy body): the prerender routes via
-// seo-full.server.ts, webmcp via `await seoBodyFor` — this module must never
-// import the bodies itself or they'd ride into the client bundle with it.
+// Callers supply FULL entries (lite index + lazy detail/body): the prerender
+// routes via seo-full.server.ts, webmcp via `await seoDetailFor/seoBodyFor` —
+// this module must never import the details or bodies itself (only the lite
+// index, for related-link names) or they'd ride into the client bundle with it.
 
 // FormatInfo's generic How-it-works trio, with the runtime pasteKey() pinned
 // to a static spelling — the markdown is prerendered once for every platform.
@@ -39,7 +37,7 @@ function tableMarkdown(table: { columns: string[]; rows: string[][] }): string {
 	].join('\n');
 }
 
-const pageName = (e: SeoEntry) => e.h1.replace(/\.$/, '');
+const pageName = (e: SeoLite) => e.h1.replace(/\.$/, '');
 
 /** The page as an ordered list of markdown blocks (joined with blank lines). */
 function blocks(entry: FullSeoEntry): string[] {
@@ -94,12 +92,14 @@ export function toolMarkdown(entry: FullSeoEntry): string {
  * document, for agents that want the corpus in a single fetch instead of
  * walking the per-page `.md` twins. Frontmatter is replaced by a plain
  * `Canonical:` line (YAML frontmatter is only valid at the very top of a file).
- * `pages` = seo-full.server.ts's FULL_PAGES (canonical order).
+ * `pages` = seo-full.server.ts's FULL_PAGES (canonical order, home first —
+ * its description doubles as the site summary line).
  */
 export function llmsFullMarkdown(pages: readonly FullSeoEntry[]): string {
+	const home = pages.find((p) => p.path === '/') ?? pages[0];
 	const header = [
 		`# ${SITE_NAME} — full content`,
-		`> ${HOME.description}`,
+		`> ${home.description}`,
 		`Tool index: ${SITE_URL}/llms.txt · every page below also exists as a standalone ` +
 			'markdown twin at `<canonical url>.md`.'
 	];
@@ -109,19 +109,28 @@ export function llmsFullMarkdown(pages: readonly FullSeoEntry[]): string {
 	return [...header, ...rendered].join('\n\n') + '\n';
 }
 
-/** `/index.md` — the homepage twin plus the full grouped tool directory. */
-export function homeMarkdown(home: FullSeoEntry): string {
+/** `/index.md` — the homepage twin plus the full grouped tool directory.
+ *  The directory (titles + descriptions of every page) is detail data, so the
+ *  server callers pass seo-full.server.ts's FULL_* sets in. */
+export function homeMarkdown(
+	home: FullSeoEntry,
+	directory: {
+		formats: readonly SeoEntry[];
+		converters: readonly SeoEntry[];
+		tools: readonly SeoEntry[];
+	}
+): string {
 	const line = (e: SeoEntry) =>
 		`- [${e.title.split(' | ')[0]}](${SITE_URL}${e.path}): ${e.description}`;
 	return [
 		...blocks(home),
 		'## All tools',
 		'### Compress',
-		FORMATS.map(line).join('\n'),
+		directory.formats.map(line).join('\n'),
 		'### Convert',
-		CONVERTERS.map(line).join('\n'),
+		directory.converters.map(line).join('\n'),
 		'### Tools',
-		TOOLS.map(line).join('\n'),
+		directory.tools.map(line).join('\n'),
 		FOOTER
 	].join('\n\n');
 }

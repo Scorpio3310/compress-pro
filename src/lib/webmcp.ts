@@ -2,14 +2,16 @@ import { goto } from '$app/navigation';
 import { resolve } from '$app/paths';
 import { CONVERTERS, FORMATS, TOOLS, TOOL_SLUGS, seoFor } from '$lib/seo';
 import { seoBodyFor } from '$lib/seo-body';
-import { toolMarkdown } from '$lib/markdown';
+import { allSeoDetails, seoDetailFor } from '$lib/seo-detail';
 
 // Minimal WebMCP surface (https://webmachinelearning.github.io/webmcp/):
 // browsers with an in-page agent expose a model context — the Chrome preview
-// puts it on navigator, the W3C draft on document; probe both — and agents
-// drive the page through registered tools. Everything here reuses seo.ts data
-// already in the bundle (the layout imports it for the footer); when the API
-// is absent the whole thing is a single property probe.
+// puts it on navigator, the W3C draft on document; agents drive the page
+// through registered tools. Registration reuses the lite seo.ts data already
+// in the bundle (the layout imports it for the footer); the heavy copy
+// (titles/descriptions, markdown bodies) is awaited inside the handlers, so
+// an agent actually calling a tool is what fetches those chunks. When the
+// API is absent the whole thing is a single property probe.
 
 interface ToolResult {
 	content: { type: 'text'; text: string }[];
@@ -37,12 +39,17 @@ function buildTools(): ModelContextTool[] {
 			description:
 				'List every Compress Pro tool page as "slug — name: what it does". Slugs feed open_tool.',
 			annotations: { readOnlyHint: true },
-			execute: async () =>
-				text(
+			execute: async () => {
+				const details = await allSeoDetails();
+				return text(
 					[...FORMATS, ...CONVERTERS, ...TOOLS]
-						.map((e) => `- ${e.path.slice(1)} — ${e.title.split(' | ')[0]}: ${e.description}`)
+						.map((e) => {
+							const detail = details[e.path.slice(1)];
+							return `- ${e.path.slice(1)} — ${detail.title.split(' | ')[0]}: ${detail.description}`;
+						})
 						.join('\n')
-				)
+				);
+			}
 		},
 		{
 			name: 'open_tool',
@@ -61,7 +68,7 @@ function buildTools(): ModelContextTool[] {
 					return text(`Unknown tool "${slug}" — call list_tools for the valid slugs.`);
 				}
 				await goto(resolve(`/${slug}`));
-				return text(`Opened /${slug} — ${seoFor(slug).description}`);
+				return text(`Opened /${slug} — ${(await seoDetailFor(slug)).description}`);
 			}
 		},
 		{
@@ -75,9 +82,15 @@ function buildTools(): ModelContextTool[] {
 					return text(`${location.pathname} is not a tool page — call list_tools.`);
 				}
 				// The page's markdown twin, rendered from the same seo entry — the
-				// long-form body is a lazy per-group chunk, awaited here on demand.
+				// detail, long-form body AND the markdown emitter are lazy chunks,
+				// awaited here on demand.
 				const tool = slug || undefined;
-				return text(toolMarkdown({ ...seoFor(tool), ...(await seoBodyFor(tool)) }));
+				const [{ toolMarkdown }, detail, body] = await Promise.all([
+					import('$lib/markdown'),
+					seoDetailFor(tool),
+					seoBodyFor(tool)
+				]);
+				return text(toolMarkdown({ ...seoFor(tool), ...detail, ...body }));
 			}
 		}
 	];

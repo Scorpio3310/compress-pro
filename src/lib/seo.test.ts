@@ -11,29 +11,36 @@ import {
 	pathFor,
 	seoFor
 } from './seo';
-// Body assertions (faq/guide/intro) go through the server-side assembly —
-// the light index above no longer carries the long-form copy.
-import { FULL_PAGES, fullSeoFor } from './seo-full.server';
+// Content assertions (title/description/tagline, steps, preset/accept, faq,
+// guide) go through the server-side assembly — the light index above carries
+// only the lite fields (path/label/h1/feature/demo).
+import {
+	FULL_CONVERTERS,
+	FULL_FORMATS,
+	FULL_PAGES,
+	FULL_TOOLS,
+	fullSeoFor
+} from './seo-full.server';
 
-const ALL = [HOME, ...FORMATS, ...CONVERTERS, ...TOOLS];
+const FULL_NON_HOME = [...FULL_FORMATS, ...FULL_CONVERTERS, ...FULL_TOOLS];
 
 describe('seo entries', () => {
 	it('has unique paths, titles, descriptions and h1s across every page', () => {
 		for (const key of ['path', 'title', 'description', 'h1'] as const) {
-			const values = ALL.map((e) => e[key]);
+			const values = FULL_PAGES.map((e) => e[key]);
 			expect(new Set(values).size, `duplicate ${key}`).toBe(values.length);
 		}
 	});
 
 	it('keeps taglines 55–58 chars so the hero never reflows between pages', () => {
-		for (const e of ALL) {
+		for (const e of FULL_PAGES) {
 			expect(e.tagline.length, `${e.path} tagline "${e.tagline}"`).toBeGreaterThanOrEqual(55);
 			expect(e.tagline.length, `${e.path} tagline "${e.tagline}"`).toBeLessThanOrEqual(58);
 		}
 	});
 
 	it('keeps descriptions and titles within SERP-friendly lengths', () => {
-		for (const e of ALL) {
+		for (const e of FULL_PAGES) {
 			expect(e.description.length, `${e.path} description`).toBeGreaterThanOrEqual(140);
 			expect(e.description.length, `${e.path} description`).toBeLessThanOrEqual(160);
 			expect(e.title.length, `${e.path} title`).toBeLessThanOrEqual(62);
@@ -48,7 +55,7 @@ describe('seo entries', () => {
 	});
 
 	it('gives every tool page a per-page OG image derived from its path', () => {
-		for (const e of [...FORMATS, ...CONVERTERS, ...TOOLS]) {
+		for (const e of FULL_NON_HOME) {
 			expect(e.ogImage, e.path).toBe(`/og${e.path}.jpg`);
 		}
 	});
@@ -56,7 +63,7 @@ describe('seo entries', () => {
 	it('every font page overrides the generic how-it-works steps', () => {
 		// The generic trio talks quality/target-size/compare — none of which
 		// the font pipeline has; shipping it there would be dishonest copy.
-		for (const e of [...FORMATS, ...CONVERTERS, ...TOOLS]) {
+		for (const e of FULL_NON_HOME) {
 			if (e.format !== 'font') continue;
 			expect(e.steps, e.path).toBeDefined();
 			expect(e.steps, e.path).toHaveLength(3);
@@ -66,7 +73,7 @@ describe('seo entries', () => {
 
 describe('converter entries', () => {
 	it('presets live on their hosting tab (image/svg/video/pdf/font/archive)', () => {
-		for (const c of CONVERTERS) {
+		for (const c of FULL_CONVERTERS) {
 			if (c.preset.kind === 'image') expect(c.preset.tab, c.path).toBe(c.format);
 			else if (c.preset.kind === 'svg') expect(c.format, c.path).toBe('svg');
 			else if (c.preset.kind === 'video') expect(c.format, c.path).toBe('video');
@@ -127,7 +134,7 @@ describe('tool groups (homepage directory + footer columns)', () => {
 describe('tool entries (standalone pages)', () => {
 	it('host their preset on the right tab, with a feature line and an accept', () => {
 		const imageTabs = new Set(['jpg', 'png', 'webp', 'gif', 'heic']);
-		for (const t of TOOLS) {
+		for (const t of FULL_TOOLS) {
 			if (t.preset.kind === 'image') expect(t.preset.tab, t.path).toBe(t.format);
 			else if (t.preset.kind === 'resize' || t.preset.kind === 'image-any')
 				expect(imageTabs.has(t.format), t.path).toBe(true);
@@ -147,9 +154,12 @@ describe('tool entries (standalone pages)', () => {
 		}
 	});
 
-	it('resolves through seoFor and converterFor like converters do', () => {
+	it('resolves through seoFor like converters do, with the preset in the detail', () => {
 		expect(seoFor('unlock-pdf').h1).toBe('Unlock PDF files.');
-		expect(converterFor('protect-pdf')?.preset).toEqual({ kind: 'pdf-op', op: 'protect' });
+		expect(FULL_TOOLS.find((t) => t.path === '/protect-pdf')?.preset).toEqual({
+			kind: 'pdf-op',
+			op: 'protect'
+		});
 	});
 });
 
@@ -223,7 +233,7 @@ describe('featured tools', () => {
 describe('related links', () => {
 	it('point at real tool pages, never at the page itself, 2–4 per page', () => {
 		const valid = new Set([...FORMATS, ...CONVERTERS, ...TOOLS].map((e) => e.path));
-		for (const e of [...FORMATS, ...CONVERTERS, ...TOOLS]) {
+		for (const e of FULL_NON_HOME) {
 			if (!e.related) continue;
 			expect(e.related.length, e.path).toBeGreaterThanOrEqual(2);
 			expect(e.related.length, e.path).toBeLessThanOrEqual(4);

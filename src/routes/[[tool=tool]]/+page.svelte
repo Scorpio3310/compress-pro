@@ -31,7 +31,7 @@
 	import Seo from '$lib/components/Seo.svelte';
 	import FormatInfo from '$lib/components/FormatInfo.svelte';
 	import Icon from '$lib/components/Icon.svelte';
-	import { seoFor, converterFor, pathFor } from '$lib/seo';
+	import { pathFor } from '$lib/seo';
 	import { page } from '$app/state';
 	import { goto, afterNavigate } from '$app/navigation';
 	import { resolve } from '$app/paths';
@@ -40,13 +40,16 @@
 	import { heroSqueeze } from '$lib/motion/logo';
 	import type { PageData } from './$types';
 
-	// Page-split demo/directory chunks from +page.ts (null on pages without them).
+	// Page-split entry/detail/body + demo/directory chunks from +page.ts
+	// (converter/demo/directory are undefined/null on pages without them).
 	let { data }: { data: PageData } = $props();
 
 	// Tabs are real routes (/compress-jpg …) sharing this one page component, so
 	// navigating between them never remounts — per-tab state below survives.
-	const seo = $derived(seoFor(page.params.tool));
-	const conv = $derived(converterFor(page.params.tool));
+	// The merged entry (lite ⊕ lazy detail) arrives via load, so SSR, hydration
+	// and client navigations all see the full head/meta + preset data.
+	const seo = $derived(data.entry);
+	const conv = $derived(data.converter);
 	const activeTab: FileFormat = $derived(seo.format ?? 'jpg');
 
 	// The h1's last word carries the one-shot "squeeze" entrance (heroSqueeze);
@@ -532,7 +535,9 @@
 	// fought. Writes go through the persisted settings store: identical to the
 	// user clicking the option themselves.
 	afterNavigate(() => {
-		const preset = converterFor(page.params.tool)?.preset;
+		// data is this navigation's resolved load output — afterNavigate fires
+		// only after load settled and the DOM updated, so the preset is current.
+		const preset = data.converter?.preset;
 		if (!preset) return;
 		if (preset.kind === 'image') {
 			settings[preset.tab].outputFormat = preset.to;

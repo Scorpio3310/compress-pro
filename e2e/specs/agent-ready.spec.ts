@@ -107,6 +107,19 @@ test('AR-03: WebMCP tools register and drive the app @smoke', async ({ page }) =
 		)
 		.toEqual(['get_current_tool', 'list_tools', 'open_tool']);
 
+	// list_tools pulls titles/descriptions from the lazy seo-detail chunks —
+	// one line per tool page, so the full registry must come back.
+	const listing = await page.evaluate(async () => {
+		const result = await (window as unknown as { __mcpTools: McpStub }).__mcpTools[
+			'list_tools'
+		].execute();
+		return result.content[0].text;
+	});
+	expect(listing.split('\n').filter((line) => line.startsWith('- '))).toHaveLength(93);
+	expect(listing).toContain(
+		'- compress-jpg — Compress JPG (JPEG) Online — Private, No Upload: Shrink JPG (JPEG) photos right in your browser. Set a quality or a target size like 500 KB. No uploads — files stay on your device. Free & private.'
+	);
+
 	await page.evaluate(() =>
 		(window as unknown as { __mcpTools: McpStub }).__mcpTools['open_tool'].execute({
 			slug: 'compress-jpg'

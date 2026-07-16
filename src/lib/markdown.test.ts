@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { SITE_URL, TOOL_SLUGS } from '$lib/seo';
-import { FULL_PAGES, fullSeoFor } from '$lib/seo-full.server';
+import {
+	FULL_CONVERTERS,
+	FULL_FORMATS,
+	FULL_PAGES,
+	FULL_TOOLS,
+	fullSeoFor
+} from '$lib/seo-full.server';
 import { homeMarkdown, llmsFullMarkdown, toolMarkdown } from './markdown';
 
 describe('toolMarkdown', () => {
@@ -53,7 +59,11 @@ describe('llmsFullMarkdown', () => {
 
 describe('homeMarkdown', () => {
 	it('lists every tool page so the directory can never drift from the registry', () => {
-		const md = homeMarkdown(fullSeoFor(undefined));
+		const md = homeMarkdown(fullSeoFor(undefined), {
+			formats: FULL_FORMATS,
+			converters: FULL_CONVERTERS,
+			tools: FULL_TOOLS
+		});
 		expect(md).toContain('# Compress anything.');
 		expect(md).toContain('## All tools');
 		for (const slug of TOOL_SLUGS) {
