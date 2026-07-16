@@ -42,9 +42,9 @@
 		<p class="mt-3 max-w-xl">
 			Practically nothing. No accounts and no databases exist. Your browser’s localStorage keeps two
 			things on your own device: your theme choice and your last-used tool settings — never file
-			contents or file names. The compression engines are cached by the browser so repeat visits
-			load fast — which also means the app keeps working offline: the clearest proof that your files
-			are not being sent anywhere.
+			contents or file names. Each compression engine is cached by the browser on first use so
+			repeat visits load fast — which also means tools you've used keep working offline: the
+			clearest proof that your files are not being sent anywhere.
 		</p>
 	</div>
 

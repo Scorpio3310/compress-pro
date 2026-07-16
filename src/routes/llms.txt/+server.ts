@@ -18,7 +18,7 @@ export function GET() {
 		'',
 		`> ${FULL_HOME.description}`,
 		'',
-		'Every tool runs entirely in the browser — files are never uploaded, there is no server-side processing, no account, no ads and no file-size limit. The app is free, open source (https://github.com/Scorpio3310/compress-pro), and keeps working offline once loaded — proof that nothing is sent anywhere.',
+		'Every tool runs entirely in the browser — files are never uploaded, there is no server-side processing, no account, no ads and no file-size limit. The app is free, open source (https://github.com/Scorpio3310/compress-pro), and tools keep working offline after their first use — proof that nothing is sent anywhere.',
 		'',
 		`Every tool page below has a plain-markdown twin for agents — append ".md" to its URL (homepage: ${SITE_URL}/index.md). The full content of every page in one document: ${SITE_URL}/llms-full.txt`,
 		'',

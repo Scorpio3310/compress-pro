@@ -84,14 +84,25 @@ async function runSevenZip(
 		onLine?.(line);
 	};
 	const wasmModule = await getWasmModule();
+	// Emscripten's instantiateWasm has no error path through `done` — with the
+	// module pre-awaited the only failure left is an instantiate OOM, which
+	// would leave SevenZipFactory pending until the 10-min watchdog. Race the
+	// load against the rejection so the call fails fast, and drop the module
+	// memo in case the compiled module itself is the problem.
+	let failInstantiate!: (error: unknown) => void;
+	const instantiateFailed = new Promise<never>((_, reject) => (failInstantiate = reject));
 	const options: SevenZipFactoryOptions = {
 		// Instantiate from the pre-compiled module — the hook wins over
 		// wasmBinary in the glue and skips its per-call WebAssembly.instantiate
-		// (bytes) compile. No rejection channel exists here; with the module
-		// pre-awaited the only failure left is an instantiate OOM, which the
-		// no-progress watchdog turns into a worker restart.
+		// (bytes) compile.
 		instantiateWasm: (imports, done) => {
-			void WebAssembly.instantiate(wasmModule, imports).then((instance) => done(instance));
+			WebAssembly.instantiate(wasmModule, imports).then(
+				(instance) => done(instance),
+				(error) => {
+					wasmModulePromise = null;
+					failInstantiate(error);
+				}
+			);
 			return {};
 		},
 		print: push,
@@ -100,7 +111,7 @@ async function runSevenZip(
 		// prompt; the d.ts wants `number` but emscripten treats null as EOF.
 		stdin: (() => null) as unknown as () => number
 	};
-	const sz = await SevenZipFactory(options);
+	const sz = await Promise.race([SevenZipFactory(options), instantiateFailed]);
 	sz.FS.mkdir('/in');
 	sz.FS.mkdir('/out');
 	if (mounts?.length) {

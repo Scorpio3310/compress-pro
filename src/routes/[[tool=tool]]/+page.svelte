@@ -302,7 +302,7 @@
 		// Warm this tab's engine now: a drop precedes the Compress click by
 		// seconds, so the worker + its wasm (the 15 MB gs module especially) load
 		// during think time instead of stalling behind a dead progress bar.
-		const warmKind = WARM_KIND[format];
+		const warmKind = warmKindFor(format);
 		if (warmKind) warmUp(warmKind);
 		// The settings panel + codec orchestration are interaction-gated chunks;
 		// load them now (a file just landed) so they're ready when the panel renders
@@ -339,8 +339,8 @@
 	};
 
 	// The primary worker each tab warms on file-drop (see handleFiles). Only the
-	// kind on the critical path is listed — pdf warms 'gs' (15 MB, the big win),
-	// not the secondary 'image' its fromImages op may also touch.
+	// kind on the critical path is listed; pdf resolves per op in warmKindFor —
+	// its worker depends on which tool page the drop lands on.
 	const WARM_KIND: Partial<Record<FileFormat, WorkerKind>> = {
 		jpg: 'image',
 		png: 'image',
@@ -348,13 +348,25 @@
 		gif: 'image',
 		heic: 'image',
 		svg: 'svg',
-		pdf: 'gs',
 		video: 'video',
 		audio: 'video',
 		font: 'font',
 		zip: 'archive',
 		exif: 'image'
 	};
+
+	// Ghostscript (a 15 MB wasm fetch + compile) backs only compress/unlock/
+	// protect — and merge when its "compress result" toggle is on. pages and
+	// toImages run on pdf-lib/pdf.js, which aren't pooled workers; fromImages'
+	// critical path is the image worker re-encoding the pages.
+	function warmKindFor(format: FileFormat): WorkerKind | null {
+		if (format !== 'pdf') return WARM_KIND[format] ?? null;
+		const { op, mergeCompress } = settings.pdf;
+		if (op === 'compress' || op === 'unlock' || op === 'protect') return 'gs';
+		if (op === 'merge') return mergeCompress ? 'gs' : null;
+		if (op === 'fromImages') return 'image';
+		return null;
+	}
 
 	async function handleCompress() {
 		// Snapshot the tab: activeTab is $derived from the route, so a read after
@@ -954,7 +966,7 @@
 	<span class="font-medium text-ink">
 		<Icon name="lock" class="mr-0.5 inline size-3 align-[-0.14em]" />Files never leave your device.
 	</span>
-	Everything runs in your browser, nothing touches a server — it even works offline once loaded.
+	Everything runs in your browser, nothing touches a server — tools you've used even work offline.
 </p>
 
 <FormatInfo

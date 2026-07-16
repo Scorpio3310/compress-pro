@@ -1,7 +1,8 @@
 /**
- * PT-01…16: pdf-lib tools — merge (order via page-size fingerprint), reorder,
+ * PT-01…18: pdf-lib tools — merge (order via page-size fingerprint), reorder,
  * page keep/remove grammar, toImages (ZIP vs single), fromImages (dims,
- * white-flattened alpha), AVIF acceptance, unlock/protect round-trip.
+ * white-flattened alpha), AVIF acceptance, unlock/protect round-trip,
+ * Ghostscript warm-up gating by op.
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 import { basename } from 'node:path';
@@ -11,6 +12,7 @@ import {
 	compress,
 	downloadCombined,
 	downloadRow,
+	gotoPath,
 	gotoTab,
 	rasterizePdfInPage,
 	setDpi,
@@ -418,4 +420,27 @@ test('PT-16: /unlock-pdf and /protect-pdf pages preset the op and gate the CTA',
 		'aria-pressed',
 		'true'
 	);
+});
+
+test('PT-18: file-drop warms Ghostscript only for ops that run it @smoke', async ({ page }) => {
+	// The 15 MB engine: /gs.wasm in dev, /_app/…/gs.<hash>.wasm in preview.
+	const gsWasmRequests: string[] = [];
+	page.on('request', (request) => {
+		const path = new URL(request.url()).pathname;
+		if (/\/gs(\.[\w-]+)?\.wasm$/.test(path)) gsWasmRequests.push(path);
+	});
+
+	// /merge-pdf presets op=merge (mergeCompress off): pdf-lib does the whole
+	// job, so the drop must not pull the Ghostscript engine. The warm fetch
+	// starts synchronously with the drop, so a short settle catches a regression.
+	await gotoPath(page, '/merge-pdf');
+	await upload(page, fx('merge-a.pdf'));
+	await page.waitForTimeout(1000);
+	expect(gsWasmRequests, 'merge drop must not warm gs').toEqual([]);
+
+	// Switching to Compress and dropping again must start the warm fetch during
+	// think time — and proves the matcher above still matches the real URL.
+	await setPdfOp(page, 'Compress');
+	await upload(page, fx('merge-b.pdf'));
+	await expect.poll(() => gsWasmRequests.length, { timeout: 15_000 }).toBeGreaterThan(0);
 });

@@ -62,23 +62,38 @@ expose<WorkerContracts['gs']>({
 			if (tail.length > 50) tail.shift();
 		};
 
-		const gs = await loadGs({
-			instantiateWasm: (imports, done) => {
-				WebAssembly.instantiate(module, imports).then((instance) => done(instance));
-				return {};
-			},
-			print: (line: string) => {
-				record(line);
-				const total = /^Processing pages \d+ through (\d+)/.exec(line);
-				if (total) {
-					pageCount = Number(total[1]);
-					return;
-				}
-				const page = /^Page (\d+)/.exec(line);
-				if (page) progress({ page: Number(page[1]), pageCount } satisfies GsProgress);
-			},
-			printErr: record
-		});
+		// Emscripten's instantiateWasm has no error path through `done` — a
+		// rejection (OOM, mostly) would leave loadGs pending until the watchdog.
+		// Race the load against it so the call fails fast, and drop the module
+		// memo in case the compiled module itself is the problem.
+		let failInstantiate!: (error: unknown) => void;
+		const instantiateFailed = new Promise<never>((_, reject) => (failInstantiate = reject));
+		const gs = await Promise.race([
+			loadGs({
+				instantiateWasm: (imports, done) => {
+					WebAssembly.instantiate(module, imports).then(
+						(instance) => done(instance),
+						(error) => {
+							compiledPromise = null;
+							failInstantiate(error);
+						}
+					);
+					return {};
+				},
+				print: (line: string) => {
+					record(line);
+					const total = /^Processing pages \d+ through (\d+)/.exec(line);
+					if (total) {
+						pageCount = Number(total[1]);
+						return;
+					}
+					const page = /^Page (\d+)/.exec(line);
+					if (page) progress({ page: Number(page[1]), pageCount } satisfies GsProgress);
+				},
+				printErr: record
+			}),
+			instantiateFailed
+		]);
 
 		gs.FS.writeFile('/in.pdf', new Uint8Array(pdf));
 

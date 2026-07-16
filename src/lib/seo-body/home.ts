@@ -22,7 +22,7 @@ export const BODIES: Record<string, SeoBody> = {
 						['Ads', 'Banners around every step', 'None'],
 						['Price & limits', 'Daily caps, premium tiers', 'Free, no limits'],
 						['Source code', 'Closed', 'Open on GitHub'],
-						['Offline', 'Needs a connection', 'Works offline once loaded']
+						['Offline', 'Needs a connection', 'Works offline after first use']
 					]
 				}
 			},
