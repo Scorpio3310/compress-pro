@@ -1,0 +1,44 @@
+diff --git a/lib/heic.js b/lib/heic.js
+index 620de445d22b09047ad1387c02fe05469c9b6181..c6974c94cbbb3412b192991e6204ec90c3a7a956 100644
+--- a/lib/heic.js
++++ b/lib/heic.js
+@@ -1,33 +1,17 @@
+-import wasmFactoryEnc from "../dist/heic-enc.js";
++// PATCHED (compress-pro): HEIC is decode-only in this app, but the static
++// heic-enc.js import kept the 5.98 MB encoder wasm in every build via its
++// `new URL("heic-enc.wasm", import.meta.url)` glue, despite loadEncoder never
++// being called. The encoder import and its exports are removed; decode is
++// untouched.
+ import wasmFactoryDec from "../dist/heic-dec.js";
+-import { check, encodeES, loadES } from "./common.js";
+-export const Presets = ["ultrafast", "superfast", "veryfast", "faster", "fast", "medium", "slow", "slower", "veryslow", "placebo"];
+-export const Subsampling = ["420", "422", "444"];
+-export const Tune = ["psnr", "ssim", "grain", "fastdecode"];
+-export const defaultOptions = {
+-    quality: 50,
+-    lossless: false,
+-    preset: "slow",
+-    tune: "ssim",
+-    tuIntraDepth: 2,
+-    complexity: 50,
+-    chroma: "420",
+-    sharpYUV: false,
+-};
++import { check, loadES } from "./common.js";
+ export const mimeType = "image/heic";
+ export const extension = "heic";
+ export const bitDepth = [8, 10, 12];
+-let encoderWASM;
+ let decoderWASM;
+-export async function loadEncoder(input) {
+-    return encoderWASM ??= await loadES(wasmFactoryEnc, input);
+-}
+ export async function loadDecoder(input) {
+     return decoderWASM ??= await loadES(wasmFactoryDec, input);
+ }
+-export function encode(image, options) {
+-    return encodeES("HEIC Encode", encoderWASM, defaultOptions, image, options);
+-}
+ export function decode(input) {
+     return check(decoderWASM.decode(input), "HEIC Decode");
+ }

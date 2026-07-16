@@ -8,3 +8,4 @@ overrides:
 patchedDependencies:
   fonteditor-core@2.6.3: patches/fonteditor-core@2.6.3.patch
   harfbuzzjs@1.4.0: patches/harfbuzzjs@1.4.0.patch
+  icodec@0.6.0: patches/icodec@0.6.0.patch

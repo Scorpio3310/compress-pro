@@ -14,6 +14,9 @@ patchedDependencies:
   harfbuzzjs@1.4.0:
     hash: 22da4d9fc862790869d96ad4397d773cc9332e85592edb3c24a401de9df345de
     path: patches/harfbuzzjs@1.4.0.patch
+  icodec@0.6.0:
+    hash: 5344a634fafebaaa584198f52028cd171eec32e1c69a7446f655f66f4b4d5641
+    path: patches/icodec@0.6.0.patch
 
 importers:
 
@@ -72,7 +75,7 @@ importers:
         version: 1.4.0(patch_hash=22da4d9fc862790869d96ad4397d773cc9332e85592edb3c24a401de9df345de)
       icodec:
         specifier: ^0.6.0
-        version: 0.6.0
+        version: 0.6.0(patch_hash=5344a634fafebaaa584198f52028cd171eec32e1c69a7446f655f66f4b4d5641)
       mediabunny:
         specifier: 1.50.8
         version: 1.50.8
@@ -3497,7 +3500,7 @@ snapshots:
 
   harfbuzzjs@1.4.0(patch_hash=22da4d9fc862790869d96ad4397d773cc9332e85592edb3c24a401de9df345de): {}
 
-  icodec@0.6.0: {}
+  icodec@0.6.0(patch_hash=5344a634fafebaaa584198f52028cd171eec32e1c69a7446f655f66f4b4d5641): {}
 
   ignore@5.3.2: {}
 
