@@ -44,6 +44,7 @@
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
 		"check:e2e": "tsc -p e2e/tsconfig.json --noEmit",
+		"check:bundle": "node scripts/check-bundle-size.mjs",
 		"lint": "prettier --check . && eslint .",
 		"format": "prettier --write .",
 		"test": "vitest run",

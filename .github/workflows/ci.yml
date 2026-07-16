@@ -27,6 +27,7 @@ jobs:
       - run: pnpm check:e2e
       - run: pnpm test
       - run: pnpm build
+      - run: pnpm check:bundle # fails if the shared per-page JS payload regresses
 
   e2e-smoke:
     name: e2e smoke (chromium)
