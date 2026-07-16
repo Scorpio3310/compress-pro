@@ -367,7 +367,11 @@ async function createArchive(
 		// 7zz recurses into the top-level directories it is handed.
 		const topLevel = new Set<string>();
 		for (const file of source.files) {
-			const parts = file.path.split('/').filter(Boolean);
+			// Defense-in-depth: '.'/'..' segments can't escape /in in MEMFS, and
+			// walkOut (the only source here) never emits them — but drop them
+			// anyway so a crafted entry path can't resolve outside the re-feed dir.
+			const parts = file.path.split('/').filter((p) => p && p !== '.' && p !== '..');
+			if (parts.length === 0) continue;
 			topLevel.add(parts[0]);
 			stage1Inputs[parts.join('/')] = file.bytes;
 		}

@@ -3,6 +3,20 @@ import { TOOL_SLUGS } from '$lib/seo';
 import { fullSeoFor } from '$lib/seo-full.server';
 import { toolMarkdown, homeMarkdown } from '$lib/markdown';
 
+/** COOP/COEP (SharedArrayBuffer isolation) plus the security-header set, applied
+ *  to every runtime response — including the negotiated markdown twin, which
+ *  used to return before these were set. Mirrors worker/index.js SECURITY_HEADERS
+ *  and the root _headers block. CSP for HTML is added by kit.csp — never here. */
+const SECURITY_HEADERS: Record<string, string> = {
+	'Cross-Origin-Opener-Policy': 'same-origin',
+	'Cross-Origin-Embedder-Policy': 'require-corp',
+	'X-Content-Type-Options': 'nosniff',
+	'Referrer-Policy': 'strict-origin-when-cross-origin',
+	'X-Frame-Options': 'DENY',
+	'Permissions-Policy':
+		'camera=(), microphone=(), geolocation=(), payment=(), usb=(), midi=(), magnetometer=(), gyroscope=(), accelerometer=()'
+};
+
 /** True only when the client explicitly lists text/markdown (browsers never do). */
 function wantsMarkdown(accept: string | null): boolean {
 	if (!accept) return false;
@@ -33,6 +47,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 			const md = slug === '' ? homeMarkdown(fullSeoFor(undefined)) : toolMarkdown(fullSeoFor(slug));
 			return new Response(event.request.method === 'HEAD' ? null : md, {
 				headers: {
+					...SECURITY_HEADERS,
 					'Content-Type': 'text/markdown; charset=utf-8',
 					Vary: 'Accept',
 					'x-markdown-tokens': String(Math.ceil(md.length / 4))
@@ -42,14 +57,8 @@ export const handle: Handle = async ({ event, resolve }) => {
 	}
 
 	const response = await resolve(event);
-	response.headers.set('Cross-Origin-Opener-Policy', 'same-origin');
-	response.headers.set('Cross-Origin-Embedder-Policy', 'require-corp');
-	response.headers.set('X-Content-Type-Options', 'nosniff');
-	response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
-	response.headers.set('X-Frame-Options', 'DENY');
-	response.headers.set(
-		'Permissions-Policy',
-		'camera=(), microphone=(), geolocation=(), payment=(), usb=(), midi=(), magnetometer=(), gyroscope=(), accelerometer=()'
-	);
+	for (const [name, value] of Object.entries(SECURITY_HEADERS)) {
+		response.headers.set(name, value);
+	}
 	return response;
 };

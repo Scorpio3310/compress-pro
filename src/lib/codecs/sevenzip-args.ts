@@ -278,14 +278,18 @@ export function nextChainStep(
 }
 
 /**
- * Create-side entry hygiene: inputs land flat in the instance's cwd, so any
- * path separators in a (browser-supplied) name must go; MEMFS also rejects
- * NUL and pure-dot names. Uniqueness stays the caller's job.
+ * Entry-name hygiene, shared by create (inputs land flat in the instance's cwd,
+ * so path separators must go; MEMFS also rejects NUL and pure-dot names) and by
+ * extract (the basename becomes an <a download> value). Control and bidi-format
+ * characters are stripped: the latter (RTL override / embedding / isolate) are
+ * pure filename-spoofing vectors — U+202E makes "photo<RLO>gpj.exe" render as
+ * "photoexe.jpg". Uniqueness stays the caller's job.
  */
 export function sanitizeEntryName(name: string): string {
 	const clean = name
 		// eslint-disable-next-line no-control-regex
 		.replace(/[\u0000-\u001f]/g, '')
+		.replace(/[\u200e\u200f\u061c\u202a-\u202e\u2066-\u2069]/g, '')
 		.replace(/[/\\]/g, '_')
 		.trim();
 	if (!clean || clean === '.' || clean === '..') return 'file';

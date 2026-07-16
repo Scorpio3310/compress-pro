@@ -241,6 +241,11 @@ describe('sanitizeEntryName', () => {
 		expect(sanitizeEntryName('a\u0000b\u001fc.txt')).toBe('abc.txt');
 	});
 
+	it('strips bidi override characters used for extension spoofing', () => {
+		const rlo = String.fromCharCode(0x202e); // right-to-left override
+		expect(sanitizeEntryName(`photo${rlo}gpj.exe`)).toBe('photogpj.exe');
+	});
+
 	it('never returns an empty or dot name', () => {
 		expect(sanitizeEntryName('')).toBe('file');
 		expect(sanitizeEntryName('..')).toBe('file');

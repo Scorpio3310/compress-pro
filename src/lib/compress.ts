@@ -14,7 +14,7 @@ import type {
 	ProgressInfo
 } from '$lib/types';
 import { isBundlingArchiveFormat, isImageFormat } from '$lib/types';
-import { ARCHIVE_OUTPUT_EXT } from '$lib/codecs/sevenzip-args';
+import { ARCHIVE_OUTPUT_EXT, sanitizeEntryName } from '$lib/codecs/sevenzip-args';
 import { runWithConcurrency } from '$lib/concurrency';
 import { compressImage, type ImageProgress } from '$lib/codecs/image';
 import { compressSvg } from '$lib/codecs/svg';
@@ -186,7 +186,7 @@ function entryRow(
 	used: Set<string>,
 	info: string | null
 ): CompressedFile {
-	const short = uniqueEntryName(entryPath.split('/').pop()!, used);
+	const short = uniqueEntryName(sanitizeEntryName(entryPath.split('/').pop()!), used);
 	used.add(short);
 	// SVG is never content-sniffed; '' keeps today's default otherwise.
 	const blob = new Blob([bytes as BlobPart], { type: displayableImageMime(short) ?? '' });
