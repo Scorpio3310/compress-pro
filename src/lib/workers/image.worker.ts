@@ -5,6 +5,7 @@ import { containScale, frameDelayMs } from '$lib/codecs/video-math';
 import { detectColorSpace } from '$lib/codecs/color-profile';
 import { convertibleSpace, convertToSrgbInPlace } from '$lib/codecs/color-convert';
 import { probeDimensions } from '$lib/codecs/image-probe';
+import { stripImageMetadataBytes } from '$lib/codecs/exif';
 import pngQuantWasmUrl from 'icodec/png-enc.wasm?url';
 import heicDecWasmUrl from 'icodec/heic-dec.wasm?url';
 
@@ -591,5 +592,20 @@ expose<WorkerContracts['image']>({
 	encode: async (payload, progress) => {
 		const result = await encodeImage(payload, progress);
 		return { result, transfer: [result.bytes] };
+	},
+	stripMetadata: async ({ bytes, removeIcc }) => {
+		const out = stripImageMetadataBytes(new Uint8Array(bytes), { removeIcc });
+		// concat() builds exact-size buffers, but the WebP nothing-removed fast
+		// path returns the input view untouched — normalize before transferring.
+		const b = out.bytes;
+		const buffer = (
+			b.byteOffset === 0 && b.byteLength === b.buffer.byteLength
+				? b.buffer
+				: b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength)
+		) as ArrayBuffer;
+		return {
+			result: { bytes: buffer, mime: out.mime, info: out.info, removedAnything: out.removedAnything },
+			transfer: [buffer]
+		};
 	}
 });

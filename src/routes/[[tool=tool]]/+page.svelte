@@ -319,8 +319,7 @@
 	const abortControllers: Partial<Record<FileFormat, AbortController>> = {};
 
 	// Worker kinds each tab's pipeline can have in flight. video/audio have no
-	// entry (graceful cancel keeps those expensive workers alive); exif runs on
-	// the main thread and needs no worker teardown.
+	// entry (graceful cancel keeps those expensive workers alive).
 	// Cancels are owner-scoped: every callWorker reachable from these kinds must
 	// pass `opts.owner` (the run's signal), or it becomes unkillable mid-call.
 	const CANCEL_KINDS: Partial<Record<FileFormat, WorkerKind[]>> = {
@@ -332,13 +331,13 @@
 		svg: ['svg', 'image'], // raster (PNG/ICO) output encodes via the image worker
 		pdf: ['gs', 'image'], // fromImages re-encodes pages via the image worker
 		font: ['font'], // synchronous brotli — terminate is the only mid-encode cancel
-		zip: ['archive'] // 7zz is synchronous wasm too; fflate fast paths cancel cooperatively
+		zip: ['archive'], // 7zz is synchronous wasm too; fflate fast paths cancel cooperatively
+		exif: ['image'] // metadata strip runs in the image worker (transferred buffers)
 	};
 
 	// The primary worker each tab warms on file-drop (see handleFiles). Only the
 	// kind on the critical path is listed — pdf warms 'gs' (15 MB, the big win),
-	// not the secondary 'image' its fromImages op may also touch. exif runs on
-	// the main thread, so it has nothing to warm.
+	// not the secondary 'image' its fromImages op may also touch.
 	const WARM_KIND: Partial<Record<FileFormat, WorkerKind>> = {
 		jpg: 'image',
 		png: 'image',
@@ -350,7 +349,8 @@
 		video: 'video',
 		audio: 'video',
 		font: 'font',
-		zip: 'archive'
+		zip: 'archive',
+		exif: 'image'
 	};
 
 	async function handleCompress() {

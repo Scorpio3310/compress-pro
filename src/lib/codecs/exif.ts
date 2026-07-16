@@ -1,9 +1,11 @@
 /**
  * Lossless metadata removal for JPEG/PNG/WebP — pure byte surgery, no
  * re-encode: metadata segments/chunks are cut out and the untouched image
- * data is copied verbatim, so pixels stay byte-identical. Runs on the main
- * thread (splicing a 50 MB buffer costs milliseconds; a worker's structured
- * clone would cost more than the work) — same rationale as webp-mux.ts.
+ * data is copied verbatim, so pixels stay byte-identical. The strip runs in
+ * the image worker (buffers are TRANSFERRED both ways, so the off-main-thread
+ * move costs nothing) — a batch of photos used to jank the progress UI with
+ * serialized main-thread memcpys. The pure helpers stay main-thread-importable:
+ * exif-copy.ts (keep-metadata re-encode path) and the unit tests use them.
  *
  * Always removed: EXIF, XMP (incl. extended), Photoshop APP13, JPEG comments,
  * PNG text/time chunks. ICC color profiles only with `removeIcc` (they change
@@ -17,8 +19,10 @@ export interface ExifStripOptions {
 	removeIcc: boolean;
 }
 
-export interface StripResult {
-	blob: Blob;
+export interface StripBytesResult {
+	bytes: Uint8Array;
+	/** Sniffed MIME of the input (extensions lie) — for rebuilding the Blob. */
+	mime: string;
 	/** Human summary of what was found/removed — shown under the result row. */
 	info: string;
 	removedAnything: boolean;
@@ -501,8 +505,9 @@ const MIME: Record<'jpeg' | 'png' | 'webp', string> = {
 	webp: 'image/webp'
 };
 
-export async function stripImageMetadata(file: File, opts: ExifStripOptions): Promise<StripResult> {
-	const bytes = new Uint8Array(await file.arrayBuffer());
+/** Pure bytes-in/bytes-out strip — runs inside the image worker (rpc-free so
+ *  the worker bundle stays lean; compress.ts owns the File→Blob framing). */
+export function stripImageMetadataBytes(bytes: Uint8Array, opts: ExifStripOptions): StripBytesResult {
 	const format = sniff(bytes);
 	if (!format) throw new Error('Only JPEG, PNG and WebP files are supported');
 
@@ -514,7 +519,8 @@ export async function stripImageMetadata(file: File, opts: ExifStripOptions): Pr
 				: stripWebpBytes(bytes, opts);
 
 	return {
-		blob: new Blob([out.bytes as BlobPart], { type: MIME[format] }),
+		bytes: out.bytes,
+		mime: MIME[format],
 		info: buildInfo(out),
 		removedAnything: removedAnything(out.removed)
 	};

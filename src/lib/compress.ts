@@ -22,8 +22,7 @@ import { compressPdf, protectPdf, unlockPdf, type PdfProgress } from '$lib/codec
 import { convertVideo } from '$lib/codecs/video';
 import { convertAudio } from '$lib/codecs/audio';
 import { convertFont, subsetFont } from '$lib/codecs/font';
-import { stripImageMetadata } from '$lib/codecs/exif';
-import { imageLaneCap } from '$lib/workers/rpc';
+import { callWorker, imageLaneCap } from '$lib/workers/rpc';
 import { formatBytes } from '$lib/utils';
 import { displayableImageMime } from '$lib/file-visual';
 
@@ -765,8 +764,18 @@ export async function compressFiles(
 				blob = await compressSvg(file.file, svgSettings, signal);
 			}
 		} else if (format === 'exif') {
-			const out = await stripImageMetadata(file.file, settings as ExifSettings);
-			blob = out.blob;
+			// The strip runs in the image worker; the buffer is transferred both
+			// ways (zero-copy), keeping batch strips off the main thread.
+			const buf = await file.file.arrayBuffer();
+			const out = await callWorker(
+				'image',
+				'stripMetadata',
+				{ bytes: buf, removeIcc: (settings as ExifSettings).removeIcc },
+				[buf],
+				undefined,
+				{ owner: signal }
+			);
+			blob = new Blob([out.bytes], { type: out.mime });
 			info = out.info;
 			// formatChanged/resized stay false — when nothing was removed the
 			// bytes are identical and the keep-original guard below returns the

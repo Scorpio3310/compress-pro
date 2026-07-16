@@ -53,6 +53,20 @@ export interface EncodeProgress {
 	frameCount: number;
 }
 
+export interface StripMetadataPayload {
+	bytes: ArrayBuffer;
+	removeIcc: boolean;
+}
+
+export interface StripMetadataResult {
+	bytes: ArrayBuffer;
+	/** Sniffed from magic bytes in the worker — the caller rebuilds the Blob. */
+	mime: string;
+	/** Human summary of what was found/removed — shown under the result row. */
+	info: string;
+	removedAnything: boolean;
+}
+
 export interface GsPayload {
 	pdf: ArrayBuffer;
 	args: string[];
@@ -299,6 +313,8 @@ export interface ArchiveProgress {
 export interface WorkerContracts {
 	image: {
 		encode: { payload: EncodePayload; result: EncodeResult; progress: EncodeProgress };
+		/** EXIF/metadata strip — one whole-buffer pass, atomic (no progress). */
+		stripMetadata: { payload: StripMetadataPayload; result: StripMetadataResult; progress: never };
 	};
 	gs: {
 		compress: { payload: GsPayload; result: ArrayBuffer; progress: GsProgress };
