@@ -6,8 +6,10 @@
  * settings panel, mediabunny, a seo-body group…) silently adds its weight to
  * every page at once. This turns that class of regression into a hard failure.
  *
- * Baseline at introduction (after the lazy-load split): route node 2 ~74 KB raw,
- * total initial JS ~111 KB gzipped. Budgets carry ~15-20% headroom. Raising them
+ * Baseline (after the lazy panel/compress split + seo lite/detail split + lazy
+ * motion engine): route node 2 ~74.6 KB raw, total initial JS ~79.6 KB gzipped.
+ * Budgets carry ~15% headroom — tight enough that `motion` (25 KB gz) or a seo
+ * detail group sneaking back into the static graph fails loudly. Raising them
  * is a deliberate act — it means every tool page just got heavier, so confirm
  * the growth is intentional (not an import that belongs behind `await import()`)
  * before bumping the numbers.
@@ -21,8 +23,8 @@ const DIST = '.svelte-kit/cloudflare';
 const PAGE = 'compress-jpg.html';
 
 const BUDGET = {
-	initialJsGz: 128_000, // sum of modulepreloaded JS, gzipped (baseline ~111 KB)
-	node2Raw: 92_000 // the shared [[tool=tool]] route node, raw bytes (baseline ~74 KB)
+	initialJsGz: 92_000, // sum of modulepreloaded JS, gzipped (baseline ~79.6 KB)
+	node2Raw: 86_000 // the shared [[tool=tool]] route node, raw bytes (baseline ~74.6 KB)
 };
 
 const html = readFileSync(join(DIST, PAGE), 'utf8');
