@@ -162,7 +162,13 @@ const config = {
 				'/ogg-to-mp3',
 				'/aac-to-mp3',
 				'/mp3-to-wav',
-				'/mp4-to-wav'
+				'/mp4-to-wav',
+				'/compress-avif',
+				'/jpg-to-avif',
+				'/png-to-avif',
+				'/webp-to-avif',
+				'/avif-to-png',
+				'/heic-to-avif'
 			]
 		}
 	}

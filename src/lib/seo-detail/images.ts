@@ -75,6 +75,18 @@ export const DETAILS: Record<string, SeoDetail | ConverterDetail> = {
 		tagline: 'iPhone HEIC decoded to lossless PNG — on your own device.',
 		related: ['/heic-to-jpg', '/compress-heic', '/compress-png']
 	},
+	'heic-to-avif': {
+		ogImage: '/og/heic-to-avif.jpg',
+		preset: { kind: 'image', tab: 'heic', to: 'avif' },
+		accept: 'image/heic,image/heif,.heic,.heif',
+		dropSubject: 'HEIC files',
+		dropHint: 'iPhone HEIC photos · converted to AVIF locally',
+		title: 'HEIC to AVIF Converter — Private, In-Browser | Compress Pro',
+		description:
+			'Convert iPhone HEIC photos to AVIF right in your browser — smaller than JPG and web-ready. Batch whole albums, download as a ZIP, zero uploads. Free.',
+		tagline: 'iPhone HEIC to web-ready AVIF — converted on your device.',
+		related: ['/heic-to-jpg', '/compress-heic', '/compress-avif']
+	},
 	'webp-to-jpg': {
 		ogImage: '/og/webp-to-jpg.jpg',
 		preset: { kind: 'image', tab: 'webp', to: 'jpg' },
@@ -104,6 +116,45 @@ export const DETAILS: Record<string, SeoDetail | ConverterDetail> = {
 			'Convert AVIF images to JPG locally in your browser — perfect when an app or site cannot open AVIF yet. Batch support, ZIP download, zero uploads. Free.',
 		tagline: 'AVIF decoded to JPG in your browser — nothing uploaded.',
 		related: ['/compress-jpg', '/jpg-to-webp', '/webp-to-jpg']
+	},
+	'avif-to-png': {
+		ogImage: '/og/avif-to-png.jpg',
+		preset: { kind: 'image', tab: 'jpg', to: 'png', quality: 100 },
+		accept: 'image/avif,.avif',
+		dropSubject: 'AVIF files',
+		dropHint: 'AVIF only · decoded to PNG locally',
+		title: 'AVIF to PNG Converter — Lossless & Private | Compress Pro',
+		description:
+			'Convert AVIF images to lossless PNG in your browser — transparency preserved, pixels untouched. Batch support with ZIP download, zero uploads. Free.',
+		tagline: 'AVIF decoded to lossless PNG — right on your own device.',
+		related: ['/avif-to-jpg', '/compress-png', '/compress-avif']
+	},
+	'jpg-to-avif': {
+		ogImage: '/og/jpg-to-avif.jpg',
+		preset: { kind: 'image', tab: 'jpg', to: 'avif' },
+		title: 'JPG to AVIF Converter — Smaller Files, Private | Compress Pro',
+		description:
+			'Convert JPG photos to AVIF right in your browser — often 30–50% smaller than the JPG at the same visual quality. Batch conversion, ZIP download, no uploads.',
+		tagline: 'JPG to AVIF, up to half the size — all in your browser.',
+		related: ['/compress-avif', '/avif-to-jpg', '/jpg-to-webp']
+	},
+	'png-to-avif': {
+		ogImage: '/og/png-to-avif.jpg',
+		preset: { kind: 'image', tab: 'png', to: 'avif' },
+		title: 'PNG to AVIF Converter — Keep Alpha, No Upload | Compress Pro',
+		description:
+			'Convert PNG to AVIF in your browser and keep full transparency. Graphics and screenshots shrink dramatically, and nothing is ever uploaded. Free & private.',
+		tagline: 'PNG to AVIF with transparency kept — converted locally.',
+		related: ['/compress-png', '/png-to-webp', '/compress-avif']
+	},
+	'webp-to-avif': {
+		ogImage: '/og/webp-to-avif.jpg',
+		preset: { kind: 'image', tab: 'webp', to: 'avif' },
+		title: 'WebP to AVIF Converter — Free, No Upload | Compress Pro',
+		description:
+			'Convert WebP images to AVIF right in your browser — the next step down in size at the same visual quality. Transparency survives, nothing is uploaded. Free.',
+		tagline: 'WebP re-encoded to smaller AVIF — right in your browser.',
+		related: ['/compress-webp', '/jpg-to-avif', '/avif-to-jpg']
 	},
 	'png-to-jpg': {
 		ogImage: '/og/png-to-jpg.jpg',
@@ -241,5 +292,17 @@ export const DETAILS: Record<string, SeoDetail | ConverterDetail> = {
 			'Compress JPG (JPEG) photos to 100 KB right in your browser — target-size mode finds the best quality that fits under the cap. No uploads, no ads. Free.',
 		tagline: 'JPG photos squeezed under 100 KB — right in your browser.',
 		related: ['/compress-jpg', '/resize-image', '/compress-image']
+	},
+	'compress-avif': {
+		ogImage: '/og/compress-avif.jpg',
+		preset: { kind: 'image', tab: 'jpg', to: 'avif' },
+		accept: 'image/avif,.avif',
+		dropSubject: 'AVIF files',
+		dropHint: 'AVIF images · recompressed locally',
+		title: 'Compress AVIF Online — Private, No Upload | Compress Pro',
+		description:
+			'Compress AVIF images right in your browser — pick a quality or an exact target size and re-encode locally. No uploads, no accounts. Free and private.',
+		tagline: 'Smaller AVIF files in your browser — nothing is uploaded.',
+		related: ['/jpg-to-avif', '/avif-to-jpg', '/compress-image']
 	}
 };

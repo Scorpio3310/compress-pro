@@ -393,6 +393,39 @@ export const BODIES: Record<string, SeoBody> = {
 			{ q: 'Is it private?', a: PRIVACY_A_IMAGE_CONVERT }
 		]
 	},
+	'heic-to-avif': {
+		intro:
+			'Convert iPhone HEIC photos to AVIF entirely in your browser — **decoded and re-encoded on your device, never uploaded**. HEIC and AVIF are equally modern, but only one of them works on the web: AVIF displays in every current browser, while HEIC stays locked to Apple software. Batch a whole album and download the ZIP.',
+		guide: [
+			{
+				heading: 'Two modern formats, one web-ready',
+				paragraphs: [
+					'Both formats compress photos far tighter than JPG — that part is a tie. The difference is reach: browsers never adopted HEIC, so an iPhone photo cannot be embedded on a website as-is, while AVIF can, at essentially the same size. For older apps and upload forms, [HEIC to JPG](/heic-to-jpg) remains the safe exit; for anything headed to the web, AVIF is the better one, and [Compress HEIC](/compress-heic) covers the keep-it-HEIC case.'
+				]
+			},
+			{
+				heading: 'Metadata is stripped',
+				paragraphs: [
+					'The AVIF is written clean: EXIF, GPS location and camera details do not carry over. For photos headed to the public web that is the safer default — location data in particular has no business on a website. Rotation is applied during decode, so photos come out upright.'
+				]
+			}
+		],
+		faq: [
+			{
+				q: 'Why AVIF instead of JPG?',
+				a: 'Size at quality: AVIF stores the same photo in roughly half the bytes of an equivalent JPG. Choose JPG only when the file must open in older software — every current browser displays AVIF fine.'
+			},
+			{
+				q: 'Does GPS location stay in the photo?',
+				a: 'No — AVIF output is written without EXIF or GPS metadata. What your camera recorded stays on your device, in the original HEIC.'
+			},
+			{
+				q: 'What can open the AVIF afterwards?',
+				a: 'Browsers universally — Chrome, Edge, Firefox, and Safari from 16.1. Older desktop viewers and some upload forms may refuse it; convert those photos to JPG instead.'
+			},
+			{ q: 'Is it private?', a: PRIVACY_A_IMAGE_CONVERT }
+		]
+	},
 	'webp-to-jpg': {
 		intro:
 			'Convert WebP images to JPG right in your browser — **nothing is uploaded, files never leave your device**. Handy for images saved from the web that older apps and upload forms refuse. Animated WebP converts to a single frame; transparency is flattened onto white. Batch-convert and grab everything as a ZIP.',
@@ -506,6 +539,138 @@ export const BODIES: Record<string, SeoBody> = {
 				a: 'Yes — cap the longest side, pick an exact quality, or switch to target-size mode and name a limit like 500 KB.'
 			},
 			{ q: 'Do my AVIF files get uploaded?', a: PRIVACY_NO_IMAGE }
+		]
+	},
+	'avif-to-png': {
+		intro:
+			'Convert AVIF images to lossless PNG entirely in your browser — **decoded on your own device, with no upload step**. At the default settings the decoded pixels are written to PNG exactly, transparency included, which makes PNG the right exit when an editor, pipeline or older tool refuses AVIF.',
+		guide: [
+			{
+				heading: 'When PNG is the right exit',
+				paragraphs: [
+					'PNG opens in everything made in the last twenty-five years and keeps transparency intact — the safe handoff to editors and workflows that predate AVIF. The price is bytes: lossless PNG cannot match a lossy AVIF for size. If the result feels heavy, the [PNG compressor](/compress-png) shrinks it losslessly, and [AVIF to JPG](/avif-to-jpg) is the smaller pick when transparency does not matter.'
+				]
+			},
+			{
+				heading: 'Opening AVIF at all',
+				paragraphs: [
+					'Decoding uses your browser’s built-in AVIF support — any current Chrome, Edge or Firefox, and Safari from 16.1 on. If a file is refused on an older browser, updating the browser is the fix; nothing is wrong with the file.'
+				]
+			}
+		],
+		faq: [
+			{
+				q: 'Is the conversion lossless?',
+				a: 'Yes — at the default quality 100 the decoded image is written to PNG without touching a pixel, transparency included. Lowering the slider switches to palette PNGs that are smaller but slightly lossy.'
+			},
+			{
+				q: 'Will the PNG be bigger than the AVIF?',
+				a: 'Almost always, and often dramatically — AVIF is one of the tightest lossy formats and PNG is lossless. That is the price of universal compatibility, not a fault in the file.'
+			},
+			{
+				q: 'Why PNG instead of JPG?',
+				a: 'JPG is far smaller but flattens transparency onto white and re-compresses lossily. Pick PNG for editing and transparency; JPG for plain sharing.'
+			},
+			{ q: 'Are my images uploaded anywhere?', a: PRIVACY_NO_IMAGE }
+		]
+	},
+	'jpg-to-avif': {
+		intro:
+			'Convert JPG photos to AVIF right in your browser — **encoded on your own device, nothing uploaded**. AVIF is the format built a quarter-century after JPG, and it shows: the same photo at the same visual quality typically lands 30–50% smaller. Batch-convert and download everything as a ZIP.',
+		guide: [
+			{
+				heading: 'Why AVIF lands so much smaller',
+				paragraphs: [
+					'AVIF borrows its compression from the AV1 video codec — decades of research JPG never had. Photos keep smooth gradients and fine detail at a fraction of the bytes, and banding-prone skies survive visibly better. On a website that compounds into faster pages and lower bandwidth on every visit. If the file must stay JPG, [Compress JPG](/compress-jpg) is the tool instead.'
+				]
+			},
+			{
+				heading: 'Where AVIF works (and where not yet)',
+				paragraphs: [
+					'Every current browser displays AVIF — Chrome and Edge since 2020, Firefox since 2021, Safari since 16.1. Outside the browser the picture is patchier: older editors, office suites and some upload forms still refuse it, so keep the JPG originals as masters. The trip back is one click via [AVIF to JPG](/avif-to-jpg), and [Compress AVIF](/compress-avif) re-squeezes AVIFs you already have.'
+				]
+			}
+		],
+		faq: [
+			{
+				q: 'How much smaller will my photos get?',
+				a: 'Typically 30–50% below the source JPG at the same visual quality — more when the source was saved at a high quality setting. The before/after compare shows exactly what you are trading.'
+			},
+			{
+				q: 'Is EXIF metadata kept?',
+				a: 'No — AVIF output is always written without EXIF, GPS or camera metadata. If keeping metadata matters, convert to WebP instead, where the keep-metadata option applies.'
+			},
+			{
+				q: 'Can I hit an exact file size?',
+				a: 'Yes — switch to target-size mode and type a cap like 200 KB; the tool searches out the best quality that fits under it, for every photo in the batch.'
+			},
+			{ q: 'Is it safe for private photos?', a: PRIVACY_A_IMAGE }
+		]
+	},
+	'png-to-avif': {
+		intro:
+			'Convert PNG images to AVIF entirely in your browser — **processed on your device, never uploaded**. AVIF keeps transparency fully intact while compressing far tighter than PNG ever can, so logos, screenshots and UI graphics shrink dramatically without losing their see-through edges.',
+		guide: [
+			{
+				heading: 'Transparency kept, weight dropped',
+				paragraphs: [
+					'Like [PNG to WebP](/png-to-webp), the alpha channel survives conversion untouched; unlike it, AVIF compresses the color underneath even tighter. Graphics routinely land 70–90% smaller than the source PNG with edges just as clean. For pixel-exact needs keep a PNG master and let [Compress PNG](/compress-png) shrink it losslessly instead.'
+				]
+			},
+			{
+				heading: 'Screenshots and sharp text',
+				paragraphs: [
+					'AVIF handles flat panels and gradients well, but very fine text at low quality can soften. Quality 80–90 keeps UI screenshots crisp; judge with the built-in compare view before batch-exporting a whole set.'
+				]
+			}
+		],
+		faq: [
+			{
+				q: 'Is transparency preserved?',
+				a: 'Yes — AVIF has a full alpha channel, so nothing is flattened. This is the key difference from converting to JPG, which paints transparent pixels white.'
+			},
+			{
+				q: 'How much smaller than PNG?',
+				a: 'Graphics and screenshots typically shrink 70–90%; photographic PNGs even more. PNG pays for lossless storage in bytes, and AVIF simply does not.'
+			},
+			{
+				q: 'What happens to metadata?',
+				a: 'AVIF output is written clean — any EXIF or text chunks in the PNG are stripped, which for published graphics is usually the safer default.'
+			},
+			{ q: 'Is it private?', a: PRIVACY_A_IMAGE_CONVERT }
+		]
+	},
+	'webp-to-avif': {
+		intro:
+			'Convert WebP images to AVIF right in your browser — **re-encoded locally, never uploaded**. WebP was the web’s efficiency upgrade of the 2010s; AVIF is the same step taken again. Stills typically come out 20–40% smaller at matching visual quality, transparency included.',
+		guide: [
+			{
+				heading: 'One generation newer',
+				paragraphs: [
+					'AVIF’s AV1-based compression outperforms WebP’s VP8 roots on nearly every image type — smoother gradients, cleaner detail at low quality, tighter files. The gap is biggest on photographic content and high-quality sources. Both formats enjoy universal current-browser support, so for the web this conversion is almost pure savings; [Compress WebP](/compress-webp) is the tool when the file must stay WebP.'
+				]
+			},
+			{
+				heading: 'Animated WebP: first frame only',
+				paragraphs: [
+					'AVIF output here is still-image only — an animated WebP converts to a single AVIF of its first frame, and the tool warns when that happens. To shrink an animation while keeping it moving, run it through [Compress WebP](/compress-webp) instead, which re-encodes animated WebP natively.'
+				]
+			}
+		],
+		faq: [
+			{
+				q: 'How much smaller is AVIF than WebP?',
+				a: 'Typically 20–40% at the same visual quality for stills — a smaller jump than from JPG, but real. High-quality sources gain the most.'
+			},
+			{
+				q: 'What happens to animated WebP?',
+				a: 'Only the first frame is kept — AVIF output is still-image only, and a warning tells you when an animation was flattened. Keep animations in WebP instead.'
+			},
+			{
+				q: 'Is transparency preserved?',
+				a: 'Yes — both formats carry a full alpha channel, so see-through regions survive the conversion exactly.'
+			},
+			{ q: 'Do my files leave my device?', a: PRIVACY_NO_IMAGE }
 		]
 	},
 	'png-to-jpg': {
@@ -911,6 +1076,39 @@ export const BODIES: Record<string, SeoBody> = {
 				a: 'The tool tells you honestly instead of shipping a ruined image. Turn on “Allow downscaling” and dimensions shrink as a last resort — never below 320 px on the longest side.'
 			},
 			{ q: 'Are my photos uploaded?', a: PRIVACY_NO_IMAGE }
+		]
+	},
+	'compress-avif': {
+		intro:
+			'Compress AVIF images right in your browser — **re-encoded on your own device, never uploaded**. AVIF is already a tight format, but plenty of AVIFs are heavier than they need to be: design-tool exports at quality 90+, cautious converter defaults, screenshots. Pick a quality or type a target size and squeeze the excess out.',
+		guide: [
+			{
+				heading: 'Why an AVIF can still shrink',
+				paragraphs: [
+					'File size in AVIF is a dial, not a property — and most encoders ship with the dial set timidly high. Re-encoding at quality 60–70 often halves a “quality 90” file with no visible change; the before/after compare tells you exactly when to stop. Target-size mode instead searches out the best quality under a hard cap like 200 KB. When a file must open in older software, [AVIF to JPG](/avif-to-jpg) is one click away, and the [image compressor](/compress-image) handles mixed batches.'
+				]
+			},
+			{
+				heading: 'What re-encoding changes',
+				paragraphs: [
+					'The output is a clean still AVIF: EXIF and GPS metadata are stripped (a privacy plus for web-bound images) and transparency is preserved exactly. Lossy generations do stack, so recompress from the best source you have, not from an already-crunched copy. Opening AVIF at all needs a current browser — Chrome, Edge, Firefox, or Safari from 16.1.'
+				]
+			}
+		],
+		faq: [
+			{
+				q: 'How much can an AVIF shrink?',
+				a: 'It depends how it was made: quality-90 exports routinely drop 40–60% at quality 65 with no visible difference. Files that were already encoded aggressively have little left to give.'
+			},
+			{
+				q: 'Is recompressing lossy?',
+				a: 'Yes — each lossy re-encode costs a little fidelity, invisible once but cumulative. Compress from the original when you can, and judge with the built-in compare slider.'
+			},
+			{
+				q: 'Is EXIF metadata kept?',
+				a: 'No — the output is written clean: EXIF, GPS and camera details are stripped. For images headed to the web that is usually the safer default.'
+			},
+			{ q: 'Is it private?', a: PRIVACY_A_IMAGE }
 		]
 	}
 };

@@ -155,6 +155,12 @@ const PAGES = [
 		'Variable → static',
 		'Pin the axes, ship one static font. Locally.'
 	],
+	['og/compress-avif.jpg', 'Compress AVIF.', 'The tightest format, tuned tighter — on your device.'],
+	['og/jpg-to-avif.jpg', 'JPG → AVIF', 'Up to half the bytes, same picture. Local.'],
+	['og/png-to-avif.jpg', 'PNG → AVIF', 'Graphics shrink, transparency stays.'],
+	['og/webp-to-avif.jpg', 'WebP → AVIF', 'One generation newer, one size smaller.'],
+	['og/avif-to-png.jpg', 'AVIF → PNG', 'Lossless pixels for every editor. Local.'],
+	['og/heic-to-avif.jpg', 'HEIC → AVIF', 'iPhone photos, web-ready. Converted locally.'],
 	[
 		'og/about.jpg',
 		'About Compress Pro.',

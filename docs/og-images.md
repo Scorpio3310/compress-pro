@@ -108,5 +108,11 @@ each entry in `src/lib/seo.ts` — pages without one fall back to `/og.jpg`.
 | `/eot-to-ttf`              | EOT → TTF           | Fonts rescued from legacy EOT files. Locally.                  |
 | `/subset-font`             | Subset fonts.       | Keep only the glyphs you use — subset locally.                 |
 | `/variable-font-to-static` | Variable → static   | Pin the axes, ship one static font. Locally.                   |
+| `/compress-avif`           | Compress AVIF.      | The tightest format, tuned tighter — on your device.           |
+| `/jpg-to-avif`             | JPG → AVIF          | Up to half the bytes, same picture. Local.                     |
+| `/png-to-avif`             | PNG → AVIF          | Graphics shrink, transparency stays.                           |
+| `/webp-to-avif`            | WebP → AVIF         | One generation newer, one size smaller.                        |
+| `/avif-to-png`             | AVIF → PNG          | Lossless pixels for every editor. Local.                       |
+| `/heic-to-avif`            | HEIC → AVIF         | iPhone photos, web-ready. Converted locally.                   |
 | `/about`                   | About Compress Pro. | Free, open source — and your files never leave your device.    |
 | `/privacy`                 | Privacy.            | No uploads, no cookies, no analytics — nothing to leak.        |

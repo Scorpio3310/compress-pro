@@ -459,3 +459,32 @@ test('CV-29: /mp4-to-wav presets WAV and extracts the audio track', async ({ pag
 	expect(info.audioCodec).toMatch(/^pcm/);
 	expect(info.hasVideo, 'video track discarded').toBe(false);
 });
+
+test('CV-30: /jpg-to-avif presets AVIF and converts', async ({ page }) => {
+	await gotoPath(page, '/jpg-to-avif');
+	await expect(page).toHaveTitle(/JPG to AVIF Converter/);
+	await upload(page, fx('photo-1200x800.jpg'));
+	await expect(outputPill(page, 'AVIF')).toHaveAttribute('aria-pressed', 'true');
+	await compress(page);
+	expect((await imageMeta((await downloadRow(page)).bytes)).format).toBe('avif');
+});
+
+test('CV-31: /png-to-avif keeps transparency', async ({ page }) => {
+	await gotoPath(page, '/png-to-avif');
+	await upload(page, fx('graphic-alpha.png'));
+	await expect(outputPill(page, 'AVIF')).toHaveAttribute('aria-pressed', 'true');
+	await compress(page);
+	const m = await imageMeta((await downloadRow(page)).bytes);
+	expect(m.format).toBe('avif');
+	expect(m.hasAlpha).toBe(true);
+});
+
+test('CV-32: /compress-avif scopes the dropzone to AVIF and recompresses', async ({ page }) => {
+	await gotoPath(page, '/compress-avif');
+	await expect(page.getByText('Drop AVIF files here')).toBeVisible();
+	await expect(page.locator('input[type=file]')).toHaveAttribute('accept', 'image/avif,.avif');
+	await upload(page, fx('photo-800x600.avif'));
+	await expect(outputPill(page, 'AVIF')).toHaveAttribute('aria-pressed', 'true');
+	await compress(page);
+	expect((await imageMeta((await downloadRow(page)).bytes)).format).toBe('avif');
+});

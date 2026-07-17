@@ -265,6 +265,13 @@ export const CONVERTERS: ConverterLite[] = [
 		h1: 'Convert HEIC to PNG.'
 	},
 	{
+		format: 'heic',
+		path: '/heic-to-avif',
+		label: 'HEIC → AVIF',
+		feature: 'Convert HEIC to AVIF',
+		h1: 'Convert HEIC to AVIF.'
+	},
+	{
 		format: 'webp',
 		path: '/webp-to-jpg',
 		label: 'WebP → JPG',
@@ -284,6 +291,34 @@ export const CONVERTERS: ConverterLite[] = [
 		label: 'AVIF → JPG',
 		feature: 'Convert AVIF to JPG',
 		h1: 'Convert AVIF to JPG.'
+	},
+	{
+		format: 'jpg',
+		path: '/avif-to-png',
+		label: 'AVIF → PNG',
+		feature: 'Convert AVIF to PNG',
+		h1: 'Convert AVIF to PNG.'
+	},
+	{
+		format: 'jpg',
+		path: '/jpg-to-avif',
+		label: 'JPG → AVIF',
+		feature: 'Convert JPG to AVIF',
+		h1: 'Convert JPG to AVIF.'
+	},
+	{
+		format: 'png',
+		path: '/png-to-avif',
+		label: 'PNG → AVIF',
+		feature: 'Convert PNG to AVIF',
+		h1: 'Convert PNG to AVIF.'
+	},
+	{
+		format: 'webp',
+		path: '/webp-to-avif',
+		label: 'WebP → AVIF',
+		feature: 'Convert WebP to AVIF',
+		h1: 'Convert WebP to AVIF.'
 	},
 	{
 		format: 'png',
@@ -695,6 +730,13 @@ export const TOOLS: ConverterLite[] = [
 		h1: 'Compress JPG to 100 KB.'
 	},
 	{
+		format: 'jpg',
+		path: '/compress-avif',
+		label: 'Compress AVIF',
+		feature: 'Compress AVIF images',
+		h1: 'Compress AVIF images.'
+	},
+	{
 		format: 'font',
 		path: '/subset-font',
 		label: 'Subset font',
@@ -870,6 +912,7 @@ export const TOOL_GROUPS: readonly {
 			'/compress-png',
 			'/compress-webp',
 			'/heic-to-jpg',
+			'/jpg-to-avif',
 			'/resize-image',
 			'/compress-image'
 		]
