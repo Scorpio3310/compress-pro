@@ -96,18 +96,56 @@ export function isHeicSequence(bytes: ArrayBuffer): boolean {
 	return false;
 }
 
-/** Animated iff GIF with ≥2 Graphic Control Extensions, WebP with the ANIM
- *  flag, or PNG with an acTL chunk (APNG). */
-function isAnimatedInput(bytes: ArrayBuffer): boolean {
+/**
+ * GIF is animated iff it holds ≥2 image descriptors — counted by walking the
+ * real block structure. (A raw whole-file scan for the 0x21 0xF9 GCE marker
+ * false-positives on LZW data and color tables — ~15 incidental hits per MB —
+ * which hung a fake "Animation lost" warning on perfectly static GIFs.)
+ * Malformed structure stops the walk: err on "not animated", never on a
+ * false warning.
+ */
+function isAnimatedGif(bytes: ArrayBuffer): boolean {
+	const b = new Uint8Array(bytes);
+	if (b.length < 13) return false; // header (6) + logical screen descriptor (7)
+	let at = 13;
+	if (b[10] & 0x80) at += 3 * (1 << ((b[10] & 0x07) + 1)); // global color table
+	const skipSubBlocks = () => {
+		while (at < b.length) {
+			const size = b[at++];
+			if (size === 0) return true;
+			at += size;
+		}
+		return false; // ran off the end
+	};
+	let frames = 0;
+	while (at < b.length) {
+		const block = b[at++];
+		if (block === 0x3b) break; // trailer
+		if (block === 0x21) {
+			at++; // extension label; then its data sub-blocks
+			if (!skipSubBlocks()) break;
+		} else if (block === 0x2c) {
+			if (++frames >= 2) return true;
+			if (at + 9 > b.length) break;
+			const flags = b[at + 8];
+			at += 9; // image descriptor body
+			if (flags & 0x80) at += 3 * (1 << ((flags & 0x07) + 1)); // local color table
+			at++; // LZW minimum code size
+			if (!skipSubBlocks()) break;
+		} else {
+			break; // unknown block — corrupt file
+		}
+	}
+	return false;
+}
+
+/** Animated iff GIF with ≥2 image descriptors (structural walk), WebP with
+ *  the ANIM flag, or PNG with an acTL chunk (APNG). Exported for tests. */
+export function isAnimatedInput(bytes: ArrayBuffer): boolean {
 	const type = sniffAnimatedInput(bytes);
 	if (type === 'image/webp' || type === 'image/png') return true;
 	if (type !== 'image/gif') return false;
-	const b = new Uint8Array(bytes);
-	let gce = 0;
-	for (let i = 0; i + 1 < b.length; i++) {
-		if (b[i] === 0x21 && b[i + 1] === 0xf9 && ++gce >= 2) return true;
-	}
-	return false;
+	return isAnimatedGif(bytes);
 }
 
 function animationWarning(
@@ -129,11 +167,12 @@ function joinWarnings(...warnings: (string | null)[]): string | null {
 	return parts.length ? parts.join(' — ') : null;
 }
 
-/** Info line for the automatic animated-WebP dimension clamp (not user resizes). */
+/** Info line for the automatic WebP dimension clamp (not user resizes) —
+ *  animated (AN-11) and static (R-07/R-09) encodes both hit the same cap. */
 function capInfo(result: EncodeResult): string | null {
-	return result.dimensionCapped
-		? `Resized to ${result.width}×${result.height} — animated WebP is limited to ${WEBP_MAX_DIMENSION} px`
-		: null;
+	if (!result.dimensionCapped) return null;
+	const what = result.animated ? 'animated WebP' : 'WebP';
+	return `Resized to ${result.width}×${result.height} — ${what} is limited to ${WEBP_MAX_DIMENSION} px`;
 }
 
 function joinInfo(...infos: (string | null)[]): string | null {
@@ -156,9 +195,7 @@ export async function encodeOnce(
 	const copy = bytes.slice(0);
 	const transfer = [copy];
 	// Same rule for predecoded RAW pixels — clone per attempt, transfer the clone.
-	const predecodedCopy = predecoded
-		? { ...predecoded, data: predecoded.data.slice(0) }
-		: undefined;
+	const predecodedCopy = predecoded ? { ...predecoded, data: predecoded.data.slice(0) } : undefined;
 	if (predecodedCopy) transfer.push(predecodedCopy.data);
 	return callWorker(
 		'image',
@@ -240,6 +277,13 @@ export async function compressImage(
 		(!isWasmDecodedSource(bytes) || convertibleSpace(colorInfo.space, colorInfo.transfer));
 	const gamutInfo = converted ? `Wide-gamut color (${colorInfo.name}) converted to sRGB` : null;
 	const exifTiff = keepMetadata && !predecoded ? exifPayloadForReencode(bytes) : null;
+	// "Keep metadata" promises EXIF in JPG/PNG/WebP outputs, but RAW rides the
+	// predecoded path where the original bytes (and their EXIF) never enter the
+	// pipeline — be honest about the ignored toggle instead of silent.
+	const rawMetadataInfo =
+		keepMetadata && predecoded
+			? "Metadata not kept — EXIF (date, camera, GPS) can't be copied from RAW files yet"
+			: null;
 
 	if (mode === 'target' && outputFormat !== 'gif' && outputFormat !== 'ico') {
 		// The ladder search needs ONE monotonic codec — 'auto' resolves to webp
@@ -270,7 +314,9 @@ export async function compressImage(
 		);
 		// A kept original is untouched — its profile was NOT converted.
 		const keptOriginal = result.blob === file;
-		const noted = keptOriginal ? result : { ...result, info: joinInfo(result.info, gamutInfo) };
+		const noted = keptOriginal
+			? result
+			: { ...result, info: joinInfo(result.info, gamutInfo, rawMetadataInfo) };
 		return withKeptMetadata(noted, file, targetExif);
 	}
 
@@ -288,7 +334,7 @@ export async function compressImage(
 		{
 			blob: new Blob([out.bytes], { type: MIME[out.chosenFormat] }),
 			warning: animationWarning(inputAnimated, out.chosenFormat, out),
-			info: joinInfo(gamutInfo, capInfo(out)),
+			info: joinInfo(gamutInfo, capInfo(out), rawMetadataInfo),
 			resized: out.resized,
 			animated: out.animated ?? false,
 			format: out.chosenFormat
@@ -442,10 +488,25 @@ async function compressGifWithGifsicle(
 	quality: number,
 	maxDimension: number | null
 ): Promise<ImageResult> {
+	// The routing here is by extension/MIME only — a truncated download or a
+	// mislabeled file would otherwise surface a raw DataView RangeError from
+	// the header reads below. 13 bytes = GIF header + logical screen descriptor.
+	const headerBytes = await file.slice(0, 13).arrayBuffer();
+	const magic = new Uint8Array(headerBytes);
+	const looksLikeGif =
+		magic.length >= 13 &&
+		magic[0] === 0x47 && // 'G'
+		magic[1] === 0x49 && // 'I'
+		magic[2] === 0x46 && // 'F'
+		magic[3] === 0x38; // '8'
+	if (!looksLikeGif) {
+		throw new Error('Could not read this GIF file — it looks incomplete or corrupted');
+	}
+
 	const { default: gifsicle } = await import('gifsicle-wasm-browser');
 
 	// Logical screen descriptor: width/height are u16 LE at bytes 6/8.
-	const header = new DataView(await file.slice(0, 10).arrayBuffer());
+	const header = new DataView(headerBytes);
 	const width = header.getUint16(6, true);
 	const height = header.getUint16(8, true);
 	const willResize =

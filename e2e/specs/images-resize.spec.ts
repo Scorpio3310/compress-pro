@@ -184,3 +184,76 @@ test('R-04: animated gif resize keeps all frames', async ({ page, rec }) => {
 		}
 	});
 });
+
+test('R-07: 17000 px static image → WebP clamps to the 16383 cap and says so', async ({
+	page,
+	rec
+}) => {
+	// The animated path already clamped (AN-11); the static path used to die
+	// with libwebp's bare "Encoding error." instead.
+	test.slow(); // a 16383 px webp encode under parallel-suite load needs headroom
+	await gotoTab(page, 'jpg');
+	await upload(page, fx('wide-17000x260.jpg'));
+	await setOutputFormat(page, 'WebP');
+	const run = await compress(page, { timeout: 120_000 });
+	expect(run.error).toBeNull();
+	const art = await downloadRow(page);
+	const m = await imageMeta(art.bytes);
+	expect(m.format).toBe('webp');
+	expect(m.width, 'clamped under the container cap').toBeLessThanOrEqual(16383);
+	expect(m.width, 'barely shrunk, not thumbnailed').toBeGreaterThan(16000);
+	await expect(page.getByTestId('row-info')).toContainText('16383');
+	rec.record({
+		id: 'R-07',
+		settings: { tab: 'jpg', output: 'webp', quality: 80 },
+		input: { name: 'wide-17000x260.jpg', bytes: readFileSync(fx('wide-17000x260.jpg')).length },
+		output: { name: art.name, bytes: art.bytes.length, width: m.width, height: m.height },
+		note: 'Used to hard-fail with a bare "Encoding error." from libwebp.'
+	});
+});
+
+test('R-08: 17000 px opaque image on Auto keeps full resolution via JPG', async ({ page, rec }) => {
+	// Auto used to encode the WebP candidate first and unconditionally — the
+	// whole file failed even though JPG handles the size fine.
+	await gotoTab(page, 'jpg');
+	await upload(page, fx('wide-17000x260.jpg'));
+	const run = await compress(page, { timeout: 120_000 });
+	expect(run.error).toBeNull();
+	const art = await downloadRow(page);
+	const m = await imageMeta(art.bytes);
+	expect(m.format, 'WebP sat out — JPG carries full resolution').toBe('jpeg');
+	expect([m.width, m.height], 'no silent downscale').toEqual([17000, 260]);
+	rec.record({
+		id: 'R-08',
+		settings: { tab: 'jpg', output: 'auto', quality: 80 },
+		input: { name: 'wide-17000x260.jpg', bytes: readFileSync(fx('wide-17000x260.jpg')).length },
+		output: { name: art.name, bytes: art.bytes.length, width: m.width, height: m.height },
+		note: 'Auto used to fail outright: the WebP candidate threw "Encoding error.".'
+	});
+});
+
+test('R-09: 17000 px image WITH alpha on Auto clamps (WebP is the only carrier)', async ({
+	page,
+	rec
+}) => {
+	test.slow(); // clamped webp + avif candidates under parallel-suite load
+	await gotoTab(page, 'png');
+	await upload(page, fx('wide-alpha-17000x120.png'));
+	const run = await compress(page, { timeout: 120_000 });
+	expect(run.error).toBeNull();
+	const art = await downloadRow(page);
+	const m = await imageMeta(art.bytes);
+	expect(m.hasAlpha, 'alpha survives — JPG was never an option').toBe(true);
+	expect(m.width, 'clamped to the WebP cap').toBe(16383);
+	await expect(page.getByTestId('row-info')).toContainText('16383');
+	rec.record({
+		id: 'R-09',
+		settings: { tab: 'png', output: 'auto', quality: 80 },
+		input: {
+			name: 'wide-alpha-17000x120.png',
+			bytes: readFileSync(fx('wide-alpha-17000x120.png')).length
+		},
+		output: { name: art.name, bytes: art.bytes.length, width: m.width, height: m.height },
+		note: 'Alpha + over-cap: the only alpha-capable candidate must clamp, not throw.'
+	});
+});

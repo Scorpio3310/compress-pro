@@ -6,6 +6,7 @@ import type {
 	WorkerContracts
 } from './protocol';
 import { expose } from './host';
+import { wasmReady } from './wasm-ready';
 import { sniffAnimatedInput, WEBP_MAX_DIMENSION } from './webp-mux';
 import { containScale, frameDelayMs } from '$lib/codecs/video-math';
 import { detectColorSpace } from '$lib/codecs/color-profile';
@@ -135,13 +136,14 @@ function installIcodecImageDataShim(): void {
 	) => (depth === 8 ? new ImageData(data, width, height) : { data, width, height, depth });
 }
 
-let heicReady: Promise<unknown> | null = null;
+// wasmReady (not `??=`): a rejected load must clear the cache so the user's
+// retry refetches instead of replaying the stale error until page reload.
+const heicReady = wasmReady(async () => (await import('icodec-heic')).loadDecoder(heicDecWasmUrl));
 
 async function decodeHeic(bytes: ArrayBuffer): Promise<ImageData> {
 	installIcodecImageDataShim();
 	const heic = await import('icodec-heic');
-	heicReady ??= heic.loadDecoder(heicDecWasmUrl);
-	await heicReady;
+	await heicReady();
 
 	// libheif applies irot/imir transforms itself — no EXIF handling on top.
 	const image = heic.decode(new Uint8Array(bytes));
@@ -176,14 +178,13 @@ function isJxl(bytes: ArrayBuffer): boolean {
 	);
 }
 
-let jxlDecReady: Promise<unknown> | null = null;
-let jxlEncReady: Promise<unknown> | null = null;
+const jxlDecReady = wasmReady(async () => (await import('icodec-jxl')).loadDecoder(jxlDecWasmUrl));
+const jxlEncReady = wasmReady(async () => (await import('icodec-jxl')).loadEncoder(jxlEncWasmUrl));
 
 async function decodeJxl(bytes: ArrayBuffer): Promise<ImageData> {
 	installIcodecImageDataShim();
 	const jxl = await import('icodec-jxl');
-	jxlDecReady ??= jxl.loadDecoder(jxlDecWasmUrl);
-	await jxlDecReady;
+	await jxlDecReady();
 	const image = jxl.decode(new Uint8Array(bytes));
 	if (image.depth !== undefined && image.depth !== 8) {
 		const { toBitDepth } = await import('icodec-common');
@@ -206,7 +207,9 @@ async function decodePsd(bytes: ArrayBuffer): Promise<ImageData> {
 	// composite() would happily misread anything else: CMYK channels land as
 	// RGBA and 16-bit throws deep inside — fail up front with an honest line.
 	if (psd.depth !== 8 || (psd.colorMode !== 3 && psd.colorMode !== 1)) {
-		throw new Error('Only 8-bit RGB or grayscale PSD files are supported — CMYK and 16/32-bit need a re-save');
+		throw new Error(
+			'Only 8-bit RGB or grayscale PSD files are supported — CMYK and 16/32-bit need a re-save'
+		);
 	}
 	// Upstream reads RAW-compression planes from one offset (all channels come
 	// back as the red plane) — and real-world flattened PSDs commonly store raw
@@ -218,7 +221,9 @@ async function decodePsd(bytes: ArrayBuffer): Promise<ImageData> {
 		const raw = decodeRawPsdComposite(bytes);
 		// Fresh copy — same ImageData foreign-buffer rule as the composite path.
 		if (raw) return new ImageData(new Uint8ClampedArray(raw.data), raw.width, raw.height);
-		throw new Error('This PSD stores uncompressed image data — re-save it in Photoshop and try again');
+		throw new Error(
+			'This PSD stores uncompressed image data — re-save it in Photoshop and try again'
+		);
 	}
 	const rgba = await psd.composite();
 	if (!psd.width || !psd.height || !rgba.length) throw new Error('Could not decode this PSD file');
@@ -259,6 +264,23 @@ async function maybeResize(
 	};
 }
 
+/** Static WebP shares the animated path's hard limit: libwebp rejects any
+ *  side over WEBP_MAX_DIMENSION with a bare "Encoding error." — shrink to the
+ *  cap instead (callers report it via `dimensionCapped`, mirroring AN-11). */
+async function clampToWebpCap(
+	imageData: ImageData
+): Promise<{ imageData: ImageData; capped: boolean }> {
+	const scale = containScale(imageData.width, imageData.height, WEBP_MAX_DIMENSION);
+	if (scale >= 1) return { imageData, capped: false };
+	const width = Math.max(1, Math.round(imageData.width * scale));
+	const height = Math.max(1, Math.round(imageData.height * scale));
+	const { default: resize } = await import('@jsquash/resize');
+	return {
+		imageData: await resize(imageData, { width, height, method: 'lanczos3' }),
+		capped: true
+	};
+}
+
 function flattenToWhite(imageData: ImageData): void {
 	const p = imageData.data;
 	for (let i = 3; i < p.length; i += 4) {
@@ -273,12 +295,13 @@ function flattenToWhite(imageData: ImageData): void {
 
 // --- Lossy PNG (icodec libimagequant) ---
 
-let pngQuantReady: Promise<unknown> | null = null;
+const pngQuantReady = wasmReady(async () =>
+	(await import('icodec-png')).loadEncoder(pngQuantWasmUrl)
+);
 
 async function reducePngColors(imageData: ImageData, quality: number): Promise<ImageData> {
 	const png = await import('icodec-png');
-	pngQuantReady ??= png.loadEncoder(pngQuantWasmUrl);
-	await pngQuantReady;
+	await pngQuantReady();
 	const rgba = png.reduceColors(
 		{ data: imageData.data, width: imageData.width, height: imageData.height, depth: 8 },
 		{ quality, colors: 256, dithering: 1, speed: 4 }
@@ -494,33 +517,47 @@ async function encodeAuto(
 	type Candidate = { bytes: ArrayBuffer; format: EncodeResult['chosenFormat'] };
 	const candidates: Candidate[] = [];
 
-	const { encode: encodeWebp } = await import('@jsquash/webp');
-	candidates.push({ bytes: await encodeWebp(imageData, { quality, method: 6 }), format: 'webp' });
+	// WebP (the always-on candidate) hard-caps at 16383 px per side. Opaque
+	// oversized images keep full resolution — JPEG takes over and WebP sits
+	// out. With alpha, WebP is the only candidate that can carry it, so the
+	// pixels clamp to the cap (same treatment as explicit webp output).
+	const opaque = isOpaque(imageData);
+	let data = imageData;
+	let capped = false;
+	if (Math.max(data.width, data.height) > WEBP_MAX_DIMENSION && !opaque) {
+		({ imageData: data, capped } = await clampToWebpCap(data));
+	}
 
-	if (isOpaque(imageData)) {
+	if (Math.max(data.width, data.height) <= WEBP_MAX_DIMENSION) {
+		const { encode: encodeWebp } = await import('@jsquash/webp');
+		candidates.push({ bytes: await encodeWebp(data, { quality, method: 6 }), format: 'webp' });
+	}
+
+	if (opaque) {
 		const { encode: encodeJpeg } = await import('@jsquash/jpeg');
 		candidates.push({
-			bytes: await encodeJpeg(imageData, jpegOptions(imageData, quality)),
+			bytes: await encodeJpeg(data, jpegOptions(data, quality)),
 			format: 'jpg'
 		});
 	}
 
 	if (
-		imageData.width * imageData.height <= AUTO_AVIF_MAX_PIXELS &&
+		data.width * data.height <= AUTO_AVIF_MAX_PIXELS &&
 		typeof crossOriginIsolated !== 'undefined' &&
 		crossOriginIsolated
 	) {
 		const { encode: encodeAvif } = await import('@jsquash/avif');
-		candidates.push({ bytes: await encodeAvif(imageData, { quality, speed: 7 }), format: 'avif' });
+		candidates.push({ bytes: await encodeAvif(data, { quality, speed: 7 }), format: 'avif' });
 	}
 
 	const smallest = candidates.reduce((a, b) => (b.bytes.byteLength < a.bytes.byteLength ? b : a));
 	return {
 		bytes: smallest.bytes,
-		resized,
-		width: imageData.width,
-		height: imageData.height,
-		chosenFormat: smallest.format
+		resized: resized || capped,
+		width: data.width,
+		height: data.height,
+		chosenFormat: smallest.format,
+		...(capped ? { dimensionCapped: true } : {})
 	};
 }
 
@@ -591,23 +628,30 @@ async function encodeImage(
 		}
 		case 'webp': {
 			const { encode } = await import('@jsquash/webp');
+			// Same hard limit as the animated clamp (AN-11): shrink + report via
+			// dimensionCapped instead of libwebp's bare "Encoding error.".
+			const { imageData: webpData, capped } = await clampToWebpCap(imageData);
+			const webpFlags = {
+				resized: resized || capped,
+				width: webpData.width,
+				height: webpData.height,
+				...(capped ? { dimensionCapped: true } : {})
+			};
 			// q100 on a LOSSLESS source → true lossless WebP (VP8L). Lossy
 			// sources stay on the lossy path: losslessly re-encoding codec
 			// artifacts costs 2-10× the bytes for zero visible gain.
 			if (quality === 100 && source !== 'heic' && isLosslessSource(bytes)) {
 				return {
-					bytes: await encode(imageData, { lossless: 1 }),
-					resized,
-					...dims,
+					bytes: await encode(webpData, { lossless: 1 }),
+					...webpFlags,
 					chosenFormat: 'webp'
 				};
 			}
 			// Measured 2026-07-10: use_sharp_yuv grows files 3-6% at the same
 			// nominal quality (it buys fidelity, not bytes) — deliberately off.
 			return {
-				bytes: await encode(imageData, { quality, method: 6 }),
-				resized,
-				...dims,
+				bytes: await encode(webpData, { quality, method: 6 }),
+				...webpFlags,
 				chosenFormat: 'webp'
 			};
 		}
@@ -624,8 +668,7 @@ async function encodeImage(
 		}
 		case 'jxl': {
 			const jxl = await import('icodec-jxl');
-			jxlEncReady ??= jxl.loadEncoder(jxlEncWasmUrl);
-			await jxlEncReady;
+			await jxlEncReady();
 			// q100 on a lossless source → true lossless JXL (same rule as WebP);
 			// lossy sources stay lossy — re-encoding artifacts losslessly costs
 			// multiples of the bytes for zero visible gain.
@@ -659,7 +702,19 @@ async function encodeImage(
 		case 'ico': {
 			const { encode } = await import('@jsquash/png');
 			const { default: resize } = await import('@jsquash/resize');
-			const square = padToSquare(imageData);
+			// Shrink to the largest ICO size BEFORE padding: pad-first would
+			// allocate a max(w,h)² RGBA square (~3.6 GB for a 30000 px panorama)
+			// for an output that is at most 256 px.
+			const icoScale = containScale(imageData.width, imageData.height, ICO_SIZES[0]);
+			const base =
+				icoScale < 1
+					? await resize(imageData, {
+							width: Math.max(1, Math.round(imageData.width * icoScale)),
+							height: Math.max(1, Math.round(imageData.height * icoScale)),
+							method: 'lanczos3'
+						})
+					: imageData;
+			const square = padToSquare(base);
 			const sizes = ICO_SIZES.filter((s) => s <= square.width);
 			if (!sizes.length) sizes.push(16); // tiny sources still get a favicon
 			const pngs: Uint8Array[] = [];
