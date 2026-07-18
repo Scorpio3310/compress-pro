@@ -98,8 +98,13 @@ async function decodeTiff(bytes: ArrayBuffer): Promise<ImageData> {
 	const rgba = UTIF.toRGBA8(ifds[0]);
 	const { width, height } = ifds[0];
 	if (!width || !height || !rgba.length) throw new Error('Could not decode this TIFF file');
-	// Copy into a fresh (non-shared) buffer — ImageData rejects ArrayBufferLike.
-	return new ImageData(new Uint8ClampedArray(rgba), width, height);
+	// utif2 has zero tag-274 handling — orientation-tagged TIFFs decoded
+	// rotated/mirrored vs how Preview/Photoshop display them (F-06).
+	const tag274 = (ifds[0] as unknown as Record<string, number[]>)['t274'];
+	const { applyOrientation } = await import('../codecs/orientation');
+	const oriented = applyOrientation(new Uint8ClampedArray(rgba), width, height, tag274?.[0] ?? 1);
+	// Fresh (non-shared) buffer — ImageData rejects ArrayBufferLike views.
+	return new ImageData(new Uint8ClampedArray(oriented.data), oriented.width, oriented.height);
 }
 
 /** RAW pixels arrive pre-decoded (LibRaw runs outside this worker) — RGB rows

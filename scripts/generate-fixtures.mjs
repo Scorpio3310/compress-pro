@@ -896,6 +896,25 @@ async function generateBmpTiff() {
 		assertEq('photo.tiff', 'width', m.width, 800);
 		manifest['photo.tiff'] = { width: 800, height: 600 };
 	}
+
+	// 29b. photo-orient6.tiff — pixels STORED rotated 90° CCW with Orientation
+	// tag 6 (rotate 90 CW to display). Viewers show it upright as 400×250;
+	// utif2 ignores tag 274, so the worker must apply it (F-06). The upright
+	// reference rides along for the pixel diff.
+	{
+		const upright = await photoScene(800, 600, { seed: 91, noise: 30 });
+		const stored = await sharp(upright).rotate(-90).toBuffer(); // 600×800 on disk
+		await write(
+			'photo-orient6.tiff',
+			await sharp(stored).withMetadata({ orientation: 6 }).tiff({ compression: 'lzw' }).toBuffer()
+		);
+		await write('photo-orient6-ref.png', await sharp(upright).png().toBuffer());
+		const m = await meta('photo-orient6.tiff');
+		assertEq('photo-orient6.tiff', 'width', m.width, 600);
+		assertEq('photo-orient6.tiff', 'orientation', m.orientation, 6);
+		manifest['photo-orient6.tiff'] = { width: 600, height: 800, orientation: 6 };
+		manifest['photo-orient6-ref.png'] = { width: 800, height: 600 };
+	}
 }
 
 /** Hand-written minimal LinearRaw DNG (a TIFF container with DNG tags —

@@ -681,6 +681,21 @@ test('CV-44: /compress-jxl scopes the dropzone to JXL and re-encodes', async ({ 
 	expect((await imageMeta(art.bytes)).format).toBe('jxl');
 });
 
+test('CV-19b: /tiff-to-jpg honors the TIFF Orientation tag', async ({ page }) => {
+	// F-06 (quality sweep): utif2 ignores tag 274, so orientation-tagged TIFFs
+	// converted rotated/mirrored. The fixture stores pixels rotated 90° CCW
+	// with Orientation 6 — the output must come out upright (800×600).
+	await gotoPath(page, '/tiff-to-jpg');
+	await upload(page, fx('photo-orient6.tiff'));
+	await compress(page);
+	const art = await downloadRow(page);
+	const m = await imageMeta(art.bytes);
+	expect(m.format).toBe('jpeg');
+	expect([m.width, m.height], 'orientation applied → upright dims').toEqual([800, 600]);
+	const { ratio } = await pixelDiff(readFileSync(fx('photo-orient6-ref.png')), art.bytes);
+	assertDiffBudget(ratio, DIFF_BUDGET.q80, 'CV-19b tiff orientation');
+});
+
 test('CV-45: /psd-to-jpg flattens a Photoshop file via @webtoon/psd', async ({ page }) => {
 	await gotoPath(page, '/psd-to-jpg');
 	await expect(page).toHaveTitle(/PSD to JPG/);
