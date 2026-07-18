@@ -23,55 +23,55 @@ limit — re-verify queued; full detail incl. failure scenarios + repro ideas in
 `test-results/audit-r1.json`). All queued below; fixes land one commit each.
 
 | F-06 | S2 | images | TIFF Orientation tag ignored — rotated/mirrored output for orientation-tagged TIFFs (`src/lib/workers/image.worker.ts:97`) | FIXED | orientation.test.ts (5 unit) + CV-19b e2e (red→green, upright dims + pixel diff) | b82cf1e |
-| F-07 | S2 | vectorize-raw-ocr | RAW develops with daylight WB, not camera WB — indoor shots get a heavy color cast (`src/lib/codecs/raw.ts:42`) | QUEUED | — | — |
-| F-08 | S2 | vectorize-raw-ocr | ocrPdf on owner-locked (permissions-encrypted) scan silently produces a corrupt PDF (`src/lib/codecs/ocr.ts:162`) | QUEUED | — | — |
-| F-09 | S2 | vectorize-raw-ocr | ocrPdf text layer misplaced on pages with /Rotate 90/180/270 (landscape scans) (`src/lib/codecs/ocr.ts:188`) | QUEUED | — | — |
-| F-10 | S2 | pdf | Merge/extract/watermark/pageNumbers silently corrupt owner-locked (encrypted) PDFs (`src/lib/codecs/pdf-tools.ts:15`) | QUEUED | — | — |
-| F-11 | S2 | pdf | watermark/pageNumbers ignore /Rotate — stamps sideways or upside down (`src/lib/codecs/pdf-tools.ts:236`) | QUEUED | — | — |
+| F-07 | S2 | vectorize-raw-ocr | RAW develops with daylight WB, not camera WB — indoor shots get a heavy color cast (`src/lib/codecs/raw.ts:42`) | FIXED | raw unit (2, real wasm develop) + CV-40/41 regen twin | 61e016f |
+| F-08 | S2 | vectorize-raw-ocr | ocrPdf on owner-locked (permissions-encrypted) scan silently produces a corrupt PDF (`src/lib/codecs/ocr.ts:162`) | FIXED | ocr unit + OC-05 e2e | 61e016f |
+| F-09 | S2 | vectorize-raw-ocr | ocrPdf text layer misplaced on pages with /Rotate 90/180/270 (landscape scans) (`src/lib/codecs/ocr.ts:188`) | FIXED | mapWordToPdf unit (4) + OC-04 e2e | 61e016f |
+| F-10 | S2 | pdf | Merge/extract/watermark/pageNumbers silently corrupt owner-locked (encrypted) PDFs (`src/lib/codecs/pdf-tools.ts:15`) | FIXED | pdf-tools unit (3) + PT-27 e2e | e0935c8 |
+| F-11 | S2 | pdf | watermark/pageNumbers ignore /Rotate — stamps sideways or upside down (`src/lib/codecs/pdf-tools.ts:236`) | FIXED | PT-28/29 e2e centroid/diagonal red→green | e0935c8 |
 | F-12 | S2 | pdf | F-03 prep on encrypted inputs transplants mojibake link URIs, loses form values (`src/lib/codecs/pdf-interactive.ts:71`) | FIXED | unit: encrypted-untouched (qpdf-encrypted fixture) | 546c8eb |
 | F-13 | S2 | pdf | Named-destination internal links silently dropped by the link transplant (`src/lib/codecs/pdf-interactive.ts:166`) | FIXED | unit: /Names tree + old-style /Dests both resolve | 546c8eb |
-| F-14 | S2 | video-audio | Rotated MJPEG .mov: convertMjpeg squashes frames into swapped dims and drops rotation (`src/lib/workers/video.worker.ts:426`) | QUEUED | — | — |
-| F-15 | S2 | video-audio | ADTS .aac → M4A: EXT grouping lets keep-original silently return the raw ADTS file (`src/lib/codecs/audio.ts:22`) | QUEUED | — | — |
+| F-14 | S2 | video-audio | Rotated MJPEG .mov: convertMjpeg squashes frames into swapped dims and drops rotation (`src/lib/workers/video.worker.ts:426`) | FIXED | rotatedDrawSpec unit (5) + V-32 quadrant e2e | 39377a7 |
+| F-15 | S2 | video-audio | ADTS .aac → M4A: EXT grouping lets keep-original silently return the raw ADTS file (`src/lib/codecs/audio.ts:22`) | FIXED | unit red-proof vs old EXT grouping + AU-22 | 39377a7 |
 | F-16 | S2 | archives | Encrypted ZIP with stored entries: fflate path returns raw ciphertext as output (`src/lib/compress.ts:441`) | QUEUED | — | — |
 | F-17 | S2 | archives | Extract silently drops dotfiles and 0-byte entries; all-dotfile zip gets wrong error (`src/lib/compress.ts:228`) | QUEUED | — | — |
-| F-18 | S2 | docs-models | Subtitle converter decodes every input as UTF-8 — legacy/UTF-16 SRT corrupts or errors (`src/lib/compress.ts:887`) | QUEUED | — | — |
-| F-19 | S2 | docs-models | yaml-to-json leaves << merge keys unresolved — literal "<<" keys in the JSON output (`src/lib/codecs/data.ts:244`) | QUEUED | — | — |
-| F-20 | S2 | docs-models | csv-to-xlsx numeric retype destroys leading zeros and >15-digit identifiers (`src/lib/codecs/data.ts:144`) | QUEUED | — | — |
-| F-21 | S3 | images | Static WebP/Auto encode of >16383 px images throws cryptic 'Encoding error.' (`src/lib/workers/image.worker.ts:582`) | QUEUED | — | — |
-| F-22 | S3 | images | isAnimatedInput byte-scan false-positives on static GIFs → false 'Animation lost' warning (`src/lib/codecs/image.ts:108`) | QUEUED | — | — |
-| F-23 | S3 | images | Rejected wasm-loader promise cached forever — one failed load bricks HEIC/JXL until reload (`src/lib/workers/image.worker.ts:138`) | QUEUED | — | — |
-| F-24 | S3 | images | Truncated GIF (<10 bytes) surfaces a raw DataView RangeError instead of an honest error (`src/lib/codecs/image.ts:449`) | QUEUED | — | — |
-| F-25 | S3 | vectorize-raw-ocr | RAW + 'Keep metadata' silently drops all EXIF/GPS despite the toggle's promise (`src/lib/codecs/image.ts:242`) | QUEUED | — | — |
-| F-26 | S3 | vectorize-raw-ocr | vtracer wasm never re-inits after a panic — one bad job bricks vectorize until reload (`src/lib/workers/vtracer.worker.ts:18`) | QUEUED | — | — |
+| F-18 | S2 | docs-models | Subtitle converter decodes every input as UTF-8 — legacy/UTF-16 SRT corrupts or errors (`src/lib/compress.ts:887`) | FIXED | decodeSubtitleText unit (5) + SB-06 e2e | 1d5ad0a |
+| F-19 | S2 | docs-models | yaml-to-json leaves << merge keys unresolved — literal "<<" keys in the JSON output (`src/lib/codecs/data.ts:244`) | FIXED | unit docker-compose idiom | 1d5ad0a |
+| F-20 | S2 | docs-models | csv-to-xlsx numeric retype destroys leading zeros and >15-digit identifiers (`src/lib/codecs/data.ts:144`) | FIXED | unit leading-zero/15-digit | 1d5ad0a |
+| F-21 | S3 | images | Static WebP/Auto encode of >16383 px images throws cryptic 'Encoding error.' (`src/lib/workers/image.worker.ts:582`) | FIXED | e2e R-07/08/09 red→green | bcf5bbb |
+| F-22 | S3 | images | isAnimatedInput byte-scan false-positives on static GIFs → false 'Animation lost' warning (`src/lib/codecs/image.ts:108`) | FIXED | unit GIF block-walk suite (5) | bcf5bbb |
+| F-23 | S3 | images | Rejected wasm-loader promise cached forever — one failed load bricks HEIC/JXL until reload (`src/lib/workers/image.worker.ts:138`) | FIXED | wasm-ready unit (4) + WR-01 e2e route-abort retry | bcf5bbb |
+| F-24 | S3 | images | Truncated GIF (<10 bytes) surfaces a raw DataView RangeError instead of an honest error (`src/lib/codecs/image.ts:449`) | FIXED | unit guard tests (3) | bcf5bbb |
+| F-25 | S3 | vectorize-raw-ocr | RAW + 'Keep metadata' silently drops all EXIF/GPS despite the toggle's promise (`src/lib/codecs/image.ts:242`) | FIXED | unit (2): honest 'Metadata not kept' note; full EXIF copy = OPEN wiring | bcf5bbb |
+| F-26 | S3 | vectorize-raw-ocr | vtracer wasm never re-inits after a panic — one bad job bricks vectorize until reload (`src/lib/workers/vtracer.worker.ts:18`) | FIXED | wasm-trap unit (4); pool-respawn mechanism | 61e016f |
 | F-27 | S3 | vectorize-raw-ocr | OCR dispatches by settings.op — op toggle after upload sends PDFs to tesseract (`src/lib/compress.ts:863`) | QUEUED | — | — |
 | F-28 | S3 | vectorize-raw-ocr | RAW/TIFF/PSD/JXL + SVG output bypasses their decoders — accepted files fail to vectorize (`src/lib/compress.ts:768`) | QUEUED | — | — |
-| F-29 | S3 | pdf | Target-size mode can ship a file over the requested target, unreported (`src/lib/codecs/pdf.ts:454`) | QUEUED | — | — |
-| F-30 | S3 | pdf | Open-ended page range beyond the last page yields misleading 'reversed' error (`src/lib/pdf-range.ts:44`) | QUEUED | — | — |
-| F-31 | S3 | pdf | pdf-to-images/pdf-to-text surface raw 'No password given' and leak the failed task (`src/lib/codecs/pdf-tools.ts:252`) | QUEUED | — | — |
-| F-32 | S3 | video-audio | MJPEG path silently ignores the fps cap yet still flags transformed=true (`src/lib/workers/video.worker.ts:413`) | QUEUED | — | — |
-| F-33 | S3 | video-audio | MJPEG with ≤24 kHz audio: conversion dies with raw 'mp4a.40.5 not supported' error (`src/lib/workers/video.worker.ts:382`) | QUEUED | — | — |
-| F-34 | S3 | video-audio | MJPEG → GIF throws misleading 'This browser can't decode this video — try Chrome' (`src/lib/workers/video.worker.ts:463`) | QUEUED | — | — |
+| F-29 | S3 | pdf | Target-size mode can ship a file over the requested target, unreported (`src/lib/codecs/pdf.ts:454`) | FIXED | pdf.test unit (2) | e0935c8 |
+| F-30 | S3 | pdf | Open-ended page range beyond the last page yields misleading 'reversed' error (`src/lib/pdf-range.ts:44`) | FIXED | pdf-range unit red→green | e0935c8 |
+| F-31 | S3 | pdf | pdf-to-images/pdf-to-text surface raw 'No password given' and leak the failed task (`src/lib/codecs/pdf-tools.ts:252`) | FIXED | unit (3) + PT-30 e2e | e0935c8 |
+| F-32 | S3 | video-audio | MJPEG path silently ignores the fps cap yet still flags transformed=true (`src/lib/workers/video.worker.ts:413`) | FIXED | V-33/34 + unit | 39377a7 |
+| F-33 | S3 | video-audio | MJPEG with ≤24 kHz audio: conversion dies with raw 'mp4a.40.5 not supported' error (`src/lib/workers/video.worker.ts:382`) | FIXED | HE-AAC ladder unit + e2e | 39377a7 |
+| F-34 | S3 | video-audio | MJPEG → GIF throws misleading 'This browser can't decode this video — try Chrome' (`src/lib/workers/video.worker.ts:463`) | FIXED | V-35 e2e | 39377a7 |
 | F-35 | S3 | archives | Chain-unwrap keys on entry names, not outer format; deb branch drops sibling entries (`src/lib/codecs/sevenzip-args.ts:253`) | QUEUED | — | — |
 | F-36 | S3 | archives | No extracted-size guard: high-ratio archive (zip bomb) OOMs the tab mid-extract (`src/lib/workers/archive.worker.ts:305`) | QUEUED | — | — |
-| F-37 | S3 | fonts | Same-format convert passthrough: corrupt WOFF/WOFF2/EOT reported as success (`src/lib/workers/font.worker.ts:213`) | QUEUED | — | — |
-| F-38 | S3 | fonts | woff2 wasm fetch failure hangs 10 min (init never settles), then misleading watchdog error (`src/lib/workers/font.worker.ts:59`) | QUEUED | — | — |
-| F-39 | S3 | fonts | WOFF2-packed font collection (ttcf flavor) errors with 'doesn't look like a valid font' (`src/lib/codecs/font-sniff.ts:41`) | QUEUED | — | — |
-| F-40 | S3 | fonts | OTF (CFF) to EOT conversion silently produces a file no EOT consumer can render (`src/lib/workers/font.worker.ts:192`) | QUEUED | — | — |
-| F-41 | S3 | fonts | woff2 emscripten abort poisons the cached module for every later woff2 job in the session (`src/lib/workers/font.worker.ts:187`) | QUEUED | — | — |
-| F-42 | S3 | docs-models | vtt-to-srt misses hourless karaoke timestamps — <MM:SS.mmm> tags leak into the SRT (`src/lib/codecs/subtitles.ts:74`) | QUEUED | — | — |
+| F-37 | S3 | fonts | Same-format convert passthrough: corrupt WOFF/WOFF2/EOT reported as success (`src/lib/workers/font.worker.ts:213`) | FIXED | font.worker unit (4) + FT-15 e2e | 4dd6494 |
+| F-38 | S3 | fonts | woff2 wasm fetch failure hangs 10 min (init never settles), then misleading watchdog error (`src/lib/workers/font.worker.ts:59`) | FIXED | unit fail-fast + FT-01/02/09 green | 4dd6494 |
+| F-39 | S3 | fonts | WOFF2-packed font collection (ttcf flavor) errors with 'doesn't look like a valid font' (`src/lib/codecs/font-sniff.ts:41`) | FIXED | font-sniff ttcf tests | 4dd6494 |
+| F-40 | S3 | fonts | OTF (CFF) to EOT conversion silently produces a file no EOT consumer can render (`src/lib/workers/font.worker.ts:192`) | FIXED | honest refusal test | 4dd6494 |
+| F-41 | S3 | fonts | woff2 emscripten abort poisons the cached module for every later woff2 job in the session (`src/lib/workers/font.worker.ts:187`) | FIXED | abort-recovery unit | 4dd6494 |
+| F-42 | S3 | docs-models | vtt-to-srt misses hourless karaoke timestamps — <MM:SS.mmm> tags leak into the SRT (`src/lib/codecs/subtitles.ts:74`) | FIXED | unit mixed-tags | 1d5ad0a |
 | F-43 | S3 | shared-infra | PDF merge ignores Cancel completely — run continues and commits its result (`src/lib/compress.ts:518`) | QUEUED | — | — |
 | F-44 | S3 | shared-infra | callWorker accepts an already-aborted owner — encodes escape Cancel onto fresh workers (`src/lib/workers/rpc.ts:260`) | FIXED | rpc.test.ts submit-time guard (red→green) | 07d4a68 |
-| F-45 | S5 | images | ICO padToSquare allocates side² RGBA for extreme aspect ratios — ~1 GB+ for panoramas (`src/lib/workers/image.worker.ts:434`) | QUEUED | — | — |
-| F-46 | S5 | vectorize-raw-ocr | Vectorize has no size cap and ignores max-dimension — huge photos hang for minutes (`src/lib/codecs/vectorize.ts:52`) | QUEUED | — | — |
-| F-47 | S5 | video-audio | Video→GIF has no hard frame/dimension cap; long or 4K sources OOM, warning shows post-run (`src/lib/codecs/video.ts:247`) | QUEUED | — | — |
-| F-48 | S5 | video-audio | Cancel during Conversion.init window is lost: guaranteed 5 s stall, then worker kill (`src/lib/workers/video.worker.ts:307`) | QUEUED | — | — |
+| F-45 | S5 | images | ICO padToSquare allocates side² RGBA for extreme aspect ratios — ~1 GB+ for panoramas (`src/lib/workers/image.worker.ts:434`) | FIXED | CV-47 e2e 60MP pano (was stall/OOM) | bcf5bbb |
+| F-46 | S5 | vectorize-raw-ocr | Vectorize has no size cap and ignores max-dimension — huge photos hang for minutes (`src/lib/codecs/vectorize.ts:52`) | FIXED | vectorize-limits unit (3) + VC-01 e2e; user maxDimension wiring = OPEN | 61e016f |
+| F-47 | S5 | video-audio | Video→GIF has no hard frame/dimension cap; long or 4K sources OOM, warning shows post-run (`src/lib/codecs/video.ts:247`) | FIXED | planGif unit (5) + V-36 e2e | 39377a7 |
+| F-48 | S5 | video-audio | Cancel during Conversion.init window is lost: guaranteed 5 s stall, then worker kill (`src/lib/workers/video.worker.ts:307`) | FIXED | job-registry unit (5) | 39377a7 |
 | F-49 | S5 | archives | 60-line tail ring loses password signal; partly-failed extract discards good entries (`src/lib/workers/archive.worker.ts:81`) | QUEUED | — | — |
 | F-50 | S5 | archives | fflate fast paths buffer whole batch + output in main-thread RAM with no size gate (`src/lib/compress.ts:274`) | QUEUED | — | — |
 | F-51 | S5 | shared-infra | fflate plain-zip create buffers all inputs in RAM — multi-GB batch crashes the tab (`src/lib/compress.ts:280`) | QUEUED | — | — |
 | F-52 | S6 | images | Keep-original guard clears info but not warning — kept original keeps false frame warning (`src/lib/compress.ts:1023`) | QUEUED | — | — |
-| F-53 | S6 | pdf | pdf-to-images zip names pad to 2 digits — wrong sort order for 100+ page PDFs (`src/lib/codecs/pdf-tools.ts:106`) | QUEUED | — | — |
+| F-53 | S6 | pdf | pdf-to-images zip names pad to 2 digits — wrong sort order for 100+ page PDFs (`src/lib/codecs/pdf-tools.ts:106`) | FIXED | unit 120-page padding | e0935c8 |
 | F-54 | S6 | archives | Legacy non-UTF-8 zip names mojibake'd; C1 controls survive sanitizeEntryName (`src/lib/compress.ts:456`) | QUEUED | — | — |
-| F-55 | S6 | fonts | WOFF extended-metadata and private blocks silently dropped on every conversion, no note (`src/lib/codecs/woff1.ts:67`) | QUEUED | — | — |
+| F-55 | S6 | fonts | WOFF extended-metadata and private blocks silently dropped on every conversion, no note (`src/lib/codecs/woff1.ts:67`) | FIXED | note surfaced; unit | 4dd6494 |
 | F-56 | S6 | docs-models | Simplify is silently skipped on morph-target meshes — setting ignored with no warning (`src/lib/workers/model.worker.ts:192`) | QUEUED | — | — |
 
 ### Audit round 1b (re-verified after usage-limit failures — ALL 12 real)

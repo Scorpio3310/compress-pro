@@ -1185,6 +1185,92 @@ async function generateZip() {
 			sizes: { 'readme.txt': entries['readme.txt'].length, 'pixel.png': png.length }
 		};
 	}
+
+	// 31b. bundle-dotfiles.zip — real dotfiles, an empty placeholder and macOS
+	// sidecar noise. Extract must row the first four and drop ONLY the noise
+	// (the old rule silently withheld every dot-basename and 0-byte entry).
+	{
+		const text = (s) => new TextEncoder().encode(s);
+		const entries = {
+			'.env': text('SECRET=1\n'),
+			'web/.htaccess': text('Deny from all\n'),
+			'empty.txt': new Uint8Array(0),
+			'index.html': text('<!doctype html><title>dotfiles fixture</title>\n'),
+			'__MACOSX/._index.html': text('AppleDouble resource fork'),
+			'.DS_Store': text('finder junk')
+		};
+		await write('bundle-dotfiles.zip', Buffer.from(zipSync(entries, { level: 6 })));
+		manifest['bundle-dotfiles.zip'] = {
+			rows: ['.env', '.htaccess', 'empty.txt', 'index.html'],
+			noise: ['__MACOSX/._index.html', '.DS_Store']
+		};
+	}
+
+	// 31c. bundle-cp437.zip — legacy Windows/DOS zip: cp437 name bytes with the
+	// UTF-8 flag CLEAR ('Résumé.pdf', é = 0x82). Hand-built STORED entry —
+	// fflate's writers always set the UTF-8 flag, so they can't produce this.
+	{
+		const nameBytes = Buffer.from([0x52, 0x82, 0x73, 0x75, 0x6d, 0x82, 0x2e, 0x70, 0x64, 0x66]);
+		const data = Buffer.from('legacy zip fixture payload\n');
+		await write('bundle-cp437.zip', storedZip([{ nameBytes, data, flags: 0 }]));
+		manifest['bundle-cp437.zip'] = { displayName: 'Résumé.pdf', text: data.toString('utf8') };
+	}
+}
+
+/** CRC-32 for the hand-built zips below (fflate doesn't export its own). */
+function zipCrc32(bytes) {
+	let crc = 0xffffffff;
+	for (const byte of bytes) {
+		crc ^= byte;
+		for (let bit = 0; bit < 8; bit++) crc = crc & 1 ? 0xedb88320 ^ (crc >>> 1) : crc >>> 1;
+	}
+	return (crc ^ 0xffffffff) >>> 0;
+}
+
+/** Minimal STORED-entry zip writer with full header control (raw name bytes,
+ *  general-purpose flags) — the knobs fflate's writers don't expose. */
+function storedZip(entries) {
+	const locals = [];
+	const centrals = [];
+	let offset = 0;
+	for (const e of entries) {
+		const crc = zipCrc32(e.data);
+		const local = Buffer.alloc(30 + e.nameBytes.length + e.data.length);
+		local.writeUInt32LE(0x04034b50, 0);
+		local.writeUInt16LE(20, 4); // version needed
+		local.writeUInt16LE(e.flags, 6);
+		local.writeUInt16LE(0, 8); // method: stored
+		local.writeUInt32LE(crc, 14);
+		local.writeUInt32LE(e.data.length, 18);
+		local.writeUInt32LE(e.data.length, 22);
+		local.writeUInt16LE(e.nameBytes.length, 26);
+		e.nameBytes.copy(local, 30);
+		e.data.copy(local, 30 + e.nameBytes.length);
+		locals.push(local);
+
+		const central = Buffer.alloc(46 + e.nameBytes.length);
+		central.writeUInt32LE(0x02014b50, 0);
+		central.writeUInt16LE(20, 4); // version made by
+		central.writeUInt16LE(20, 6); // version needed
+		central.writeUInt16LE(e.flags, 8);
+		central.writeUInt16LE(0, 10); // method: stored
+		central.writeUInt32LE(crc, 16);
+		central.writeUInt32LE(e.data.length, 20);
+		central.writeUInt32LE(e.data.length, 24);
+		central.writeUInt16LE(e.nameBytes.length, 28);
+		central.writeUInt32LE(offset, 42);
+		e.nameBytes.copy(central, 46);
+		centrals.push(central);
+		offset += local.length;
+	}
+	const cd = Buffer.concat(centrals);
+	const eocd = Buffer.alloc(22);
+	eocd.writeUInt32LE(0x06054b50, 0);
+	eocd.writeUInt16LE(entries.length, 8);
+	eocd.writeUInt16LE(entries.length, 10);
+	eocd.writeUInt32LE(cd.length, 12);
+	eocd.writeUInt32LE(offset, 16);
+	return Buffer.concat([...locals, cd, eocd]);
 }
 
 // ----------------------------------------------------------------- archives
@@ -1379,6 +1465,43 @@ async function generateArchives() {
 		await expectEntries('bundle-aes.zip', 'a.zip', aes, 'TEST');
 		await write('bundle-aes.zip', Buffer.from(aes));
 		manifest['bundle-aes.zip'] = { entries: BASENAMES, password: 'TEST' };
+	}
+
+	// 41b. ZipCrypto STORED zip (the classic `zip -e -0` shape: incompressible
+	// content stores, ZipCrypto encrypts). fflate "extracts" such entries as
+	// key-header + XOR ciphertext with NO error — the app must read the
+	// encryption bit and route to the worker instead.
+	{
+		const secret = enc('top secret notes — zipcrypto fixture\n');
+		const zc = (
+			await sevenZip(
+				['a', '-tzip', '-mx0', '-pTEST', '-mem=ZipCrypto', '--', '/out/zc.zip', 'secret.txt'],
+				{ 'secret.txt': secret }
+			)
+		).FS.readFile('/out/zc.zip');
+		// gen-verify: the entry must be method 0 (stored) WITH bit 0 set — the
+		// exact shape fflate mis-extracts silently. Read the central directory.
+		const buf = Buffer.from(zc);
+		const eocd = buf.lastIndexOf(Buffer.from([0x50, 0x4b, 0x05, 0x06]));
+		const cd = buf.readUInt32LE(eocd + 16);
+		const flags = buf.readUInt16LE(cd + 8);
+		const method = buf.readUInt16LE(cd + 10);
+		if (!(flags & 1) || method !== 0) {
+			throw new Error(
+				`bundle-zipcrypto.zip: expected stored+encrypted, got flags=${flags} method=${method}`
+			);
+		}
+		// gen-verify: the password opens it and yields the exact plaintext.
+		const opened = await sevenZipEntries('zc.zip', zc, 'TEST');
+		if (opened['secret.txt'] !== secret.length) {
+			throw new Error(`bundle-zipcrypto.zip: gen-verify failed (${JSON.stringify(opened)})`);
+		}
+		await write('bundle-zipcrypto.zip', Buffer.from(zc));
+		manifest['bundle-zipcrypto.zip'] = {
+			entries: ['secret.txt'],
+			password: 'TEST',
+			text: 'top secret notes — zipcrypto fixture\n'
+		};
 	}
 
 	// 42. tar + tar.gz (tar via 7zz — the tar the app writes; gzip via fflate).
@@ -2617,6 +2740,32 @@ async function generateModels() {
 	await notex.transform(draco());
 	await write('sample-draco-notex.glb', Buffer.from(await io.writeBinary(notex)));
 	manifest['sample-draco-notex.glb'] = {};
+
+	// Morph-target sphere (MD-10): one blend-shape target on the primitive —
+	// simplify must skip wholesale and say so in the row warning.
+	const morph = new Document();
+	const morphCounts = buildSphere(morph, { withTexture: null });
+	{
+		const prim = morph.getRoot().listMeshes()[0].listPrimitives()[0];
+		const base = prim.getAttribute('POSITION').getArray();
+		// Spec-correct displacement deltas: puff the sphere out by 25 %.
+		const deltas = Float32Array.from(base, (v) => v * 0.25);
+		prim.addTarget(
+			morph
+				.createPrimitiveTarget('puff')
+				.setAttribute(
+					'POSITION',
+					morph
+						.createAccessor()
+						.setType('VEC3')
+						.setArray(deltas)
+						.setBuffer(morph.getRoot().listBuffers()[0])
+				)
+		);
+		morph.getRoot().listMeshes()[0].setWeights([0]);
+	}
+	await write('sample-morph.glb', Buffer.from(await io.writeBinary(morph)));
+	manifest['sample-morph.glb'] = { triangles: morphCounts.triangles };
 
 	// External-reference .gltf (MD-07): scene.bin deliberately does not exist.
 	const externalGltf = JSON.stringify({
