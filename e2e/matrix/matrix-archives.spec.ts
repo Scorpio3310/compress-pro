@@ -112,14 +112,15 @@ async function refEntries(
 			password
 		);
 	}
-	return appVisible(entries);
+	return entries;
 }
 
 /** Mirror the app's extractableEntry row rule (src/lib/compress.ts): folder
  *  markers, empty entries and dot-basename noise (__MACOSX/._*, .DS_Store)
- *  never become rows — the reference must not count them either. (Triage
- *  2026-07-18: refEntries = 2× rows on every macOS-made zip was exactly the
- *  __MACOSX sidecars, not data loss.) */
+ *  never become rows — the EXTRACT reference must not count them either.
+ *  (Triage 2026-07-18: refEntries = 2× rows on every macOS-made zip was
+ *  exactly the __MACOSX sidecars, not data loss.) CONVERT deliberately
+ *  compares UNFILTERED: a format conversion must preserve every entry. */
 function appVisible(entries: Record<string, Uint8Array>): Record<string, Uint8Array> {
 	return Object.fromEntries(
 		Object.entries(entries).filter(([n, bytes]) => {
@@ -253,7 +254,7 @@ for (const f of archives) {
 			let ref: Record<string, Uint8Array> | null = null;
 			let refError = '';
 			try {
-				ref = await refEntries(input, f.name, run.password);
+				ref = appVisible(await refEntries(input, f.name, run.password));
 			} catch (error) {
 				refError = String(error).slice(0, 200);
 			}
