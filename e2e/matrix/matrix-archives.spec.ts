@@ -112,7 +112,22 @@ async function refEntries(
 			password
 		);
 	}
-	return entries;
+	return appVisible(entries);
+}
+
+/** Mirror the app's extractableEntry row rule (src/lib/compress.ts): folder
+ *  markers, empty entries and dot-basename noise (__MACOSX/._*, .DS_Store)
+ *  never become rows — the reference must not count them either. (Triage
+ *  2026-07-18: refEntries = 2× rows on every macOS-made zip was exactly the
+ *  __MACOSX sidecars, not data loss.) */
+function appVisible(entries: Record<string, Uint8Array>): Record<string, Uint8Array> {
+	return Object.fromEntries(
+		Object.entries(entries).filter(([n, bytes]) => {
+			if (n.endsWith('/') || bytes.length === 0) return false;
+			const base = n.split('/').pop() ?? n;
+			return !base.startsWith('.');
+		})
+	);
 }
 
 /** fflate keeps directory entries (trailing slash) — files only, please. */
@@ -266,11 +281,20 @@ for (const f of archives) {
 				password: run.password
 			};
 			if (ref) {
-				const { matched, problems } = matchEntries(ref, out);
-				metrics.matched = matched;
-				failures.push(...problems.slice(0, 5));
-				if (Object.keys(ref).length !== outCount)
-					failures.push(`entry count ${outCount} != reference ${Object.keys(ref).length}`);
+				const refFiles = Object.values(ref);
+				if (entryCount === 1 && refFiles.length === 1) {
+					// Chromium mangles extension-less download names (sample-2 →
+					// sample-2.txt) — for the 1:1 case bytes are the whole truth.
+					const same = Buffer.from(Object.values(out)[0]).equals(Buffer.from(refFiles[0]));
+					metrics.matched = same ? 1 : 0;
+					if (!same) failures.push('single-entry bytes differ from reference');
+				} else {
+					const { matched, problems } = matchEntries(ref, out);
+					metrics.matched = matched;
+					failures.push(...problems.slice(0, 5));
+					if (Object.keys(ref).length !== outCount)
+						failures.push(`entry count ${outCount} != reference ${Object.keys(ref).length}`);
+				}
 			}
 			rec.cell({
 				family: 'archives',

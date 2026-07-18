@@ -13,7 +13,8 @@ Status: `FIXED` (commit + covering test) · `OPEN` (needs human decision) · `IN
 | # | Sev | Area | Finding | Status | Test | Commit |
 |---|-----|------|---------|--------|------|--------|
 | F-01 | S6 (test-infra) | e2e helpers | `openAdvanced()` raced the lazily-imported settings card (`loadControls` in +page): probing `advanced-toggle` via `count()` before the dynamic import mounted silently no-opped, leaving later switch clicks stuck against the collapsed `inert` panel. Baseline `test:e2e:quick` was red: 8/381 failing under workers=4 (HE-02, IMG-12, KM-06, S-04, S-05, V-07, V-08, V-24) — all in toggle/advanced flows; each passed in isolation. Diagnosed via CDP (`Network.requestWillBeSent` initiator + MutationObserver instrumentation). Fix: wait for new `data-testid="settings-panel"` before deciding the tab has no disclosure. | FIXED | quick suite 381/381 green after fix (was 8 fail → 2 residual-flake → 0 across three runs); race deterministically repro'd via instrumented spec before fix | 3481522 |
-| F-03 | S1 | pdf compress | Ghostscript compression silently DROPS filled AcroForm field values: sample2.pdf (filled form: Gender "Man", Height "150", Favourite colour "Red") → /compress-pdf Medium → output renders those fields EMPTY (checked checkbox survived). Caught by visual inspection of the matrix raster `rasters/pdf/pdf__sample2.pdf__compress__medium/side-p1.png`; SSIM 0.9957 did NOT catch it (fields are a tiny pixel fraction). User-entered form data lost on compress = corrupt output. | INVESTIGATING | (repro test to be added with fix) | — |
+| F-03 | S1 | pdf compress/grayscale/pdfa | The gs wasm engine drops EVERY annotation on rewrite (measured: even bare pdfwrite args and `-dPreserveAnnots=true`): filled AcroForm values (sample2.pdf: "Man"/"150"/"Red" → empty) AND hyperlinks silently vanished. Caught by VISUAL inspection of the matrix raster (SSIM 0.9957 missed it). Two-layer root cause: engine strips annots; and pdf-lib `updateFieldAppearances` only regenerates DIRTY fields, so externally-filled forms flattened to empty boxes. Fix: `pdf-interactive.ts` — byte-scan (+bounded /ObjStm probe), re-set every field to its own value (marks dirty), regenerate appearances, flatten pre-gs; collect /Link annots (URI + GoTo) and transplant post-gs; flatten surfaced as row warning. Applied to compress (level+target), grayscale, pdfa. | FIXED | P-30 e2e (red→green) + 6 unit tests (pdf-interactive.test.ts) + visual re-check of matrix raster | d2a86a7 |
+| F-04 | S6 (test-infra) | matrix harness | Archive extract cells failed as "3/6 entries" on every macOS-made zip/rar + all bz2 — triage proved ZERO app data loss: the app intentionally hides `__MACOSX/._*`/dot-file noise (extractableEntry rule), and Chromium appends ".txt" to extension-less single-entry downloads, breaking name-keyed comparison. Comparator now mirrors the app's row rule and byte-compares the 1:1 case. Sidebar polish idea logged as O-02. | FIXED | matrix extract cells green (sample-2.zip/bz2, sample-5.rar) | (with harness commits) |
 | F-02 | S6 (dev-only) | dev server | During e2e runs a stray full reload sometimes fires from `@vite/client` (`pageReload` debouncer; CDP initiator stack captured; no HMR/full-reload message logged server- or client-side). Dev-only — production never runs the vite client. Resets page state mid-test when it lands; not reproducible on an idle page (25 s watch) nor in a standalone scripted flow. | OPEN (monitoring) | n/a — will re-flag if it recurs in matrix runs | — |
 
 ## Real-file matrix
@@ -51,6 +52,12 @@ tar-gz↔zip, ttf↔woff, ttf↔woff2, woff↔woff2) whose title token SETS are 
 (populated at the end)
 
 ## OPEN items (need a human decision)
+
+- **O-02 (UX polish, archives):** an extracted entry with no extension (e.g. the JPEG
+  payload inside sample-2.bz2) downloads as "<name>.txt" — Chromium appends an extension
+  because the blob is typed `''` (compress.ts entryRow). Suggestion: magic-sniff common
+  types for extension-less extracted entries (image sniffing already exists in
+  file-visual.ts) and set blob type + display name accordingly.
 
 - **O-01 (SEO, editorial):** 10 reversed converter pairs share identical title token
   sets (e.g. "Convert TTF to WOFF2 …" vs "Convert WOFF2 to TTF …") — potential keyword
