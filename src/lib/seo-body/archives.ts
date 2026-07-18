@@ -3,7 +3,7 @@
 // migration snapshot). This is now the authoring source for this copy;
 // loaded lazily via seo-body/index.ts, statically by seo-full.server.ts.
 import type { SeoBody } from '$lib/seo';
-import { PRIVACY_A_ARCHIVE, PRIVACY_A_EXTRACT } from './shared';
+import { PRIVACY_A_ARCHIVE, PRIVACY_A_EXTRACT, PRIVACY_PROOF } from './shared';
 
 export const BODIES: Record<string, SeoBody> = {
 	'zip-files': {
@@ -378,6 +378,60 @@ export const BODIES: Record<string, SeoBody> = {
 			{ q: 'Is it private?', a: PRIVACY_A_ARCHIVE }
 		]
 	},
+	'create-tar-bz2': {
+		intro:
+			'Bundle any files into a .tar.bz2 right in your browser — **tar joins them, bzip2 squeezes them, nothing is uploaded**. The classic unix pairing for source trees and text-heavy payloads, built without touching a terminal.',
+		guide: [
+			{
+				heading: 'Where bz2 sits between gz and xz',
+				paragraphs: [
+					'bzip2 lands noticeably smaller than gzip on text and source code, at a real speed cost — the middle child of the tarball family. [Create TAR.GZ](/create-tar-gz) stays the fast, maximally compatible default; [Create TAR.XZ](/create-tar-xz) squeezes hardest of the three. Compressing single files without the tar wrapper is [Bzip2 files](/bzip2-files).'
+				]
+			}
+		],
+		faq: [
+			{
+				q: 'Why choose bz2 over gz?',
+				a: 'Better ratios on text, logs and source trees — typically 10–20% smaller than gzip — in exchange for slower compression. For payloads downloaded many times, the trade pays for itself.'
+			},
+			{
+				q: 'Will Windows open a .tar.bz2?',
+				a: '7-Zip, WinRAR and PeaZip all open it; stock Explorer does not. For non-technical recipients a ZIP is the friendlier handoff — tarballs are for unix-shaped destinations.'
+			},
+			{
+				q: 'Is there a file-size limit?',
+				a: 'Only your device’s memory — nothing is uploaded, so no server cap applies. Multi-hundred-MB bundles are routine.'
+			},
+			{ q: 'Is it private?', a: PRIVACY_A_ARCHIVE }
+		]
+	},
+	'create-tar-xz': {
+		intro:
+			'Bundle files into a .tar.xz entirely in your browser — **the tightest mainstream tarball format, built locally with nothing uploaded**. The packaging Linux distributions and software releases standardized on, one drag-and-drop away.',
+		guide: [
+			{
+				heading: 'Maximum squeeze, understood trade-offs',
+				paragraphs: [
+					'xz (LZMA2) typically undercuts gzip by 25–40% on compressible payloads, which is why release artifacts ship as .tar.xz — built once, downloaded many times. The price is CPU: creation is the slowest of the family, so patience on big trees is normal. [Create TAR.GZ](/create-tar-gz) wins when speed or maximum compatibility matters, and [Create 7Z](/create-7z) offers the same LZMA family plus AES-256 encryption.'
+				]
+			}
+		],
+		faq: [
+			{
+				q: 'How much smaller than tar.gz?',
+				a: 'Typically 25–40% on source code, text and mixed payloads. Already-compressed content (media, existing archives) barely budges in any format.'
+			},
+			{
+				q: 'Why does creating it take so long?',
+				a: 'xz trades CPU for ratio by design — it searches much harder for redundancy than gzip. The decompress side is fast; only creation is slow.'
+			},
+			{
+				q: 'Who can open .tar.xz?',
+				a: 'Every modern unix out of the box, and 7-Zip or PeaZip on Windows. For non-technical recipients, ZIP remains the safer handoff.'
+			},
+			{ q: 'Is it private?', a: PRIVACY_A_ARCHIVE }
+		]
+	},
 	'gzip-files': {
 		intro:
 			'Gzip compresses a single file into a single .gz — no bundling, no archive semantics, just the exact stream format web servers, log rotators and unix tools speak. Drop files and each one comes back as its own .gz, **compressed entirely on your device**.',
@@ -563,6 +617,33 @@ export const BODIES: Record<string, SeoBody> = {
 			{
 				q: 'What about .bz2 and .xz files?',
 				a: 'Same story, different compressor — and the same answer: drop them on this page or the archive tab and they decompress locally. All three families share one engine here.'
+			},
+			{ q: 'Is it private?', a: PRIVACY_A_EXTRACT }
+		]
+	},
+	'extract-z': {
+		intro:
+			'Decompress unix .Z files right in your browser — **the 1980s compress format, opened with nothing installed and nothing uploaded**. Old distribution archives, university mirrors and legacy backups come back as their original files; a .tar.Z unwraps all the way through.',
+		guide: [
+			{
+				heading: 'A format older than the web',
+				paragraphs: [
+					'.Z predates gzip: it is the output of compress(1), built on 1984-vintage LZW, and modern systems often ship without the tool that reads it — exactly why a browser page is the convenient way in. Chains like source.tar.Z unwrap both layers automatically, first the .Z stream, then the tar bundle. Newer single-file cousins live on [Extract GZ](/extract-gz), and everything else archive-shaped opens on [Zip & Unzip](/zip-files).'
+				]
+			}
+		],
+		faq: [
+			{
+				q: 'What created these .Z files?',
+				a: 'The unix compress utility, standard through the eighties and nineties — FTP mirrors, tape backups and source distributions of that era are full of them.'
+			},
+			{
+				q: 'What about .tar.Z files?',
+				a: 'Recognized and unwrapped in one pass — the .Z layer is decompressed, then the tar bundle inside unpacks to its files automatically.'
+			},
+			{
+				q: 'Can I create .Z files here?',
+				a: 'No — the format is obsolete for new archives. Make .gz or .xz instead; every system that reads .Z also reads those.'
 			},
 			{ q: 'Is it private?', a: PRIVACY_A_EXTRACT }
 		]
@@ -754,6 +835,303 @@ export const BODIES: Record<string, SeoBody> = {
 				a: 'Yes — ARJ stored CRCs per file and the decoder verifies them, so what comes out is exactly what went in three decades ago, or you get an error instead of silent corruption.'
 			},
 			{ q: 'Is it private?', a: PRIVACY_A_EXTRACT }
+		]
+	},
+	'compress-epub': {
+		intro:
+			'Compress EPUB e-books entirely in your browser — **only the images inside are re-encoded; every word, style and page break stays byte-identical**. Drop the .epub files, pick a quality, and download lighter books that read exactly the same. Nothing is uploaded.',
+		guide: [
+			{
+				heading: 'Where the weight in an EPUB lives',
+				paragraphs: [
+					'The text of a novel is a few hundred kilobytes; the covers, illustrations and publisher logos around it are usually the other 90%. This tool opens the EPUB, re-encodes each raster image in its own format at your chosen quality — JPEG stays JPEG, PNG stays PNG, transparency included — and repacks the book. Any image that would come out bigger is kept untouched, so a run can only ever help. An optional size cap downscales oversized images to e-reader resolution for the biggest wins.'
+				]
+			},
+			{
+				heading: 'What never changes',
+				paragraphs: [
+					'Chapters, styles, fonts, metadata and reading order pass through byte-for-byte, and the EPUB container rules (the mimetype entry first, stored) are preserved — the result opens in every reader the original did. DRM-protected books are refused with a clear message rather than silently corrupted: encrypted content cannot be recompressed. Comics in ZIP form have their own tool — [Compress CBZ](/compress-cbz).'
+				]
+			},
+			{
+				heading: 'Under the hood',
+				paragraphs: [
+					'Images are re-encoded by the same engines as the image tabs — MozJPEG for JPEGs, OxiPNG with palette quantization for PNGs, libwebp for WebP — all compiled to WebAssembly and running in workers on your device. The container is unpacked and rebuilt locally too, so the book never leaves your browser: no queue, no server, no copy of your library anywhere.'
+				]
+			}
+		],
+		faq: [
+			{
+				q: 'Will the book look or read differently?',
+				a: 'The text will not change at all — it is carried over byte-identical. Images are re-encoded at your chosen quality; at the default the difference is hard to spot, and any image that would grow is kept as-is.'
+			},
+			{
+				q: 'Why was my EPUB refused?',
+				a: 'It is DRM-protected (META-INF/encryption.xml with real encryption). Recompressing encrypted content would corrupt the book, so the tool refuses instead. Books whose fonts are merely obfuscated — an InDesign habit — are fine and convert normally.'
+			},
+			{
+				q: 'How much smaller do books get?',
+				a: 'Image-heavy books routinely drop 30–60%; text-only novels have little to give. The per-image guard means the output is never bigger than the input.'
+			},
+			{ q: 'Is it private?', a: PRIVACY_A_ARCHIVE }
+		]
+	},
+	'compress-cbz': {
+		intro:
+			'Compress CBZ comic archives entirely in your browser — **every page re-encoded in its own format at the quality you pick, with an optional downscale for e-readers**. Filenames, page order and metadata stay exactly as they were. Nothing is uploaded.',
+		guide: [
+			{
+				heading: 'Comics are the perfect target',
+				paragraphs: [
+					'A CBZ is just a ZIP of page images, and scans are usually saved far larger than any screen can show — high resolutions, generous quality settings. Re-encoding at a sensible quality halves many archives outright, and the Max image size cap (1600 px covers tablets and e-readers comfortably) multiplies the savings on oversized scans. Pages that would grow are kept untouched, and page filenames never change, so reading order is exactly preserved.'
+				]
+			},
+			{
+				heading: 'Formats and edge cases, honestly',
+				paragraphs: [
+					'JPEG pages stay JPEG, PNG stays PNG (with transparency), WebP stays WebP; GIFs and ComicInfo.xml pass through untouched. Mislabeled archives are handled too — a "CBZ" that is really a RAR is read all the same. For actual .cbr files, [CBR to CBZ](/cbr-to-cbz) does the container conversion; at quality 100 this tool is a lossless repack that only restructures the archive.'
+				]
+			}
+		],
+		faq: [
+			{
+				q: 'Does the page order survive?',
+				a: 'Yes — readers order pages by filename and every filename is preserved exactly, along with ComicInfo.xml metadata. Only the image bytes inside get lighter.'
+			},
+			{
+				q: 'What quality should I pick?',
+				a: 'The default (80) is visually transparent for most scans. For archival copies use 100 — pages that cannot shrink losslessly are simply kept, so nothing degrades.'
+			},
+			{
+				q: 'Can I shrink pages for an e-reader?',
+				a: 'Yes — set Max image size to 1600 px (or 1200 for small readers) and oversized scans are downscaled to fit, which is where the biggest savings usually come from.'
+			},
+			{ q: 'Is it private?', a: PRIVACY_A_ARCHIVE }
+		]
+	},
+	'csv-to-xlsx': {
+		intro:
+			'Convert CSV files to real Excel workbooks entirely in your browser — **delimiters auto-detected (comma, semicolon, tab), numbers typed as numbers, text kept as text**. Drop the .csv, download the .xlsx. Nothing is ever uploaded.',
+		guide: [
+			{
+				heading: 'What a proper conversion gets right',
+				paragraphs: [
+					'CSV has no types — everything is text until something interprets it. This tool re-types pure numbers as numeric cells so sums and charts work immediately, while anything ambiguous stays text: date-looking strings, fractions like 1/2 and codes like MARCH1 are NOT silently turned into dates, the classic spreadsheet-import disaster. Quoted fields, embedded commas and multi-line cells all survive; semicolon and tab files (European Excel exports) are detected automatically.'
+				]
+			},
+			{
+				heading: 'The whole family on one tab',
+				paragraphs: [
+					'This page is the front door of the data tab: drop any of the four formats and the direction follows the file — [XLSX back to CSV](/xlsx-to-csv), [JSON to YAML](/json-to-yaml) and [YAML to JSON](/yaml-to-json) all run through the same engine. Batch a mixed folder and every file comes back converted the right way.'
+				]
+			},
+			{
+				heading: 'Under the hood',
+				paragraphs: [
+					'Spreadsheets are read and written by SheetJS — the open-source library behind most of the JavaScript spreadsheet world — and the JSON/YAML side runs on the standard `yaml` parser, both loaded on demand in your browser. Your data never leaves the device: no upload, no server-side copy, and the tools keep working offline once loaded. For business and personal data that is not a nice-to-have — it is the point.'
+				]
+			}
+		],
+		faq: [
+			{
+				q: 'Will my numbers and dates survive?',
+				a: 'Numbers become real numeric cells. Date-looking strings deliberately stay text — automatic date guessing is how "1/2" becomes January 2nd in other tools. Format columns as dates in Excel afterwards if you need them typed.'
+			},
+			{
+				q: 'Does it handle semicolon CSVs from European Excel?',
+				a: 'Yes — the delimiter is sniffed per file, so comma, semicolon and tab files all convert correctly, decimal commas included.'
+			},
+			{
+				q: 'Is there a size limit?',
+				a: 'No hard limit — typical exports convert instantly. Very large files (tens of MB) take a few seconds since everything runs on your own machine.'
+			},
+			{
+				q: 'Is my data uploaded?',
+				a: 'No. The conversion runs entirely in your browser — the server only delivers this page. Spreadsheets full of names, prices or personal data never leave your device.' + PRIVACY_PROOF
+			}
+		]
+	},
+	'xlsx-to-csv': {
+		intro:
+			'Convert Excel workbooks to clean CSV entirely in your browser — **dates and formulas come out as the values you see in Excel, and the delimiter is yours to pick**. Drop .xlsx or legacy .xls, download the .csv. Nothing is uploaded.',
+		guide: [
+			{
+				heading: 'Values, not surprises',
+				paragraphs: [
+					'Cells export as Excel displays them: formulas become their computed values (never `=SUM(...)` text), dates keep their formatted form, and the file starts with a UTF-8 byte-order mark so Excel re-opens č, š, ž and every other accent correctly — the silent encoding bug this tool exists to avoid. Fully empty trailing rows are dropped, matching Excel’s own export.'
+				]
+			},
+			{
+				heading: 'Delimiters and multiple sheets',
+				paragraphs: [
+					'Comma is the default; pick semicolon for European Excel locales (where comma is the decimal separator) or tab for TSV. Workbooks with several sheets export the first one — the row note says so explicitly, nothing disappears silently. Need the reverse trip? [CSV to XLSX](/csv-to-xlsx) is one click away.'
+				]
+			}
+		],
+		faq: [
+			{
+				q: 'What happens to formulas?',
+				a: 'They export as their last computed values — exactly what the cells showed in Excel. A formula that was never calculated exports as an empty field rather than formula text.'
+			},
+			{
+				q: 'Why does the CSV start with an invisible character?',
+				a: 'That is the UTF-8 byte-order mark. Excel needs it to read accented characters correctly; every other tool simply ignores it.'
+			},
+			{
+				q: 'My workbook has several sheets — which one converts?',
+				a: 'The first sheet, and the result row tells you when others were present. Duplicate the workbook with the sheet you need first, or export sheet by sheet.'
+			},
+			{
+				q: 'Is my spreadsheet uploaded?',
+				a: 'No. The whole conversion runs in your browser — the server only delivers this page. Financials, client lists, inventories: none of it leaves your device.' + PRIVACY_PROOF
+			}
+		]
+	},
+	'json-to-yaml': {
+		intro:
+			'Convert JSON to readable YAML entirely in your browser — **key order preserved, values untouched, block style throughout**. Config files, API payloads and exports become something a human can actually review. Nothing is uploaded.',
+		guide: [
+			{
+				heading: 'Faithful by construction',
+				paragraphs: [
+					'The JSON is parsed and re-serialized — never string-mangled — so every value survives exactly: numbers stay numbers, null stays null, unicode stays unicode, and keys keep their original order. Long strings are not folded across lines, which keeps diffs readable. Invalid JSON fails with the parser’s own message instead of producing half a file.'
+				]
+			},
+			{
+				heading: 'When YAML is the right target',
+				paragraphs: [
+					'YAML is the lingua franca of configuration — CI pipelines, Kubernetes, docker-compose — and far easier to read and comment than JSON. The reverse trip is [YAML to JSON](/yaml-to-json); both directions ride the same data tab, alongside the [CSV](/csv-to-xlsx) and [Excel](/xlsx-to-csv) converters.'
+				]
+			}
+		],
+		faq: [
+			{
+				q: 'Is the output valid YAML 1.2?',
+				a: 'Yes — produced by the standard yaml library in block style with 2-space indentation, ready for any modern parser or CI system.'
+			},
+			{
+				q: 'Does the key order change?',
+				a: 'No — keys come out exactly in the order they appear in the JSON. Nothing is sorted or normalized behind your back.'
+			},
+			{
+				q: 'Can I convert several files at once?',
+				a: 'Yes — drop a folder’s worth; each file converts independently, and mixed batches (JSON alongside CSV or YAML) each go their own way.'
+			},
+			{
+				q: 'Is my data uploaded?',
+				a: 'No. The conversion is plain parsing that runs entirely in your browser — the server only delivers this page. API keys or secrets inside your configs never leave your device.' + PRIVACY_PROOF
+			}
+		]
+	},
+	'yaml-to-json': {
+		intro:
+			'Convert YAML to JSON entirely in your browser — **anchors and aliases resolved, pretty or minified output, strict validation with real error messages**. Configs become portable JSON any tool can read. Nothing is uploaded.',
+		guide: [
+			{
+				heading: 'What conversion resolves',
+				paragraphs: [
+					'YAML’s conveniences are expanded into plain data: anchors and aliases become the values they reference, block scalars become normal strings, and the result is exactly what a YAML parser would hand your program — now portable to anything that speaks JSON. Comments have no JSON form and are dropped; that is inherent to the format, not a bug.'
+				]
+			},
+			{
+				heading: 'Strict where it matters',
+				paragraphs: [
+					'Duplicate keys and syntax errors fail loudly with the parser’s message instead of guessing, and multi-document files are refused with a clear note rather than silently truncated. Dates written like 2024-01-15 stay strings — YAML 1.2 semantics, and what you want in JSON. The reverse trip is [JSON to YAML](/json-to-yaml).'
+				]
+			}
+		],
+		faq: [
+			{
+				q: 'What happens to anchors and aliases?',
+				a: 'They are resolved — each alias becomes a full copy of the anchored value, which is exactly how any YAML-consuming program sees the data.'
+			},
+			{
+				q: 'Pretty or minified?',
+				a: 'Your pick — 2-space pretty printing for reading and diffs, or minified single-line output for payloads. The toggle sits right on the page.'
+			},
+			{
+				q: 'Why was my file refused?',
+				a: 'Usually a syntax error, a duplicate key, or a multi-document stream (---separated). The error message quotes the parser so you can fix the exact line.'
+			},
+			{
+				q: 'Is my data uploaded?',
+				a: 'No. The conversion is plain parsing that runs entirely in your browser — the server only delivers this page. Kubernetes secrets and CI configs never leave your device.' + PRIVACY_PROOF
+			}
+		]
+	},
+	'compress-glb': {
+		intro:
+			'Compress GLB 3D models entirely in your browser — **geometry crushed with Draco or Meshopt, embedded textures re-encoded, optionally fewer triangles**. Product models, scans and game assets shrink dramatically; nothing is ever uploaded.',
+		guide: [
+			{
+				heading: 'Three ways to compress geometry',
+				paragraphs: [
+					'Draco (Google) packs vertex data and connectivity the tightest and is decoded by three.js, Babylon.js, <model-viewer> and every major engine. Meshopt (EXT_meshopt_compression) trades a little size for very fast, GPU-friendly decoding — also widely supported. And None quantizes the numbers without any compression extension at all: the output opens in every glTF viewer with zero extra decoders, which makes it the safe pick when you don’t control the viewer.'
+				]
+			},
+			{
+				heading: 'Textures and triangles',
+				paragraphs: [
+					'Embedded JPEG textures re-encode at your chosen quality and PNGs can be downscaled — 4K textures are the usual culprit in oversized web models, and the Max texture size cap alone often halves a file. Any texture that would grow is kept untouched, and GPU-compressed formats (KTX2) pass through as-is. The optional Simplify slider decimates the mesh itself — permanent detail loss, but the biggest wins on dense photogrammetry scans.'
+				]
+			},
+			{
+				heading: 'Under the hood',
+				paragraphs: [
+					'The pipeline is glTF Transform — the reference glTF processing library — running with Google’s Draco codec and meshoptimizer compiled to WebAssembly, all inside a worker on your device. Deduplication, welding and pruning run first, then your chosen codec; animations, materials and scene structure are carried over untouched. Your model never leaves the browser — no queue, no server, no copy of your asset anywhere.'
+				]
+			}
+		],
+		faq: [
+			{
+				q: 'Will the compressed model open in my viewer?',
+				a: 'Draco and Meshopt output needs a viewer with the matching decoder — three.js, Babylon.js, <model-viewer> and the major engines all bundle both. If you can’t control the viewer, pick None: that output needs no decoder at all.'
+			},
+			{
+				q: 'Are animations and materials preserved?',
+				a: 'Yes — animations, skins, materials and the node hierarchy pass through untouched. Only vertex data is compressed and textures re-encoded; nothing is restructured.'
+			},
+			{
+				q: 'Why is my .gltf file rejected?',
+				a: 'A .gltf keeps geometry and textures in separate files this browser tool can’t reach. Export as a single .glb (Binary glTF) — every DCC tool and engine has that option — and it will convert.'
+			},
+			{
+				q: 'Is my model uploaded?',
+				a: 'No. The whole pipeline — parsing, compression, texture re-encoding — runs in your browser. The server only delivers this page; your asset never leaves your device.' + PRIVACY_PROOF
+			}
+		]
+	},
+	'cbr-to-cbz': {
+		intro:
+			'Convert CBR comics to CBZ entirely in your browser — **the RAR container becomes a ZIP; every page rides across bit-identical by default**. CBZ opens in more readers, and unlike RAR it is a format tools can also write. Nothing is uploaded.',
+		guide: [
+			{
+				heading: 'Why CBZ over CBR',
+				paragraphs: [
+					'CBR is a RAR archive, and RAR is a proprietary format most software can read but almost none may write — which is why comic tools, readers and libraries have standardized on CBZ (ZIP) instead. This converter reads the RAR locally, keeps every page and the metadata exactly as they are, and writes a clean CBZ with the same filenames and order.'
+				]
+			},
+			{
+				heading: 'Bit-exact by default, smaller on request',
+				paragraphs: [
+					'The page arrives with quality preset to 100: every page is carried over bit-identical, so the conversion is purely structural. Lower the quality slider and the same run also re-encodes the pages — the [Compress CBZ](/compress-cbz) machinery working during the conversion. Password-protected CBRs are not supported; extract them first with [Extract RAR](/extract-rar).'
+				]
+			}
+		],
+		faq: [
+			{
+				q: 'Are the pages altered?',
+				a: 'Not by default — at the preset quality 100 every page is byte-identical to the original. Only the container around them changes from RAR to ZIP.'
+			},
+			{
+				q: 'Why is my CBZ bigger than the CBR was?',
+				a: 'RAR sometimes compresses a hair tighter than ZIP. The difference is small (pages are already-compressed images), and the trade is compatibility — CBZ opens everywhere. Lower the quality slider if size matters more.'
+			},
+			{
+				q: 'Do reading order and metadata survive?',
+				a: 'Yes — filenames, folder structure and ComicInfo.xml all carry over unchanged, so readers show the exact same book.'
+			},
+			{ q: 'Is it private?', a: PRIVACY_A_ARCHIVE }
 		]
 	}
 };

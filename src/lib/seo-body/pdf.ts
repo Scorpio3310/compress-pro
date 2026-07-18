@@ -264,7 +264,7 @@ export const BODIES: Record<string, SeoBody> = {
 	},
 	'protect-pdf': {
 		intro:
-			'Add a password to any PDF and download an encrypted copy that no reader opens without it. Everything happens in your browser with standard PDF encryption — the kind every reader supports — and **neither the file nor the password is ever sent anywhere**.',
+			'Add a password to any PDF and download an encrypted copy that no reader opens without it. Everything happens in your browser with AES-256 — the strongest standard PDF encryption — and **neither the file nor the password is ever sent anywhere**.',
 		guide: [
 			{
 				heading: 'What the password actually protects',
@@ -283,7 +283,7 @@ export const BODIES: Record<string, SeoBody> = {
 		faq: [
 			{
 				q: 'Which encryption does it use?',
-				a: 'Standard 128-bit PDF encryption, which every PDF reader supports — Adobe Acrobat, Apple Preview and browsers all require the password to open the file. For highly sensitive material, prefer an encrypted archive or disk image.'
+				a: 'AES-256, the strongest standard PDF encryption (revision 6). Adobe Acrobat X (2010) and newer, Apple Preview, and every modern browser require the password to open the file; only readers from before 2010 cannot handle it.'
 			},
 			{
 				q: 'What if I forget the password?',
@@ -292,6 +292,168 @@ export const BODIES: Record<string, SeoBody> = {
 			{
 				q: 'Can I remove the password later?',
 				a: 'Yes — as long as you still know it. Drop the protected file on the Unlock PDF tool, type the password once, and download a copy that opens freely. Keep the original file too, or store the password in a password manager.'
+			},
+			{ q: 'Is it private?', a: PRIVACY_A_PDF }
+		]
+	},
+	'rotate-pdf': {
+		intro:
+			'Rotate PDF pages entirely in your browser — **90° left or right, or a full 180°, applied to every page structurally**. Nothing is re-encoded and nothing is uploaded; a sideways scan becomes readable in two clicks.',
+		guide: [
+			{
+				heading: 'A rotation flag, not a rewrite',
+				paragraphs: [
+					'PDF pages carry a rotation property, and this tool sets it — the page content itself is untouched, so quality cannot degrade and the file size barely moves. That also makes it instant, even for hundred-page scans. To drop or reorder pages while you are at it, [Split PDF](/split-pdf) handles ranges, and [Merge PDF](/merge-pdf) puts documents together.'
+				]
+			}
+		],
+		faq: [
+			{
+				q: 'Does rotating lose quality?',
+				a: 'No — rotation is a structural flag on each page, not a re-render. Text stays text, images keep every pixel, and the file size stays essentially the same.'
+			},
+			{
+				q: 'Can I rotate just one page?',
+				a: 'This tool rotates every page — the common case for sideways scans. To treat pages differently, split the document first, rotate the parts, and merge them back.'
+			},
+			{
+				q: 'Which direction is 90° right?',
+				a: 'Clockwise — the top of the page moves to the right edge. 90° left is counter-clockwise, and 180° flips the page upside down.'
+			},
+			{ q: 'Is it private?', a: PRIVACY_A_PDF }
+		]
+	},
+	'watermark-pdf': {
+		intro:
+			'Stamp a diagonal text watermark across every page of a PDF — **CONFIDENTIAL, DRAFT, a client name, anything you type — added entirely in your browser**. The stamp is semi-transparent, sized to the page, and becomes part of the document.',
+		guide: [
+			{
+				heading: 'What a watermark is (and is not)',
+				paragraphs: [
+					'A watermark labels the document visibly — every reader sees it, every print carries it. It is a deterrent and a statement of status, not security: determined editing can remove it, and it does not encrypt anything. When the content itself must be locked, [Protect PDF](/protect-pdf) adds real AES-256 encryption; the two combine well — watermark first, then protect.'
+				]
+			}
+		],
+		faq: [
+			{
+				q: 'Can the watermark be removed later?',
+				a: 'Not by this site, and not trivially — it is drawn into each page’s content. But a watermark is a visible label, not DRM; treat it as a deterrent, not protection.'
+			},
+			{
+				q: 'Where and how large is the stamp?',
+				a: 'Diagonally across the middle of every page, semi-transparent gray, automatically sized to the page — long texts shrink to fit, short ones stay bold.'
+			},
+			{
+				q: 'Does it work on scanned PDFs?',
+				a: 'Yes — the stamp is drawn over whatever the page contains, scans included. The pages themselves are not re-encoded.'
+			},
+			{ q: 'Is it private?', a: PRIVACY_A_PDF }
+		]
+	},
+	'pdf-page-numbers': {
+		intro:
+			'Add page numbers to any PDF right in your browser — **“page / total” at the bottom center of every page, and nothing else changes**. Merged reports, scanned contracts and print-bound documents get numbered in one pass, with no uploads.',
+		guide: [
+			{
+				heading: 'Made for merged documents',
+				paragraphs: [
+					'Numbers matter most right after combining files — a stitched-together report reads like one document once its pages count through. The natural flow is [Merge PDF](/merge-pdf) first, then number the result here. The numbering is drawn into each page like any footer; the content above it is untouched.'
+				]
+			}
+		],
+		faq: [
+			{
+				q: 'What format do the numbers use?',
+				a: '“3 / 12” — the page and the total, small and gray at the bottom center. Every page gets one, starting from 1.'
+			},
+			{
+				q: 'Will numbers overlap my footer?',
+				a: 'They sit in the bottom margin (about 8 mm up). Documents with unusually deep footers could collide — check one page after running; the original file stays untouched either way.'
+			},
+			{
+				q: 'Does numbering change quality or size?',
+				a: 'No — it draws a few characters of text per page. The content is not re-encoded and the size change is negligible.'
+			},
+			{ q: 'Is it private?', a: PRIVACY_A_PDF }
+		]
+	},
+	'pdf-to-text': {
+		intro:
+			'Pull all text out of a PDF into a plain .txt file — **extracted from the digital text layer, entirely in your browser**. Reports, e-books, contracts and exports become raw text for editing, searching, quoting or feeding to other tools.',
+		guide: [
+			{
+				heading: 'Digital PDFs only — scans need OCR',
+				paragraphs: [
+					'This tool reads the text layer a digital PDF already carries. Scanned documents are photographs of paper — they have no text layer, and the honest result here is a clear error, not silent emptiness. For scans, [OCR PDF](/ocr-pdf) recognizes the text on your device and can make the PDF itself searchable; its sibling [Image to Text](/image-to-text) does the same for photos and screenshots.'
+				]
+			}
+		],
+		faq: [
+			{
+				q: 'Why did I get an error about a missing text layer?',
+				a: 'Your PDF is a scan — pictures of pages, with no digital text inside. Run it through the OCR PDF tool instead; that recognizes the text locally.'
+			},
+			{
+				q: 'Is the layout preserved?',
+				a: 'No — the output is plain text, page by page. Columns, tables and formatting flatten into reading order, which suits quoting and processing, not reprinting.'
+			},
+			{
+				q: 'How large can the PDF be?',
+				a: 'Hundreds of pages are fine — extraction is fast and runs entirely on your device, so there is no upload cap and no queue.'
+			},
+			{ q: 'Is it private?', a: PRIVACY_A_PDF }
+		]
+	},
+	'grayscale-pdf': {
+		intro:
+			'Convert a color PDF to grayscale entirely in your browser — **every image, graphic and text color mapped to clean mono by Ghostscript, locally**. Ideal before ink-friendly printing, for consistent handouts, and often smaller files too.',
+		guide: [
+			{
+				heading: 'Why go grayscale',
+				paragraphs: [
+					'Printing color documents on a mono printer produces muddy, inconsistent grays — converting first gives the printer exactly what it will print. Grayscale images also compress tighter, so colorful decks often shrink along the way; run [Compress PDF](/compress-pdf) after for the full squeeze. The conversion re-serializes the document through the same Ghostscript engine the compressor uses.'
+				]
+			}
+		],
+		faq: [
+			{
+				q: 'Does grayscale make the file smaller?',
+				a: 'Usually — a grayscale image stores a third of the color data. Decks full of colorful graphics shrink noticeably; text-only documents barely change.'
+			},
+			{
+				q: 'Is the conversion reversible?',
+				a: 'No — color information is discarded in the output. Keep your original file; it is never modified.'
+			},
+			{
+				q: 'Will text stay sharp?',
+				a: 'Yes — text and vector graphics are recolored, not rasterized. Images are converted pixel-for-pixel without downsampling.'
+			},
+			{ q: 'Is it private?', a: PRIVACY_A_PDF }
+		]
+	},
+	'pdf-to-pdfa': {
+		intro:
+			'Convert any PDF to **PDF/A-2b — the ISO archival standard — entirely in your browser**. Courts, public registries, tenders and long-term archives require it; Ghostscript embeds the fonts, fixes the color definitions and stamps the conformance metadata, all locally.',
+		guide: [
+			{
+				heading: 'What PDF/A actually guarantees',
+				paragraphs: [
+					'PDF/A is a self-contained profile of PDF: every font embedded, colors defined by an included sRGB output intent, no external dependencies, no encryption — so the document renders identically decades from now. This tool produces PDF/A-2b (ISO 19005-2, level B), the variant registries and courts most commonly ask for. Note the standard forbids password protection — protect copies for distribution separately with [Protect PDF](/protect-pdf), and keep the archival original open.'
+				]
+			}
+		],
+		faq: [
+			{
+				q: 'Which PDF/A version do I get?',
+				a: 'PDF/A-2b — visually reliable long-term archiving per ISO 19005-2, the profile most institutions request. The output declares its conformance in the document metadata.'
+			},
+			{
+				q: 'Why do archives insist on PDF/A?',
+				a: 'Because ordinary PDFs can reference fonts and colors that disappear over the years. PDF/A embeds everything, so the file is guaranteed to look the same on any future system.'
+			},
+			{
+				q: 'Does the document change visually?',
+				a: 'It should not — the conversion embeds resources and normalizes colors rather than redesigning pages. Files with exotic transparency or missing fonts get repaired to the closest conforming rendering.'
 			},
 			{ q: 'Is it private?', a: PRIVACY_A_PDF }
 		]

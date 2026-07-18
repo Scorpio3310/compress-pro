@@ -31,7 +31,12 @@ export const BODY_GROUP_OF: Record<FileFormat, Exclude<BodyGroup, 'home'>> = {
 	audio: 'video-audio',
 	font: 'fonts',
 	zip: 'archives',
-	exif: 'archives'
+	exif: 'archives',
+	ocr: 'images',
+	subtitle: 'video-audio',
+	ebook: 'archives',
+	model: 'archives',
+	data: 'archives'
 };
 
 const LOADERS: Record<BodyGroup, () => Promise<{ BODIES: Record<string, SeoBody> }>> = {

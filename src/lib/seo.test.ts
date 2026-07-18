@@ -80,6 +80,9 @@ describe('converter entries', () => {
 			else if (c.preset.kind === 'audio') expect(c.format, c.path).toBe('audio');
 			else if (c.preset.kind === 'font') expect(c.format, c.path).toBe('font');
 			else if (c.preset.kind === 'archive') expect(c.format, c.path).toBe('zip');
+			else if (c.preset.kind === 'subtitle') expect(c.format, c.path).toBe('subtitle');
+			else if (c.preset.kind === 'ebook') expect(c.format, c.path).toBe('ebook');
+			else if (c.preset.kind === 'data') expect(c.format, c.path).toBe('data');
 			else expect(c.format, c.path).toBe('pdf');
 		}
 	});
@@ -142,6 +145,8 @@ describe('tool entries (standalone pages)', () => {
 			else if (t.preset.kind === 'audio') expect(t.format, t.path).toBe('audio');
 			else if (t.preset.kind === 'font-op') expect(t.format, t.path).toBe('font');
 			else if (t.preset.kind === 'archive') expect(t.format, t.path).toBe('zip');
+			else if (t.preset.kind === 'ocr') expect(t.format, t.path).toBe('ocr');
+			else if (t.preset.kind === 'ebook') expect(t.format, t.path).toBe('ebook');
 			else expect(t.format, t.path).toBe('pdf');
 			expect(t.feature.length, t.path).toBeGreaterThan(0);
 			// Archive-create pages accept ANYTHING — an explicit '' (rendered as
@@ -179,7 +184,12 @@ describe('engine copy', () => {
 		'/compress-audio': /LAME/,
 		'/font-converter': /Brotli/,
 		'/zip-files': /7-Zip/,
-		'/remove-exif': /byte surgery/
+		'/remove-exif': /byte surgery/,
+		'/image-to-text': /Tesseract/,
+		'/srt-to-vtt': /pure JavaScript/,
+		'/compress-epub': /MozJPEG/,
+		'/compress-glb': /Draco/,
+		'/csv-to-xlsx': /SheetJS/
 	};
 
 	it('every format page names its engine in an "Under the hood" section', () => {

@@ -3,7 +3,12 @@
 // migration snapshot). This is now the authoring source for this copy;
 // loaded lazily via seo-body/index.ts, statically by seo-full.server.ts.
 import type { SeoBody } from '$lib/seo';
-import { PRIVACY_A_IMAGE, PRIVACY_A_IMAGE_CONVERT, PRIVACY_NO_IMAGE } from './shared';
+import {
+	PRIVACY_A_IMAGE,
+	PRIVACY_A_IMAGE_CONVERT,
+	PRIVACY_A_PDF,
+	PRIVACY_NO_IMAGE
+} from './shared';
 
 export const BODIES: Record<string, SeoBody> = {
 	'compress-jpg': {
@@ -426,6 +431,39 @@ export const BODIES: Record<string, SeoBody> = {
 			{ q: 'Is it private?', a: PRIVACY_A_IMAGE_CONVERT }
 		]
 	},
+	'heic-to-webp': {
+		intro:
+			'Convert iPhone HEIC photos to WebP entirely in your browser — **decoded and re-encoded on your device, never uploaded**. WebP opens where HEIC cannot: every browser, CMS and chat app of the last decade, at a fraction of the size an equivalent JPG would cost.',
+		guide: [
+			{
+				heading: 'Why WebP for iPhone photos',
+				paragraphs: [
+					'HEIC is excellent on the phone and awkward everywhere else — browsers never adopted it. WebP keeps most of that efficiency while displaying across the entire web, which makes it the right export for sites, blogs and web apps. [HEIC to JPG](/heic-to-jpg) remains the pick for older desktop software and print; [HEIC to AVIF](/heic-to-avif) squeezes hardest where cutting-edge support is guaranteed.'
+				]
+			},
+			{
+				heading: 'Quality and metadata',
+				paragraphs: [
+					'The default quality is visually transparent for photos — judge with the built-in compare slider before batch-exporting an album. With the keep-metadata toggle on, EXIF from the HEIC carries into the WebP; leave it off and the file is written clean. Rotation is applied during decode either way, so photos come out upright.'
+				]
+			}
+		],
+		faq: [
+			{
+				q: 'Why WebP instead of JPG?',
+				a: 'Roughly 25–35% fewer bytes at the same visual quality, plus transparency support. JPG still wins for maximum compatibility with older desktop apps, print shops and picky upload forms.'
+			},
+			{
+				q: 'Is metadata kept?',
+				a: 'Your choice — the keep-metadata toggle carries EXIF from the HEIC into the WebP; switched off, the output is written clean, which for web publishing is usually the safer default.'
+			},
+			{
+				q: 'Can I convert a whole album at once?',
+				a: 'Yes — drop hundreds of photos in one go; each converts on your device and the batch downloads as a single ZIP.'
+			},
+			{ q: 'Is it private?', a: PRIVACY_A_IMAGE_CONVERT }
+		]
+	},
 	'webp-to-jpg': {
 		intro:
 			'Convert WebP images to JPG right in your browser — **nothing is uploaded, files never leave your device**. Handy for images saved from the web that older apps and upload forms refuse. Animated WebP converts to a single frame; transparency is flattened onto white. Batch-convert and grab everything as a ZIP.',
@@ -495,6 +533,39 @@ export const BODIES: Record<string, SeoBody> = {
 				a: 'Usually, especially for photos — PNG is a lossless format and cannot match lossy WebP sizes. That is the price of universal compatibility; for graphics the difference is smaller.'
 			},
 			{ q: 'Is it private?', a: PRIVACY_A_IMAGE_CONVERT }
+		]
+	},
+	'gif-to-webp': {
+		intro:
+			'Convert animated GIFs to WebP entirely in your browser — **every frame is re-encoded on your device, and the animation survives**. GIF is a 1989 format doing a 2020s job; animated WebP does the same job in typically half to a third of the bytes. Batch-convert and download everything as a ZIP.',
+		guide: [
+			{
+				heading: 'The animation really is kept',
+				paragraphs: [
+					'Each frame is decoded, re-encoded and muxed into an animated WebP with the original frame timing — nothing is flattened to a still. On the rare browser without modern decoding support the tool falls back to the first frame and says so with a warning rather than failing silently. To stay in GIF instead, [Compress GIF](/compress-gif) shrinks the file without changing format.'
+				]
+			},
+			{
+				heading: 'Where the savings come from',
+				paragraphs: [
+					'GIF is capped at 256 colors per frame and compresses with 1980s LZW; WebP brings full-color frames and video-style compression. Photographic loops and smooth gradients gain the most — 50–70% smaller is typical, sometimes far more. For silent clips where a video file is acceptable, [GIF to MP4](/gif-to-mp4) beats both formats by another wide margin.'
+				]
+			}
+		],
+		faq: [
+			{
+				q: 'Does the animation survive?',
+				a: 'Yes — all frames and their timing carry into the animated WebP. Only on very old browsers without the needed decoders does the tool fall back to the first frame, and it warns you when that happens.'
+			},
+			{
+				q: 'How much smaller will my GIFs get?',
+				a: 'Typically 50–70%. Photographic and gradient-heavy loops shrink the most; tiny pixel-art GIFs with few colors have the least to give.'
+			},
+			{
+				q: 'Where does animated WebP play?',
+				a: 'Every current browser and most chat and social apps display it. If a destination strictly demands GIF, keep the original and compress it on the GIF tab instead.'
+			},
+			{ q: 'Are my GIFs uploaded?', a: PRIVACY_NO_IMAGE }
 		]
 	},
 	'avif-to-jpg': {
@@ -733,6 +804,39 @@ export const BODIES: Record<string, SeoBody> = {
 			{ q: 'Are photos uploaded to a server?', a: PRIVACY_NO_IMAGE }
 		]
 	},
+	'jpg-to-svg': {
+		intro:
+			'Convert JPG images to vector SVG right in your browser — **traced on your device, nothing uploaded**. Exported logos, scanned drawings and lettering become scalable, editable paths; pick color tracing or a black & white stencil.',
+		guide: [
+			{
+				heading: 'From JPG to editable vectors',
+				paragraphs: [
+					'Tracing turns pixels into geometry: paths that stay sharp at billboard size and open in any vector editor. It shines on graphics that were rasterized somewhere along the way — a logo that only survives as a JPG, a scanned sketch, hand lettering. Photographs are the wrong input: they trace into heavy approximations, usually larger than the JPG itself; keep those on [Compress JPG](/compress-jpg). The finished vector can be minified further with [Compress SVG](/compress-svg).'
+				]
+			},
+			{
+				heading: 'JPEG noise and the Detail dial',
+				paragraphs: [
+					'JPEG compression sprinkles subtle noise around edges, and a tracer faithfully picks it up as tiny stray shapes. If the result looks speckled, lower the Detail slider — it merges small artifacts away — and clean, high-quality sources always trace best. Black & white mode ignores color noise entirely, which makes it the most forgiving choice for scans.'
+				]
+			}
+		],
+		faq: [
+			{
+				q: 'Which JPGs vectorize well?',
+				a: 'Logos, lettering, scanned line art and drawings with flat areas. The cleaner and sharper the source, the better the trace — heavily compressed or photographic JPGs come out rough.'
+			},
+			{
+				q: 'Why is the SVG larger than my JPG?',
+				a: 'Detailed images need many paths to approximate, and each path costs bytes. Simple graphics produce small SVGs; photos rarely do — that is inherent to tracing, not a bug.'
+			},
+			{
+				q: 'What is the black & white mode for?',
+				a: 'It traces a single-color stencil — ideal for cutting machines, stamps, watermarks and one-color print, and it shrugs off JPEG color noise.'
+			},
+			{ q: 'Are my images uploaded?', a: PRIVACY_NO_IMAGE }
+		]
+	},
 	'png-to-webp': {
 		intro:
 			'Convert PNG images to WebP entirely in your browser — **processed on your device, never uploaded**. Unlike JPG, WebP keeps transparency fully intact, so logos, UI graphics, and stickers stay see-through while shrinking dramatically. Pick a quality or a target size, convert in batches, and download a ZIP.',
@@ -764,6 +868,39 @@ export const BODIES: Record<string, SeoBody> = {
 				a: 'The quality slider drives lossy compression, which is what makes files so small; at 90+ it is visually indistinguishable for most graphics. Judge with the built-in before/after compare.'
 			},
 			{ q: 'Do my files leave my device?', a: PRIVACY_NO_IMAGE }
+		]
+	},
+	'png-to-svg': {
+		intro:
+			'Convert PNG images to true vector SVG entirely in your browser — **traced on your own device by the vtracer engine, never uploaded**. Logos, icons and flat graphics become infinitely scalable paths you can recolor and edit in any vector tool.',
+		guide: [
+			{
+				heading: 'What vectorization really does',
+				paragraphs: [
+					'Tracing rebuilds the picture as geometric shapes instead of pixels: the result stays razor-sharp at any size and opens as editable paths in Illustrator, Inkscape or Figma. Ideal inputs are logos, icons, stickers and drawings with flat color areas. Photographs are the wrong input — the tracer approximates them with hundreds of overlapping shapes and the SVG usually ends up larger than the PNG; for photos, [Compress PNG](/compress-png) or [PNG to WebP](/png-to-webp) is the right tool. The reverse trip lives on [SVG to PNG](/svg-to-png).'
+				]
+			},
+			{
+				heading: 'Color or black & white',
+				paragraphs: [
+					'Color mode clusters similar colors into stacked vector layers — right for full-color logos and illustrations. Black & white mode traces a single-color stencil: perfect for cut files, stamps and one-color printing. The Detail slider trades fidelity for simplicity — higher keeps small shapes and more color steps, lower merges them into cleaner, lighter paths.'
+				]
+			}
+		],
+		faq: [
+			{
+				q: 'Which images vectorize well?',
+				a: 'Logos, icons, lettering, stickers and flat illustrations — anything with clear edges and few distinct colors. Screenshots and photographs trace poorly; they become heavy approximations.'
+			},
+			{
+				q: 'Why is my SVG bigger than the PNG?',
+				a: 'Complex or photographic images need hundreds of paths to approximate, and paths cost bytes. That is the honest trade of tracing — for simple graphics the SVG is small; for photos it rarely is.'
+			},
+			{
+				q: 'Can I edit the result afterwards?',
+				a: 'Yes — the output is standard SVG paths, fully editable in Illustrator, Inkscape, Figma or any vector editor: recolor shapes, delete layers, refine curves.'
+			},
+			{ q: 'Is it private?', a: PRIVACY_A_IMAGE_CONVERT }
 		]
 	},
 	'bmp-to-jpg': {
@@ -799,6 +936,33 @@ export const BODIES: Record<string, SeoBody> = {
 			{ q: 'Is it private?', a: PRIVACY_A_IMAGE_CONVERT }
 		]
 	},
+	'bmp-to-png': {
+		intro:
+			'Convert BMP bitmaps to PNG entirely in your browser — **lossless by default, processed on your device**. Same pixels, dramatically fewer bytes: PNG compresses what BMP stores raw, and transparency, where the BMP carries it, survives intact.',
+		guide: [
+			{
+				heading: 'Lossless, unlike BMP to JPG',
+				paragraphs: [
+					'PNG stores the decoded bitmap exactly, which makes it the right exit for diagrams, pixel art and screenshots with sharp text — everything JPG smears. Photographic BMPs are the exception: [BMP to JPG](/bmp-to-jpg) lands them far smaller with no visible cost. If the PNG itself feels heavy afterwards, [Compress PNG](/compress-png) shrinks it losslessly or via palette reduction.'
+				]
+			}
+		],
+		faq: [
+			{
+				q: 'Is the conversion really lossless?',
+				a: 'Yes — at the default quality 100 every pixel is carried over exactly. Lowering the quality slider switches to palette PNGs: much smaller, slightly lossy, often indistinguishable for flat graphics.'
+			},
+			{
+				q: 'How much smaller than BMP?',
+				a: 'Typically 5–20× — BMP spends three or four bytes on every pixel regardless of content, while PNG actually compresses. Flat-color screenshots and diagrams shrink the most.'
+			},
+			{
+				q: 'PNG or JPG for my BMPs?',
+				a: 'PNG for graphics, text and pixel art — sharp edges stay sharp. JPG for photographic content, where it lands several times smaller again.'
+			},
+			{ q: 'Are my files uploaded?', a: PRIVACY_NO_IMAGE }
+		]
+	},
 	'tiff-to-jpg': {
 		intro:
 			'Scanners and pro cameras love TIFF; the rest of the world does not. Convert to JPG for sharing and uploading — **the file never leaves your machine**, so even huge scans are fine.',
@@ -830,6 +994,174 @@ export const BODIES: Record<string, SeoBody> = {
 				a: 'Yes — pick a quality, or switch to target-size mode and type a cap like 1 MB. Huge scans also respond well to a longest-side limit, which trims dimensions before quality even has to give.'
 			},
 			{ q: 'Is it private?', a: PRIVACY_A_IMAGE_CONVERT }
+		]
+	},
+	'tiff-to-png': {
+		intro:
+			'Convert TIFF scans and photos to lossless PNG entirely in your browser — **no upload, and no size ceiling imposed by a server**. The decoded page is written to PNG pixel-for-pixel, giving editing pipelines and archives a universal lossless file that opens everywhere.',
+		guide: [
+			{
+				heading: 'From archival TIFF to usable PNG',
+				paragraphs: [
+					'TIFF is the native tongue of scanners and pro cameras, and almost nothing else speaks it. PNG carries the same pixels losslessly and opens in every editor, browser and pipeline. Multi-page TIFFs keep their first page — export pages individually from the scanner when you need them all. Wide-gamut scans are converted to sRGB, with a note when that happens. For sharing rather than archiving, [TIFF to JPG](/tiff-to-jpg) lands far smaller, and [Compress PNG](/compress-png) squeezes the PNG itself.'
+				]
+			}
+		],
+		faq: [
+			{
+				q: 'Is anything lost in the conversion?',
+				a: 'No pixels — at the default quality 100 the decode is written to PNG exactly. Wide-gamut color is mapped to sRGB (the tool notes when it applies), and TIFF metadata is not carried over.'
+			},
+			{
+				q: 'What happens to multi-page TIFFs?',
+				a: 'The first page converts; the rest are ignored. Scanner software can export pages as separate files when you need every page.'
+			},
+			{
+				q: 'Why is the PNG still large?',
+				a: 'PNG is lossless — a detailed 600-dpi scan simply holds a lot of information. If size matters more than perfect pixels, JPG at quality 90 is the practical compromise.'
+			},
+			{ q: 'Is it private?', a: PRIVACY_A_IMAGE_CONVERT }
+		]
+	},
+	'raw-to-jpg': {
+		intro:
+			'Convert camera RAW files to JPG entirely in your browser — **CR2, NEF, ARW, DNG, RAF, RW2 and ORF, demosaiced on your own device by LibRaw**. Drop a whole shoot, get shareable JPGs back as a ZIP; the negatives never touch a server.',
+		guide: [
+			{
+				heading: 'What developing a RAW actually means',
+				paragraphs: [
+					'A RAW file is not an image yet — it is the sensor’s mosaic of single-color readings. Developing interpolates full color for every pixel (demosaicing), applies the camera’s white balance and writes standard sRGB. This tool uses LibRaw — the same engine behind many desktop converters — with its sensible defaults, so what you get closely matches the camera’s intent. It is a fast converter, not a raw editor: for exposure surgery and profiles, develop in a dedicated tool and compress the export with [Compress JPG](/compress-jpg).'
+				]
+			},
+			{
+				heading: 'Speed, size and the other outputs',
+				paragraphs: [
+					'Decoding runs at full sensor resolution, so a 45-megapixel file takes a few seconds — that is real demosaicing happening locally. The output does not have to be JPG: the format pills switch to [WebP](/jpg-to-webp) or AVIF for tighter web copies, and quality, resize and target-size modes all apply after the develop. Metadata is not carried over — the output is a clean image file.'
+				]
+			}
+		],
+		faq: [
+			{
+				q: 'Which RAW formats are supported?',
+				a: 'Canon CR2, Nikon NEF, Sony ARW, Adobe DNG, Fujifilm RAF, Panasonic RW2 and Olympus ORF — everything the bundled LibRaw engine reads. Drop a file and it either develops or tells you clearly.'
+			},
+			{
+				q: 'Do I control the development settings?',
+				a: 'The camera’s own white balance, sRGB output and standard demosaicing are applied — the same sane defaults desktop converters start from. For creative control, use a raw editor; this tool is for fast, faithful conversion.'
+			},
+			{
+				q: 'Why is my 40 MB RAW only a few MB as JPG?',
+				a: 'That is the point — RAW stores unprocessed sensor data with headroom you no longer need once developed. The JPG keeps what the photo looks like at a fraction of the weight.'
+			},
+			{ q: 'Is it private?', a: PRIVACY_A_IMAGE }
+		]
+	},
+	'cr2-to-jpg': {
+		intro:
+			'Convert Canon CR2 RAW files to JPG right in your browser — **demosaiced locally by LibRaw, never uploaded**. EOS shoots become shareable JPGs in one drop, with quality and resize controls applied after the develop.',
+		guide: [
+			{
+				heading: 'From EOS sensor data to a finished JPG',
+				paragraphs: [
+					'CR2 is Canon’s TIFF-based RAW container from the EOS era. Developing it interpolates full color from the sensor mosaic, applies your camera’s white balance and writes sRGB — LibRaw’s defaults, matching what Canon’s own software would start from. The [generic RAW converter](/raw-to-jpg) handles mixed shoots (including newer CR3 siblings it may not read — those need a desktop tool), and [Compress JPG](/compress-jpg) squeezes the results further.'
+				]
+			}
+		],
+		faq: [
+			{
+				q: 'Does it read CR3 too?',
+				a: 'CR2 is the focus here. CR3 (newer EOS bodies) is not part of the supported set — convert those with Canon’s software or a desktop raw tool, then compress the JPG here.'
+			},
+			{
+				q: 'Is the conversion faithful to the camera?',
+				a: 'Yes within converter terms — the camera’s white balance and standard demosaicing are applied. It will closely match the embedded preview, though creative picture styles are not reproduced.'
+			},
+			{
+				q: 'Can I convert a whole shoot at once?',
+				a: 'Yes — drop hundreds of files; they develop one after another (the decoder works at full resolution) and download together as a ZIP.'
+			},
+			{ q: 'Is it private?', a: PRIVACY_A_IMAGE_CONVERT }
+		]
+	},
+	'nef-to-jpg': {
+		intro:
+			'Convert Nikon NEF RAW files to JPG entirely in your browser — **decoded on your device by LibRaw, with nothing uploaded**. From D-SLR archives to fresh Z-series shoots, the negatives become universal JPGs in one drop.',
+		guide: [
+			{
+				heading: 'Developing NEF without Nikon software',
+				paragraphs: [
+					'NEF is Nikon’s RAW container, and opening it usually means installing NX Studio or a commercial editor. Here the develop happens in the browser: demosaic, camera white balance, sRGB out — LibRaw’s faithful defaults. Mixed-brand shoots belong on the [generic RAW converter](/raw-to-jpg); the finished JPGs shrink further with [Compress JPG](/compress-jpg) or convert to [WebP](/jpg-to-webp) for the web.'
+				]
+			}
+		],
+		faq: [
+			{
+				q: 'Which Nikon bodies does this cover?',
+				a: 'Anything writing standard NEF that LibRaw reads — decades of D-SLRs and Z mirrorless bodies. Compressed and uncompressed NEF variants both develop.'
+			},
+			{
+				q: 'Will it look like the camera’s JPG?',
+				a: 'Close — the camera white balance and standard demosaicing are applied. Nikon Picture Controls (vivid, flat …) are creative extras the standard develop does not reproduce.'
+			},
+			{
+				q: 'What resolution does the JPG keep?',
+				a: 'Full sensor resolution by default. Use the resize control to cap the longest side, or target-size mode to hit an exact file size.'
+			},
+			{ q: 'Is it private?', a: PRIVACY_A_IMAGE_CONVERT }
+		]
+	},
+	'arw-to-jpg': {
+		intro:
+			'Convert Sony ARW RAW files to JPG right in your browser — **demosaiced locally, never uploaded**. Alpha-series shoots turn into shareable JPGs with the quality, resize and target-size controls applied after the develop.',
+		guide: [
+			{
+				heading: 'Alpha RAW, developed in a tab',
+				paragraphs: [
+					'ARW is Sony’s RAW flavor, and the usual route to JPG runs through Imaging Edge or a paid editor. This page develops it directly: LibRaw demosaics the sensor data, applies the camera’s white balance and writes sRGB. For mixed cards use the [RAW converter](/raw-to-jpg); for web-bound exports flip the output pill to [WebP](/jpg-to-webp) or AVIF and skip a second conversion.'
+				]
+			}
+		],
+		faq: [
+			{
+				q: 'Are compressed ARW files supported?',
+				a: 'Yes — Sony’s compressed and uncompressed ARW variants both develop, as long as the bundled LibRaw reads the body’s files. Drop one and you will know immediately.'
+			},
+			{
+				q: 'Why does the conversion take a few seconds?',
+				a: 'Because it is a real develop: full-resolution demosaicing of every pixel, on your own hardware. A 60-megapixel A7R file is honest work — nothing is being sent anywhere.'
+			},
+			{
+				q: 'Can I go straight to WebP or AVIF?',
+				a: 'Yes — the output pills switch formats after the develop, so one pass produces web-ready files without an intermediate JPG.'
+			},
+			{ q: 'Is it private?', a: PRIVACY_A_IMAGE_CONVERT }
+		]
+	},
+	'dng-to-jpg': {
+		intro:
+			'Convert DNG files to JPG entirely in your browser — **Adobe’s universal RAW negative, decoded on your device by LibRaw**. Phone pro-mode captures, drone shots and converted camera archives all develop into standard JPGs, nothing uploaded.',
+		guide: [
+			{
+				heading: 'The RAW everything speaks — almost',
+				paragraphs: [
+					'DNG is the openly documented RAW container: phones with pro mode, drones, and Lightroom-converted archives all write it. What they don’t do is open everywhere — plenty of apps and forms still want a plain JPG, which is exactly the develop this page performs (demosaic, camera white balance, sRGB). Mixed RAW batches belong on the [RAW converter](/raw-to-jpg), and [Compress JPG](/compress-jpg) squeezes the results to any cap.'
+				]
+			}
+		],
+		faq: [
+			{
+				q: 'Where do DNG files come from?',
+				a: 'Phone pro/RAW modes (Pixel, iPhone via apps), DJI drones, and Adobe tooling that converts brand RAWs to DNG for archiving. All of these develop here.'
+			},
+			{
+				q: 'Does it handle compressed DNG?',
+				a: 'Standard lossless-compressed and uncompressed DNGs develop fine. Exotic variants (lossy proxies from some apps) usually work too — the tool tells you clearly when one does not.'
+			},
+			{
+				q: 'Is the original DNG changed?',
+				a: 'Never — the negative on your disk stays untouched. You download a newly developed JPG copy next to it.'
+			},
+			{ q: 'Are my photos uploaded?', a: PRIVACY_NO_IMAGE }
 		]
 	},
 	'png-to-ico': {
@@ -1109,6 +1441,243 @@ export const BODIES: Record<string, SeoBody> = {
 				a: 'No — the output is written clean: EXIF, GPS and camera details are stripped. For images headed to the web that is usually the safer default.'
 			},
 			{ q: 'Is it private?', a: PRIVACY_A_IMAGE }
+		]
+	},
+	'psd-to-jpg': {
+		intro:
+			'Convert Photoshop PSD files to JPG entirely in your browser — **the flattened composite, decoded on your own device**. No Photoshop, no uploads, no accounts: drop the .psd, download the .jpg everyone can open.',
+		guide: [
+			{
+				heading: 'What comes out of a PSD',
+				paragraphs: [
+					'A PSD carries the layered project plus a flattened preview of how it looked when saved — that flattened image is what converts, pixel-exact at full resolution. Layers, masks and smart objects are design-time machinery; they are not exported separately. The result is set to quality 90 by default — a faithful copy, adjustable before you run. Need transparency kept? [PSD to PNG](/psd-to-png) is the lossless sibling.'
+				]
+			},
+			{
+				heading: 'The honest limits',
+				paragraphs: [
+					'8-bit RGB and grayscale documents convert; CMYK and 16/32-bit files are refused with a clear message rather than mangled — re-save them as 8-bit RGB first. Files saved with “Maximize Compatibility” off may carry no flattened preview and can fail to open. This is a converter, not an editor: for tweaks you still need an image tool, but for “send me a JPG of that design”, this is the shortest path.'
+				]
+			}
+		],
+		faq: [
+			{
+				q: 'Do I need Photoshop installed?',
+				a: 'No — the file is parsed and flattened by the decoder in this page, on your device. Nothing is installed and nothing leaves your browser.'
+			},
+			{
+				q: 'Are individual layers exported?',
+				a: 'No — the flattened composite converts as one image, exactly as the file looked when saved. Layer-by-layer export needs an editor.'
+			},
+			{
+				q: 'Why is my PSD refused?',
+				a: 'Most refusals are CMYK color or 16/32-bit depth — re-save as 8-bit RGB and it will convert. Very old or preview-less files (Maximize Compatibility off) can also fail to parse.'
+			},
+			{ q: 'Are my design files uploaded?', a: PRIVACY_A_IMAGE_CONVERT }
+		]
+	},
+	'psd-to-png': {
+		intro:
+			'Convert Photoshop PSD files to lossless PNG entirely in your browser — **the flattened composite with its transparency, decoded on your own device**. Drop the .psd files, download PNG twins that open everywhere. Nothing is uploaded.',
+		guide: [
+			{
+				heading: 'Lossless, transparency included',
+				paragraphs: [
+					'The PNG is written at quality 100 — a pixel-exact copy of the PSD’s flattened image, and where the document carries an alpha channel, the transparency survives into the PNG. That makes this the right exit for logos, UI assets and cut-outs headed to the web or a slide deck. For photos where file size matters more than perfection, [PSD to JPG](/psd-to-jpg) lands much smaller.'
+				]
+			},
+			{
+				heading: 'What converts and what does not',
+				paragraphs: [
+					'8-bit RGB and grayscale PSDs convert; CMYK and 16/32-bit are refused with a clear message — re-save as 8-bit RGB first. Layers are not exported individually: the composite is the deliverable. The resulting PNG can go straight into [Compress PNG](/compress-png) if it needs to lose weight afterwards.'
+				]
+			}
+		],
+		faq: [
+			{
+				q: 'Is transparency preserved?',
+				a: 'Yes — when the flattened composite carries an alpha channel, the PNG keeps it. Areas that were transparent in the design stay transparent.'
+			},
+			{
+				q: 'Is the conversion really lossless?',
+				a: 'Yes — PNG at quality 100 stores the flattened pixels exactly. What you saved in Photoshop is what lands in the PNG.'
+			},
+			{
+				q: 'Can I convert many PSDs at once?',
+				a: 'Yes — drop a folder’s worth; each file converts independently and everything downloads together as a ZIP if you want it in one go.'
+			},
+			{ q: 'Is it private?', a: PRIVACY_A_IMAGE_CONVERT }
+		]
+	},
+	'jxl-to-jpg': {
+		intro:
+			'Convert JPEG XL images to universal JPG entirely in your browser — **decoded by libjxl compiled to WebAssembly, running on your own device**. JXL is a great archive format that most software still cannot open; JPG opens everywhere. Nothing is uploaded.',
+		guide: [
+			{
+				heading: 'Why convert out of JXL',
+				paragraphs: [
+					'JPEG XL compresses beautifully, but support outside Safari is still thin — Chrome dropped its experiment, and most editors, viewers and upload forms simply refuse .jxl files. Converting to JPG trades some bytes for universal compatibility: mail clients, CMSes, office suites, everything opens it. Keep the JXL originals as masters; this tool produces the copies the rest of the world can read.'
+				]
+			},
+			{
+				heading: 'Quality choices that matter',
+				paragraphs: [
+					'JPG is lossy, so the quality slider decides how faithful the copy is — the default is visually transparent for photos. Need the opposite direction? [JPG to JXL](/jpg-to-jxl) writes new JPEG XL files, and [Compress JXL](/compress-jxl) re-squeezes existing ones without leaving the format.'
+				]
+			}
+		],
+		faq: [
+			{
+				q: 'Why won’t my JXL files open anywhere?',
+				a: 'Browser and OS support stalled — Safari renders JXL, Chrome and most editors do not. That is exactly what this converter is for: the JPG copy opens everywhere.'
+			},
+			{
+				q: 'Do both JXL container flavors work?',
+				a: 'Yes — bare codestreams and ISO-container .jxl files are both detected by content and decoded the same way.'
+			},
+			{
+				q: 'Is quality lost in the conversion?',
+				a: 'JPG re-encoding is lossy by nature — at the default quality the difference is not visible for photos. Raise the slider to 100 for the most faithful copy.'
+			},
+			{ q: 'Are my images uploaded?', a: PRIVACY_A_IMAGE_CONVERT }
+		]
+	},
+	'jpg-to-jxl': {
+		intro:
+			'Convert JPG photos to JPEG XL entirely in your browser — **encoded by libjxl on your own device, typically 20–40% smaller at the same visual quality**. The format built to replace JPG, applied to your existing photos. Nothing is uploaded.',
+		guide: [
+			{
+				heading: 'What JPEG XL buys you',
+				paragraphs: [
+					'JXL is the newest of the next-generation image formats — modern entropy coding, wider color, progressive decode, and file sizes that undercut JPG substantially at equal quality. For photo archives that compounds into real disk savings. The catch is support: Safari displays JXL natively, Chrome currently does not — which is why this site treats JXL as a storage and archival format rather than a web-delivery one.'
+				]
+			},
+			{
+				heading: 'Archive honestly',
+				paragraphs: [
+					'Converting a JPG to JXL cannot restore detail the JPG already discarded — it re-encodes what is there into fewer bytes. For a web-ready format with broad support today, [JPG to AVIF](/jpg-to-avif) is the better pick; for coming back out, [JXL to JPG](/jxl-to-jpg) reverses the trip.'
+				]
+			}
+		],
+		faq: [
+			{
+				q: 'How much smaller do files get?',
+				a: 'Typically 20–40% below the source JPG at matching visual quality, more at lower quality settings. Target-size mode works too — type a cap and the encoder searches out the best fit.'
+			},
+			{
+				q: 'Will the .jxl files open on my machine?',
+				a: 'Safari and a growing set of image tools read JXL; Chrome and most editors still do not. Treat it as an archive format and keep this converter handy for the way back.'
+			},
+			{
+				q: 'Is EXIF metadata kept?',
+				a: 'No — JXL output is written without EXIF, GPS or camera metadata. If keeping metadata matters, convert to WebP instead, where the keep-metadata option applies.'
+			},
+			{ q: 'Is it private?', a: PRIVACY_A_IMAGE_CONVERT }
+		]
+	},
+	'compress-jxl': {
+		intro:
+			'Compress JPEG XL images entirely in your browser — **decoded and re-encoded by libjxl on your own device**. Pick a quality or an exact target size; the result stays a .jxl. Nothing is ever uploaded.',
+		guide: [
+			{
+				heading: 'When a JXL can still shrink',
+				paragraphs: [
+					'JXL files saved at high quality, exported losslessly, or produced by cameras and tools with conservative defaults carry more bytes than their content needs. Re-encoding at a sensible quality routinely halves them. Files that were already tightly compressed have little left to give — when re-encoding would grow a file, the original is returned untouched, so a batch run never makes anything worse.'
+				]
+			},
+			{
+				heading: 'Quality, target size, or lossless',
+				paragraphs: [
+					'The quality slider is the everyday control; target-size mode finds the best quality under a byte cap. Because the output stays JXL, this is for trimming archives in place — for copies the rest of the world opens, [JXL to JPG](/jxl-to-jpg) is one click away.'
+				]
+			}
+		],
+		faq: [
+			{
+				q: 'How much smaller will my files get?',
+				a: 'High-quality or lossless sources often drop 40–70%; already-tight files may not shrink at all — those come back unchanged rather than bloated.'
+			},
+			{
+				q: 'Does the file stay a JXL?',
+				a: 'Yes — same format, same extension, just fewer bytes. Players and tools that opened the original open the result.'
+			},
+			{
+				q: 'Can I set an exact size?',
+				a: 'Yes — switch to target-size mode and type a cap like 500 KB; the tool searches out the best quality that fits for every file in the batch.'
+			},
+			{ q: 'Is it private?', a: PRIVACY_A_IMAGE }
+		]
+	},
+	'image-to-text': {
+		intro:
+			'Extract text from images entirely in your browser — **screenshots, photos of documents, scans and whiteboards, recognized on your own device**. Pick the document language, drop the images, and each one comes back as a .txt file. Nothing is ever uploaded.',
+		guide: [
+			{
+				heading: 'What OCR reads well — and what it does not',
+				paragraphs: [
+					'Printed text is the sweet spot: books, receipts, screenshots, signs and scans recognize reliably when the text is sharp and reasonably horizontal. Handwriting is not — cursive and freeform notes come out garbled, and no browser OCR changes that honestly. Resolution matters too: if you can barely read it zoomed in, neither can the recognizer. Scanned PDFs have their own tool — [OCR PDF](/ocr-pdf) keeps the pages and adds a searchable layer.'
+				]
+			},
+			{
+				heading: 'Eight languages, downloaded once',
+				paragraphs: [
+					'Recognition models for English, Slovenian, German, Italian, French, Spanish, Portuguese and Croatian ship with the site — the one you pick (1–2 MB) downloads on first use and stays cached, so later runs work offline. Choosing the right language matters: an English model reading German text will miss every umlaut.'
+				]
+			},
+			{
+				heading: 'Under the hood',
+				paragraphs: [
+					'Recognition runs on Tesseract — the open-source OCR engine that has read the world’s paper for decades — compiled to WebAssembly and running in a worker on your device. The page you are on only ever serves files; your images, the recognized text and the language models all live and die in your browser. That is also why there are no page limits and no queues: your hardware does the reading.'
+				]
+			}
+		],
+		faq: [
+			{
+				q: 'Which languages are supported?',
+				a: 'English, Slovenian, German, Italian, French, Spanish, Portuguese and Croatian. Pick the document’s language before running — recognition quality depends on it.'
+			},
+			{
+				q: 'Does it read handwriting?',
+				a: 'Not usefully — Tesseract is built for printed text. Clean print recognizes well; cursive and freeform handwriting come out garbled.'
+			},
+			{
+				q: 'Why is my result poor?',
+				a: 'Usually resolution or language: blurry, small or skewed text defeats any OCR, and the wrong language model misses accented characters. Use a sharper capture and double-check the language picker.'
+			},
+			{ q: 'Are my images uploaded?', a: PRIVACY_NO_IMAGE }
+		]
+	},
+	'ocr-pdf': {
+		intro:
+			'Make scanned PDFs searchable entirely in your browser — **every page is recognized on your device and an invisible text layer is laid over the original**. The document looks exactly the same, but suddenly you can select, copy and Ctrl-F it. Nothing is uploaded.',
+		guide: [
+			{
+				heading: 'An invisible layer over your original pages',
+				paragraphs: [
+					'The pages themselves are never re-rendered or recompressed — the original PDF is kept and only a transparent text layer is added on top, word by word, exactly where each word sits in the scan. File size barely changes and the visual quality cannot degrade. When the goal is a smaller file rather than a searchable one, [Compress PDF](/compress-pdf) is the tool; the two combine well — compress first, then recognize.'
+				]
+			},
+			{
+				heading: 'Which PDFs need OCR at all',
+				paragraphs: [
+					'PDFs born digital — exported from Word, invoices from software, web receipts — already carry a text layer and need nothing. Scans are the ones that don’t: a scanned contract is just photographs of paper until OCR gives it words. Recognition uses the same eight self-hosted [Tesseract languages as the image tool](/image-to-text), and picking the document’s language is what makes accented characters come out right.'
+				]
+			}
+		],
+		faq: [
+			{
+				q: 'Does the PDF look different afterwards?',
+				a: 'No — the original pages are untouched; the added text layer is invisible. The only change you notice is that selection, copying and search suddenly work.'
+			},
+			{
+				q: 'How accurate is the recognition?',
+				a: 'On clean 300-DPI scans of printed text, very — occasional misreads happen on stamps, tables and low-quality faxes. The layer is invisible either way, so a misread never disfigures the document.'
+			},
+			{
+				q: 'How long does a big scan take?',
+				a: 'Roughly a second or two per page on a modern laptop — an 80-page contract is a coffee-length job. Everything runs locally, so nothing queues behind other people’s files.'
+			},
+			{ q: 'Is it private?', a: PRIVACY_A_PDF }
 		]
 	}
 };

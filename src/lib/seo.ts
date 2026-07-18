@@ -120,7 +120,7 @@ export type ConverterPreset =
 			// Positive list: new FileFormat members must opt in, not leak in.
 			kind: 'image';
 			tab: 'jpg' | 'png' | 'webp' | 'gif' | 'heic';
-			to: ImageFormat | 'ico';
+			to: ImageFormat | 'ico' | 'svg' | 'jxl';
 			quality?: number;
 			// Target-size landing pages ("compress JPG to 100 KB") arrive with
 			// the mode flipped and the cap typed in.
@@ -131,13 +131,26 @@ export type ConverterPreset =
 	| { kind: 'pdf-to-images'; imageFormat: 'jpg' | 'png' }
 	// SVG tab raster export — 'svg' output itself is the tab default.
 	| { kind: 'svg'; to: 'png' | 'ico' }
-	| { kind: 'video'; container: 'mp4' | 'webm' | 'mov' | 'gif' }
+	| { kind: 'video'; container: 'mp4' | 'webm' | 'mov' | 'gif'; removeAudio?: true }
 	| { kind: 'audio'; output: AudioConversionSettings['outputFormat'] }
 	| { kind: 'font'; to: FontFormat }
 	// Font-tab tools: 'subset' arrives on the Subset op with its defaults;
 	// 'instance' additionally flips to a static-instance, keep-all-glyphs run.
 	| { kind: 'font-op'; op: 'subset' | 'instance' }
-	| { kind: 'pdf-op'; op: 'unlock' | 'protect' | 'merge' | 'pages' }
+	| {
+			kind: 'pdf-op';
+			op:
+				| 'unlock'
+				| 'protect'
+				| 'merge'
+				| 'pages'
+				| 'rotate'
+				| 'watermark'
+				| 'pageNumbers'
+				| 'toText'
+				| 'grayscale'
+				| 'toPdfa';
+	  }
 	// Longest-side cap across every image tab — the page's whole point, so
 	// drops that re-route to their native tab (png → png) land configured.
 	| { kind: 'resize'; maxDimension: number }
@@ -146,7 +159,19 @@ export type ConverterPreset =
 	| { kind: 'image-any' }
 	// Archive tab: create-X, extract-X and X→Y converter pages all ride the
 	// same tab; `to` targets create/convert (extract ignores it).
-	| { kind: 'archive'; op: 'create' | 'extract' | 'convert'; to?: ArchiveOutputFormat };
+	| { kind: 'archive'; op: 'create' | 'extract' | 'convert'; to?: ArchiveOutputFormat }
+	// OCR tab: /image-to-text hosts the tab default (toText); /ocr-pdf presets
+	// the searchable-PDF op.
+	| { kind: 'ocr'; op: 'toText' | 'toPdf' }
+	// Subtitle tab: target format only — the input (SRT/VTT/ASS) is detected
+	// per file, so every page converts any of the three inputs.
+	| { kind: 'subtitle'; to: 'vtt' | 'srt' }
+	// Ebook tab: one uniform pipeline; /cbr-to-cbz presets quality 100 so the
+	// per-entry keep-original guard makes it a bit-exact container repack.
+	| { kind: 'ebook'; quality?: number }
+	// Data tab: one uniform pipeline, nothing to preset — the marker exists
+	// because every converter detail must carry a preset (index test).
+	| { kind: 'data' };
 
 export const FORMATS: (SeoLite & { format: FileFormat })[] = [
 	{
@@ -237,6 +262,41 @@ export const FORMATS: (SeoLite & { format: FileFormat })[] = [
 		label: 'EXIF',
 		h1: 'Remove EXIF data.',
 		feature: 'Remove EXIF metadata and GPS location from photos'
+	},
+	{
+		format: 'ocr',
+		path: '/image-to-text',
+		label: 'OCR',
+		h1: 'Extract text from images.',
+		feature: 'Extract text from images (OCR)'
+	},
+	{
+		format: 'subtitle',
+		path: '/srt-to-vtt',
+		label: 'Subs',
+		h1: 'Convert SRT to VTT.',
+		feature: 'Convert subtitles between SRT, VTT and ASS'
+	},
+	{
+		format: 'ebook',
+		path: '/compress-epub',
+		label: 'Books',
+		h1: 'Compress EPUB e-books.',
+		feature: 'Compress the images inside EPUB e-books'
+	},
+	{
+		format: 'model',
+		path: '/compress-glb',
+		label: '3D',
+		h1: 'Compress GLB 3D models.',
+		feature: 'Compress GLB 3D models (Draco, Meshopt, textures)'
+	},
+	{
+		format: 'data',
+		path: '/csv-to-xlsx',
+		label: 'Data',
+		h1: 'Convert CSV to XLSX.',
+		feature: 'Convert spreadsheets and data files (CSV, XLSX, JSON, YAML)'
 	}
 ];
 
@@ -272,6 +332,13 @@ export const CONVERTERS: ConverterLite[] = [
 		h1: 'Convert HEIC to AVIF.'
 	},
 	{
+		format: 'heic',
+		path: '/heic-to-webp',
+		label: 'HEIC → WebP',
+		feature: 'Convert HEIC to WebP',
+		h1: 'Convert HEIC to WebP.'
+	},
+	{
 		format: 'webp',
 		path: '/webp-to-jpg',
 		label: 'WebP → JPG',
@@ -284,6 +351,13 @@ export const CONVERTERS: ConverterLite[] = [
 		label: 'WebP → PNG',
 		feature: 'Convert WebP to PNG',
 		h1: 'Convert WebP to PNG.'
+	},
+	{
+		format: 'gif',
+		path: '/gif-to-webp',
+		label: 'GIF → WebP',
+		feature: 'Convert GIF to WebP',
+		h1: 'Convert GIF to WebP.'
 	},
 	{
 		format: 'jpg',
@@ -307,11 +381,53 @@ export const CONVERTERS: ConverterLite[] = [
 		h1: 'Convert JPG to AVIF.'
 	},
 	{
+		format: 'jpg',
+		path: '/jxl-to-jpg',
+		label: 'JXL → JPG',
+		feature: 'Convert JXL to JPG',
+		h1: 'Convert JXL to JPG.'
+	},
+	{
+		format: 'jpg',
+		path: '/psd-to-jpg',
+		label: 'PSD → JPG',
+		feature: 'Convert PSD to JPG',
+		h1: 'Convert PSD to JPG.'
+	},
+	{
+		format: 'jpg',
+		path: '/psd-to-png',
+		label: 'PSD → PNG',
+		feature: 'Convert PSD to PNG',
+		h1: 'Convert PSD to PNG.'
+	},
+	{
+		format: 'jpg',
+		path: '/jpg-to-jxl',
+		label: 'JPG → JXL',
+		feature: 'Convert JPG to JXL',
+		h1: 'Convert JPG to JXL.'
+	},
+	{
 		format: 'png',
 		path: '/png-to-avif',
 		label: 'PNG → AVIF',
 		feature: 'Convert PNG to AVIF',
 		h1: 'Convert PNG to AVIF.'
+	},
+	{
+		format: 'png',
+		path: '/png-to-svg',
+		label: 'PNG → SVG',
+		feature: 'Convert PNG to SVG',
+		h1: 'Convert PNG to SVG.'
+	},
+	{
+		format: 'jpg',
+		path: '/jpg-to-svg',
+		label: 'JPG → SVG',
+		feature: 'Convert JPG to SVG',
+		h1: 'Convert JPG to SVG.'
 	},
 	{
 		format: 'webp',
@@ -368,6 +484,20 @@ export const CONVERTERS: ConverterLite[] = [
 		label: 'PDF → PNG',
 		feature: 'Convert PDF to PNG',
 		h1: 'Convert PDF to PNG.'
+	},
+	{
+		format: 'pdf',
+		path: '/pdf-to-text',
+		label: 'PDF → Text',
+		feature: 'Convert PDF to text',
+		h1: 'Convert PDF to text.'
+	},
+	{
+		format: 'pdf',
+		path: '/pdf-to-pdfa',
+		label: 'PDF → PDF/A',
+		feature: 'Convert PDF to PDF/A',
+		h1: 'Convert PDF to PDF/A.'
 	},
 	{
 		format: 'video',
@@ -489,6 +619,48 @@ export const CONVERTERS: ConverterLite[] = [
 		h1: 'Convert MP4 to WAV.'
 	},
 	{
+		format: 'audio',
+		path: '/webm-to-mp3',
+		label: 'WebM → MP3',
+		feature: 'Convert WebM to MP3',
+		h1: 'Convert WebM to MP3.'
+	},
+	{
+		format: 'audio',
+		path: '/mov-to-mp3',
+		label: 'MOV → MP3',
+		feature: 'Convert MOV to MP3',
+		h1: 'Convert MOV to MP3.'
+	},
+	{
+		format: 'audio',
+		path: '/mp3-to-m4a',
+		label: 'MP3 → M4A',
+		feature: 'Convert MP3 to M4A',
+		h1: 'Convert MP3 to M4A.'
+	},
+	{
+		format: 'audio',
+		path: '/wav-to-m4a',
+		label: 'WAV → M4A',
+		feature: 'Convert WAV to M4A',
+		h1: 'Convert WAV to M4A.'
+	},
+	{
+		format: 'audio',
+		path: '/mp3-to-ogg',
+		label: 'MP3 → OGG',
+		feature: 'Convert MP3 to OGG',
+		h1: 'Convert MP3 to OGG.'
+	},
+	{
+		format: 'audio',
+		path: '/wav-to-opus',
+		label: 'WAV → Opus',
+		feature: 'Convert WAV to Opus',
+		h1: 'Convert WAV to Opus.'
+	},
+	{
 		format: 'jpg',
 		path: '/bmp-to-jpg',
 		label: 'BMP → JPG',
@@ -497,10 +669,59 @@ export const CONVERTERS: ConverterLite[] = [
 	},
 	{
 		format: 'jpg',
+		path: '/bmp-to-png',
+		label: 'BMP → PNG',
+		feature: 'Convert BMP to PNG',
+		h1: 'Convert BMP to PNG.'
+	},
+	{
+		format: 'jpg',
 		path: '/tiff-to-jpg',
 		label: 'TIFF → JPG',
 		feature: 'Convert TIFF to JPG',
 		h1: 'Convert TIFF to JPG.'
+	},
+	{
+		format: 'jpg',
+		path: '/tiff-to-png',
+		label: 'TIFF → PNG',
+		feature: 'Convert TIFF to PNG',
+		h1: 'Convert TIFF to PNG.'
+	},
+	{
+		format: 'jpg',
+		path: '/raw-to-jpg',
+		label: 'RAW → JPG',
+		feature: 'Convert RAW to JPG',
+		h1: 'Convert RAW to JPG.'
+	},
+	{
+		format: 'jpg',
+		path: '/cr2-to-jpg',
+		label: 'CR2 → JPG',
+		feature: 'Convert CR2 to JPG',
+		h1: 'Convert CR2 to JPG.'
+	},
+	{
+		format: 'jpg',
+		path: '/nef-to-jpg',
+		label: 'NEF → JPG',
+		feature: 'Convert NEF to JPG',
+		h1: 'Convert NEF to JPG.'
+	},
+	{
+		format: 'jpg',
+		path: '/arw-to-jpg',
+		label: 'ARW → JPG',
+		feature: 'Convert ARW to JPG',
+		h1: 'Convert ARW to JPG.'
+	},
+	{
+		format: 'jpg',
+		path: '/dng-to-jpg',
+		label: 'DNG → JPG',
+		feature: 'Convert DNG to JPG',
+		h1: 'Convert DNG to JPG.'
 	},
 	{
 		format: 'png',
@@ -655,6 +876,48 @@ export const CONVERTERS: ConverterLite[] = [
 		label: 'ZIP → TAR.GZ',
 		feature: 'Convert ZIP to TAR.GZ',
 		h1: 'Convert ZIP to TAR.GZ.'
+	},
+	{
+		format: 'subtitle',
+		path: '/vtt-to-srt',
+		label: 'VTT → SRT',
+		feature: 'Convert VTT to SRT',
+		h1: 'Convert VTT to SRT.'
+	},
+	{
+		format: 'subtitle',
+		path: '/ass-to-srt',
+		label: 'ASS → SRT',
+		feature: 'Convert ASS to SRT',
+		h1: 'Convert ASS to SRT.'
+	},
+	{
+		format: 'ebook',
+		path: '/cbr-to-cbz',
+		label: 'CBR → CBZ',
+		feature: 'Convert CBR to CBZ',
+		h1: 'Convert CBR to CBZ.'
+	},
+	{
+		format: 'data',
+		path: '/xlsx-to-csv',
+		label: 'XLSX → CSV',
+		feature: 'Convert XLSX to CSV',
+		h1: 'Convert XLSX to CSV.'
+	},
+	{
+		format: 'data',
+		path: '/json-to-yaml',
+		label: 'JSON → YAML',
+		feature: 'Convert JSON to YAML',
+		h1: 'Convert JSON to YAML.'
+	},
+	{
+		format: 'data',
+		path: '/yaml-to-json',
+		label: 'YAML → JSON',
+		feature: 'Convert YAML to JSON',
+		h1: 'Convert YAML to JSON.'
 	}
 ];
 
@@ -693,6 +956,34 @@ export const TOOLS: ConverterLite[] = [
 		h1: 'Split PDF files.'
 	},
 	{
+		format: 'pdf',
+		path: '/rotate-pdf',
+		label: 'Rotate PDF',
+		feature: 'Rotate PDF pages',
+		h1: 'Rotate PDF pages.'
+	},
+	{
+		format: 'pdf',
+		path: '/watermark-pdf',
+		label: 'Watermark PDF',
+		feature: 'Watermark PDFs with custom text',
+		h1: 'Watermark PDF files.'
+	},
+	{
+		format: 'pdf',
+		path: '/pdf-page-numbers',
+		label: 'Page numbers',
+		feature: 'Add page numbers to PDFs',
+		h1: 'Add page numbers to PDFs.'
+	},
+	{
+		format: 'pdf',
+		path: '/grayscale-pdf',
+		label: 'Grayscale PDF',
+		feature: 'Convert PDFs to grayscale',
+		h1: 'Convert PDFs to grayscale.'
+	},
+	{
 		format: 'video',
 		path: '/compress-mp4',
 		demo: 'video',
@@ -706,6 +997,20 @@ export const TOOLS: ConverterLite[] = [
 		label: 'Compress MOV',
 		feature: 'Compress MOV (QuickTime) video',
 		h1: 'Compress MOV videos.'
+	},
+	{
+		format: 'video',
+		path: '/remove-audio-from-video',
+		label: 'Remove audio',
+		feature: 'Remove the audio track from videos',
+		h1: 'Remove audio from video.'
+	},
+	{
+		format: 'ocr',
+		path: '/ocr-pdf',
+		label: 'OCR PDF',
+		feature: 'Make scanned PDFs searchable',
+		h1: 'Make scanned PDFs searchable.'
 	},
 	{
 		format: 'jpg',
@@ -735,6 +1040,20 @@ export const TOOLS: ConverterLite[] = [
 		label: 'Compress AVIF',
 		feature: 'Compress AVIF images',
 		h1: 'Compress AVIF images.'
+	},
+	{
+		format: 'jpg',
+		path: '/compress-jxl',
+		label: 'Compress JXL',
+		feature: 'Compress JPEG XL images',
+		h1: 'Compress JXL images.'
+	},
+	{
+		format: 'ebook',
+		path: '/compress-cbz',
+		label: 'Compress CBZ',
+		feature: 'Compress CBZ comic archives',
+		h1: 'Compress CBZ comics.'
 	},
 	{
 		format: 'font',
@@ -770,6 +1089,20 @@ export const TOOLS: ConverterLite[] = [
 		label: 'Create TAR.GZ',
 		feature: 'Create TAR.GZ tarballs',
 		h1: 'Create TAR.GZ tarballs.'
+	},
+	{
+		format: 'zip',
+		path: '/create-tar-bz2',
+		label: 'Create TAR.BZ2',
+		feature: 'Create TAR.BZ2 tarballs',
+		h1: 'Create TAR.BZ2 tarballs.'
+	},
+	{
+		format: 'zip',
+		path: '/create-tar-xz',
+		label: 'Create TAR.XZ',
+		feature: 'Create TAR.XZ tarballs',
+		h1: 'Create TAR.XZ tarballs.'
 	},
 	{
 		format: 'zip',
@@ -819,6 +1152,13 @@ export const TOOLS: ConverterLite[] = [
 		label: 'Extract GZ',
 		feature: 'Decompress .gz files',
 		h1: 'Extract GZ files.'
+	},
+	{
+		format: 'zip',
+		path: '/extract-z',
+		label: 'Extract Z',
+		feature: 'Decompress unix .Z files',
+		h1: 'Extract .Z files.'
 	},
 	{
 		format: 'zip',
@@ -906,7 +1246,7 @@ export const TOOL_GROUPS: readonly {
 }[] = [
 	{
 		title: 'Images',
-		formats: ['jpg', 'png', 'webp', 'gif', 'heic', 'svg'],
+		formats: ['jpg', 'png', 'webp', 'gif', 'heic', 'svg', 'ocr'],
 		footerPaths: [
 			'/compress-jpg',
 			'/compress-png',
@@ -919,14 +1259,15 @@ export const TOOL_GROUPS: readonly {
 	},
 	{
 		title: 'Video & audio',
-		formats: ['video', 'audio'],
+		formats: ['video', 'audio', 'subtitle'],
 		footerPaths: [
 			'/compress-video',
 			'/compress-mp4',
 			'/mov-to-mp4',
 			'/mp4-to-mp3',
 			'/video-to-gif',
-			'/compress-audio'
+			'/compress-audio',
+			'/srt-to-vtt'
 		]
 	},
 	{
@@ -936,6 +1277,7 @@ export const TOOL_GROUPS: readonly {
 			'/compress-pdf',
 			'/merge-pdf',
 			'/split-pdf',
+			'/rotate-pdf',
 			'/jpg-to-pdf',
 			'/pdf-to-jpg',
 			'/unlock-pdf'
@@ -955,14 +1297,17 @@ export const TOOL_GROUPS: readonly {
 	{
 		title: 'Archives & metadata',
 		footerTitle: 'Archives',
-		formats: ['zip', 'exif'],
+		// 'model' and 'data' ride here as the misc bucket (footer picks are
+		// full at 7 — their hubs are reachable via the homepage directory).
+		formats: ['zip', 'exif', 'ebook', 'model', 'data'],
 		footerPaths: [
 			'/zip-files',
 			'/create-7z',
 			'/extract-rar',
 			'/extract-7z',
 			'/gzip-files',
-			'/remove-exif'
+			'/remove-exif',
+			'/compress-epub'
 		]
 	}
 ];
@@ -973,6 +1318,11 @@ export function pathFor(format: FileFormat): string {
 	if (format === 'exif') return '/remove-exif';
 	if (format === 'zip') return '/zip-files';
 	if (format === 'font') return '/font-converter';
+	if (format === 'ocr') return '/image-to-text';
+	if (format === 'subtitle') return '/srt-to-vtt';
+	if (format === 'ebook') return '/compress-epub';
+	if (format === 'model') return '/compress-glb';
+	if (format === 'data') return '/csv-to-xlsx';
 	return `/compress-${format}`;
 }
 

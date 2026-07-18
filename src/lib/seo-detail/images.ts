@@ -87,6 +87,18 @@ export const DETAILS: Record<string, SeoDetail | ConverterDetail> = {
 		tagline: 'iPhone HEIC to web-ready AVIF — converted on your device.',
 		related: ['/heic-to-jpg', '/compress-heic', '/compress-avif']
 	},
+	'heic-to-webp': {
+		ogImage: '/og/heic-to-webp.jpg',
+		preset: { kind: 'image', tab: 'heic', to: 'webp' },
+		accept: 'image/heic,image/heif,.heic,.heif',
+		dropSubject: 'HEIC files',
+		dropHint: 'iPhone HEIC photos · converted to WebP locally',
+		title: 'HEIC to WebP Converter — Private, In-Browser | Compress Pro',
+		description:
+			'Convert iPhone HEIC photos to WebP right in your browser — web-ready files at a fraction of JPG size. Batch whole albums, ZIP download, zero uploads.',
+		tagline: 'iPhone HEIC photos to web-ready WebP — all on your device.',
+		related: ['/heic-to-jpg', '/compress-heic', '/heic-to-avif']
+	},
 	'webp-to-jpg': {
 		ogImage: '/og/webp-to-jpg.jpg',
 		preset: { kind: 'image', tab: 'webp', to: 'jpg' },
@@ -104,6 +116,17 @@ export const DETAILS: Record<string, SeoDetail | ConverterDetail> = {
 			'Convert WebP to lossless PNG in your browser — transparency preserved, pixels untouched. Batch conversion with ZIP download. No uploads, no accounts. Free.',
 		tagline: 'WebP to lossless PNG in your browser — files stay local.',
 		related: ['/webp-to-jpg', '/compress-png', '/png-to-webp']
+	},
+	'gif-to-webp': {
+		ogImage: '/og/gif-to-webp.jpg',
+		preset: { kind: 'image', tab: 'gif', to: 'webp' },
+		dropSubject: 'GIF files',
+		dropHint: 'Animated GIFs · re-encoded to WebP locally',
+		title: 'GIF to WebP Converter — Keep the Animation | Compress Pro',
+		description:
+			'Convert animated GIFs to WebP right in your browser — the animation survives and files land 50–70% smaller. Batch conversion, ZIP download, no uploads.',
+		tagline: 'GIFs re-encoded to animated WebP, 50–70% smaller — local.',
+		related: ['/compress-gif', '/compress-webp', '/gif-to-mp4']
 	},
 	'avif-to-jpg': {
 		ogImage: '/og/avif-to-jpg.jpg',
@@ -146,6 +169,30 @@ export const DETAILS: Record<string, SeoDetail | ConverterDetail> = {
 			'Convert PNG to AVIF in your browser and keep full transparency. Graphics and screenshots shrink dramatically, and nothing is ever uploaded. Free & private.',
 		tagline: 'PNG to AVIF with transparency kept — converted locally.',
 		related: ['/compress-png', '/png-to-webp', '/compress-avif']
+	},
+	'png-to-svg': {
+		ogImage: '/og/png-to-svg.jpg',
+		preset: { kind: 'image', tab: 'png', to: 'svg' },
+		accept: 'image/png,.png',
+		dropSubject: 'PNG files',
+		dropHint: 'PNG logos & graphics · vectorized locally',
+		title: 'PNG to SVG Converter — Vectorize Images | Compress Pro',
+		description:
+			'Convert PNG logos and graphics to true vector SVG right in your browser — color or black & white tracing, batch support, nothing uploaded. Free.',
+		tagline: 'PNG traced into real vector paths — all in your browser.',
+		related: ['/jpg-to-svg', '/compress-svg', '/svg-to-png']
+	},
+	'jpg-to-svg': {
+		ogImage: '/og/jpg-to-svg.jpg',
+		preset: { kind: 'image', tab: 'jpg', to: 'svg' },
+		accept: 'image/jpeg,.jpg,.jpeg',
+		dropSubject: 'JPG files',
+		dropHint: 'JPG logos & drawings · vectorized locally',
+		title: 'JPG to SVG Converter — Vectorize Images | Compress Pro',
+		description:
+			'Convert JPG images to vector SVG right in your browser — trace logos and drawings into scalable paths, in color or black & white. No uploads. Free.',
+		tagline: 'JPG traced into scalable vector paths — right on-device.',
+		related: ['/png-to-svg', '/compress-svg', '/compress-jpg']
 	},
 	'webp-to-avif': {
 		ogImage: '/og/webp-to-avif.jpg',
@@ -195,6 +242,18 @@ export const DETAILS: Record<string, SeoDetail | ConverterDetail> = {
 		tagline: 'Turn bulky BMP bitmaps into small JPGs — in your browser.',
 		related: ['/compress-jpg', '/png-to-jpg', '/tiff-to-jpg']
 	},
+	'bmp-to-png': {
+		ogImage: '/og/bmp-to-png.jpg',
+		preset: { kind: 'image', tab: 'jpg', to: 'png', quality: 100 },
+		accept: 'image/bmp,.bmp',
+		dropSubject: 'BMP files',
+		dropHint: 'BMP bitmaps · converted to lossless PNG locally',
+		title: 'BMP to PNG Converter — Lossless, No Upload | Compress Pro',
+		description:
+			'Convert BMP bitmaps to lossless PNG in your browser — same pixels at a fraction of the size, transparency kept. Batch support, nothing uploaded. Free.',
+		tagline: 'Raw BMP bitmaps into tidy lossless PNGs — all in-browser.',
+		related: ['/bmp-to-jpg', '/compress-png', '/tiff-to-png']
+	},
 	'tiff-to-jpg': {
 		ogImage: '/og/tiff-to-jpg.jpg',
 		preset: { kind: 'image', tab: 'jpg', to: 'jpg' },
@@ -206,6 +265,79 @@ export const DETAILS: Record<string, SeoDetail | ConverterDetail> = {
 			'Convert TIFF scans and photos to JPG in your browser — no upload, no size limits. Multi-page TIFFs keep the first page. Free, private, unlimited.',
 		tagline: 'Scanner TIFFs become shareable JPGs — locally, for free.',
 		related: ['/compress-jpg', '/jpg-to-pdf', '/bmp-to-jpg']
+	},
+	'tiff-to-png': {
+		ogImage: '/og/tiff-to-png.jpg',
+		preset: { kind: 'image', tab: 'jpg', to: 'png', quality: 100 },
+		accept: 'image/tiff,.tif,.tiff',
+		dropSubject: 'TIFF files',
+		dropHint: 'TIFF scans · converted to lossless PNG locally',
+		title: 'TIFF to PNG Converter — Lossless & Private | Compress Pro',
+		description:
+			'Convert TIFF scans and photos to lossless PNG in your browser — pixels untouched, no upload, no size limits. Multi-page TIFFs keep the first page. Free.',
+		tagline: 'Scanner TIFFs to lossless PNG — right on your own device.',
+		related: ['/tiff-to-jpg', '/compress-png', '/bmp-to-png']
+	},
+	'raw-to-jpg': {
+		ogImage: '/og/raw-to-jpg.jpg',
+		preset: { kind: 'image', tab: 'jpg', to: 'jpg' },
+		accept:
+			'image/x-adobe-dng,image/x-canon-cr2,image/x-nikon-nef,image/x-sony-arw,.cr2,.nef,.arw,.dng,.raf,.rw2,.orf',
+		dropSubject: 'RAW files',
+		dropHint: 'CR2, NEF, ARW, DNG & more · developed locally',
+		title: 'RAW to JPG Converter — CR2, NEF, ARW, DNG | Compress Pro',
+		description:
+			'Convert camera RAW photos to JPG right in your browser — CR2, NEF, ARW, DNG and more, demosaiced locally by LibRaw. No uploads, no sign-up. Free.',
+		tagline: 'Camera RAW developed into JPGs — right on your own device.',
+		related: ['/cr2-to-jpg', '/dng-to-jpg', '/compress-jpg']
+	},
+	'cr2-to-jpg': {
+		ogImage: '/og/cr2-to-jpg.jpg',
+		preset: { kind: 'image', tab: 'jpg', to: 'jpg' },
+		accept: 'image/x-canon-cr2,.cr2',
+		dropSubject: 'CR2 files',
+		dropHint: 'Canon CR2 RAW · developed to JPG locally',
+		title: 'CR2 to JPG Converter — Canon RAW, Private | Compress Pro',
+		description:
+			'Convert Canon CR2 RAW photos to JPG in your browser — demosaiced locally with LibRaw, never uploaded. Batch whole shoots, download as a ZIP. Free.',
+		tagline: 'Canon CR2 RAW developed to JPG — photos never leave home.',
+		related: ['/raw-to-jpg', '/nef-to-jpg', '/compress-jpg']
+	},
+	'nef-to-jpg': {
+		ogImage: '/og/nef-to-jpg.jpg',
+		preset: { kind: 'image', tab: 'jpg', to: 'jpg' },
+		accept: 'image/x-nikon-nef,.nef',
+		dropSubject: 'NEF files',
+		dropHint: 'Nikon NEF RAW · developed to JPG locally',
+		title: 'NEF to JPG Converter — Nikon RAW, Private | Compress Pro',
+		description:
+			'Convert Nikon NEF RAW photos to JPG right in your browser — decoded locally, nothing uploaded. Batch conversion with ZIP download, no sign-up. Free.',
+		tagline: 'Nikon NEF RAW developed to JPG — all on your own device.',
+		related: ['/raw-to-jpg', '/cr2-to-jpg', '/compress-jpg']
+	},
+	'arw-to-jpg': {
+		ogImage: '/og/arw-to-jpg.jpg',
+		preset: { kind: 'image', tab: 'jpg', to: 'jpg' },
+		accept: 'image/x-sony-arw,.arw',
+		dropSubject: 'ARW files',
+		dropHint: 'Sony ARW RAW · developed to JPG locally',
+		title: 'ARW to JPG Converter — Sony RAW, Private | Compress Pro',
+		description:
+			'Convert Sony ARW RAW photos to JPG in your browser — demosaiced on your device, never uploaded. Batch whole shoots, tune quality, download a ZIP. Free.',
+		tagline: 'Sony ARW RAW developed to JPG — nothing is ever uploaded.',
+		related: ['/raw-to-jpg', '/dng-to-jpg', '/compress-jpg']
+	},
+	'dng-to-jpg': {
+		ogImage: '/og/dng-to-jpg.jpg',
+		preset: { kind: 'image', tab: 'jpg', to: 'jpg' },
+		accept: 'image/x-adobe-dng,.dng',
+		dropSubject: 'DNG files',
+		dropHint: 'Adobe DNG RAW · developed to JPG locally',
+		title: 'DNG to JPG Converter — Adobe RAW, Private | Compress Pro',
+		description:
+			'Convert DNG photos to JPG right in your browser — Adobe’s universal RAW format, decoded locally by LibRaw. Batch support, ZIP download, no uploads.',
+		tagline: 'DNG negatives developed into JPGs — right in your browser.',
+		related: ['/raw-to-jpg', '/compress-jpg', '/jpg-to-webp']
 	},
 	'png-to-ico': {
 		ogImage: '/og/png-to-ico.jpg',
@@ -293,6 +425,65 @@ export const DETAILS: Record<string, SeoDetail | ConverterDetail> = {
 		tagline: 'JPG photos squeezed under 100 KB — right in your browser.',
 		related: ['/compress-jpg', '/resize-image', '/compress-image']
 	},
+	'psd-to-jpg': {
+		ogImage: '/og/psd-to-jpg.jpg',
+		preset: { kind: 'image', tab: 'jpg', to: 'jpg', quality: 90 },
+		accept: 'image/vnd.adobe.photoshop,.psd',
+		dropSubject: 'PSD files',
+		dropHint: 'Photoshop files · flattened locally',
+		title: 'PSD to JPG Converter — Free, Private, No Upload | Compress Pro',
+		description:
+			'Convert Photoshop PSD files to JPG right in your browser — the flattened image, decoded and saved on your device. No uploads, no accounts. Free.',
+		tagline: 'Photoshop files opened as JPG — right on your own device.',
+		related: ['/psd-to-png', '/compress-jpg', '/tiff-to-jpg']
+	},
+	'psd-to-png': {
+		ogImage: '/og/psd-to-png.jpg',
+		preset: { kind: 'image', tab: 'jpg', to: 'png', quality: 100 },
+		accept: 'image/vnd.adobe.photoshop,.psd',
+		dropSubject: 'PSD files',
+		dropHint: 'Photoshop files · transparency kept',
+		title: 'PSD to PNG Converter — Free, Private, No Upload | Compress Pro',
+		description:
+			'Convert Photoshop PSD files to lossless PNG right in your browser — transparency kept, nothing uploaded. Batch files, download a ZIP. Free, private.',
+		tagline: 'PSD flattened to a lossless PNG — nothing gets uploaded.',
+		related: ['/psd-to-jpg', '/compress-png', '/png-to-webp']
+	},
+	'jxl-to-jpg': {
+		ogImage: '/og/jxl-to-jpg.jpg',
+		// quality 90: the source is an archival format — coming OUT of it
+		// should default to a faithful copy, not the everyday-web setting.
+		preset: { kind: 'image', tab: 'jpg', to: 'jpg', quality: 90 },
+		accept: 'image/jxl,.jxl',
+		dropSubject: 'JXL files',
+		dropHint: 'JPEG XL · decoded locally',
+		title: 'JXL to JPG Converter — Free, Private, No Upload | Compress Pro',
+		description:
+			'Convert JPEG XL images to universal JPG right in your browser — nothing is uploaded. Batch files, adjust quality, download a ZIP. Free, no accounts.',
+		tagline: 'JXL opened and saved as JPG — right on your own device.',
+		related: ['/jpg-to-jxl', '/compress-jxl', '/avif-to-jpg']
+	},
+	'jpg-to-jxl': {
+		ogImage: '/og/jpg-to-jxl.jpg',
+		preset: { kind: 'image', tab: 'jpg', to: 'jxl' },
+		title: 'JPG to JXL Converter — JPEG XL, No Upload | Compress Pro',
+		description:
+			'Convert JPG photos to JPEG XL right in your browser — typically 20–40% smaller at the same quality. Batch conversion, no uploads, free, no limits.',
+		tagline: 'JPG to JPEG XL on your device — smaller, nothing uploaded.',
+		related: ['/jxl-to-jpg', '/compress-jxl', '/jpg-to-avif']
+	},
+	'compress-jxl': {
+		ogImage: '/og/compress-jxl.jpg',
+		preset: { kind: 'image', tab: 'jpg', to: 'jxl' },
+		accept: 'image/jxl,.jxl',
+		dropSubject: 'JXL files',
+		dropHint: 'JPEG XL · re-encoded locally',
+		title: 'Compress JXL Online — JPEG XL, No Upload | Compress Pro',
+		description:
+			'Compress JPEG XL images right in your browser — pick a quality or an exact target size and re-encode locally. No uploads, no accounts. Free and private.',
+		tagline: 'Smaller JXL files made locally — nothing ever uploaded.',
+		related: ['/jpg-to-jxl', '/jxl-to-jpg', '/compress-image']
+	},
 	'compress-avif': {
 		ogImage: '/og/compress-avif.jpg',
 		preset: { kind: 'image', tab: 'jpg', to: 'avif' },
@@ -304,5 +495,25 @@ export const DETAILS: Record<string, SeoDetail | ConverterDetail> = {
 			'Compress AVIF images right in your browser — pick a quality or an exact target size and re-encode locally. No uploads, no accounts. Free and private.',
 		tagline: 'Smaller AVIF files in your browser — nothing is uploaded.',
 		related: ['/jpg-to-avif', '/avif-to-jpg', '/compress-image']
+	},
+	'image-to-text': {
+		ogImage: '/og/image-to-text.jpg',
+		title: 'Image to Text (OCR) — Free, Private, Local | Compress Pro',
+		description:
+			'Extract text from images right in your browser — Tesseract OCR in 8 languages, run entirely on your device. No uploads, no accounts, no limits. Free.',
+		tagline: 'Words read out of images, right on your device — free OCR.',
+		related: ['/ocr-pdf', '/remove-exif', '/compress-image']
+	},
+	'ocr-pdf': {
+		ogImage: '/og/ocr-pdf.jpg',
+		preset: { kind: 'ocr', op: 'toPdf' },
+		accept: 'application/pdf,.pdf',
+		dropSubject: 'PDF files',
+		dropHint: 'Scanned PDFs · recognized locally',
+		title: 'OCR PDF — Make Scanned PDFs Searchable | Compress Pro',
+		description:
+			'Make scanned PDFs searchable right in your browser — an invisible text layer is added over the original pages. Local Tesseract OCR, zero uploads. Free.',
+		tagline: 'Scanned PDFs become searchable — all recognized on-device.',
+		related: ['/image-to-text', '/compress-pdf', '/merge-pdf']
 	}
 };

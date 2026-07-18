@@ -223,6 +223,78 @@ export const DETAILS: Record<string, SeoDetail | ConverterDetail> = {
 		tagline: 'Pull the audio out of video as WAV — ready for any editor.',
 		related: ['/mp4-to-mp3', '/mp3-to-wav', '/compress-audio']
 	},
+	'webm-to-mp3': {
+		ogImage: '/og/webm-to-mp3.jpg',
+		preset: { kind: 'audio', output: 'mp3' },
+		accept: 'audio/webm,video/webm,.webm',
+		dropSubject: 'WebM files',
+		dropHint: 'WebM video · audio extracted as MP3',
+		title: 'WebM to MP3 Converter — Extract Audio | Compress Pro',
+		description:
+			'Extract the audio track from WebM videos and save it as MP3 — right in your browser. No upload, no sign-up, no length limits. Free and private.',
+		tagline: 'Pull audio out of WebM videos — straight to MP3, locally.',
+		related: ['/mp4-to-mp3', '/compress-audio', '/webm-to-mp4']
+	},
+	'mov-to-mp3': {
+		ogImage: '/og/mov-to-mp3.jpg',
+		preset: { kind: 'audio', output: 'mp3' },
+		accept: 'video/quicktime,.mov',
+		dropSubject: 'MOV files',
+		dropHint: 'iPhone MOV video · audio extracted as MP3',
+		title: 'MOV to MP3 Converter — iPhone Video Audio | Compress Pro',
+		description:
+			'Extract audio from iPhone MOV videos and save it as MP3 right in your browser — interviews, gigs and memos. No uploads, no length limits. Free & private.',
+		tagline: 'The soundtrack of your MOV videos as MP3 — made locally.',
+		related: ['/mp4-to-mp3', '/mov-to-mp4', '/compress-audio']
+	},
+	'mp3-to-m4a': {
+		ogImage: '/og/mp3-to-m4a.jpg',
+		preset: { kind: 'audio', output: 'm4a' },
+		accept: 'audio/mpeg,audio/mp3,.mp3',
+		dropSubject: 'MP3 files',
+		dropHint: 'MP3 audio · encoded to M4A locally',
+		title: 'MP3 to M4A Converter — Free, No Upload | Compress Pro',
+		description:
+			'Convert MP3 audio to M4A (AAC) right in your browser — the native format for Apple devices and audiobooks. Pick a bitrate, nothing uploaded. Free.',
+		tagline: 'MP3 re-encoded to Apple-native M4A — on your own device.',
+		related: ['/m4a-to-mp3', '/wav-to-m4a', '/compress-audio']
+	},
+	'wav-to-m4a': {
+		ogImage: '/og/wav-to-m4a.jpg',
+		preset: { kind: 'audio', output: 'm4a' },
+		accept: 'audio/wav,audio/x-wav,.wav',
+		dropSubject: 'WAV files',
+		dropHint: 'WAV recordings · encoded to M4A locally',
+		title: 'WAV to M4A Converter — Small AAC Files | Compress Pro',
+		description:
+			'Convert WAV recordings to M4A (AAC) in your browser — roughly a tenth of the size with no audible difference. Pick a bitrate, keep it local. Free forever.',
+		tagline: 'Huge WAV masters become small M4A files — encoded locally.',
+		related: ['/wav-to-mp3', '/wav-to-flac', '/compress-audio']
+	},
+	'mp3-to-ogg': {
+		ogImage: '/og/mp3-to-ogg.jpg',
+		preset: { kind: 'audio', output: 'ogg' },
+		accept: 'audio/mpeg,audio/mp3,.mp3',
+		dropSubject: 'MP3 files',
+		dropHint: 'MP3 audio · encoded to OGG (Opus) locally',
+		title: 'MP3 to OGG Converter — Free, No Upload | Compress Pro',
+		description:
+			'Convert MP3 audio to OGG right in your browser — modern Opus in an OGG container, ideal for games and the web. No uploads, no sign-up. Free forever.',
+		tagline: 'MP3 into OGG (Opus) for games and the web — made locally.',
+		related: ['/ogg-to-mp3', '/wav-to-opus', '/compress-audio']
+	},
+	'wav-to-opus': {
+		ogImage: '/og/wav-to-opus.jpg',
+		preset: { kind: 'audio', output: 'opus' },
+		accept: 'audio/wav,audio/x-wav,.wav',
+		dropSubject: 'WAV files',
+		dropHint: 'WAV recordings · encoded to Opus locally',
+		title: 'WAV to Opus Converter — Tiny Voice Audio | Compress Pro',
+		description:
+			'Convert WAV audio to Opus in your browser — the most efficient audio codec there is, ideal for voice and streaming. Pick a bitrate, keep it local. Free.',
+		tagline: 'WAV into tiny Opus files — peak efficiency, run locally.',
+		related: ['/opus-to-mp3', '/wav-to-mp3', '/compress-audio']
+	},
 	'compress-mp4': {
 		ogImage: '/og/compress-mp4.jpg',
 		preset: { kind: 'video', container: 'mp4' },
@@ -246,5 +318,54 @@ export const DETAILS: Record<string, SeoDetail | ConverterDetail> = {
 			'Shrink MOV videos right in your browser and keep the QuickTime format — set a quality or a target size. No uploads, no watermarks. Free & private.',
 		tagline: 'Shrink QuickTime MOV files on your device — still a MOV.',
 		related: ['/mov-to-mp4', '/compress-mp4', '/compress-video']
+	},
+	// Hub page of the subtitle tab (pathFor target) — FORMATS entries carry no
+	// preset by design (tab clicks land here and must not stomp settings); the
+	// tab default (to: 'vtt') matches the page's promise.
+	'srt-to-vtt': {
+		ogImage: '/og/srt-to-vtt.jpg',
+		dropSubject: 'SRT files',
+		dropHint: 'SRT/VTT/ASS · converted locally',
+		title: 'SRT to VTT Converter — Free, Private, No Upload | Compress Pro',
+		description:
+			'Convert SRT subtitles to WebVTT for HTML5 video right in your browser — instant, private, nothing uploaded. ASS files convert too. Free, no accounts.',
+		tagline: 'Subtitles converted on your device — instant & private.',
+		related: ['/vtt-to-srt', '/ass-to-srt', '/compress-video']
+	},
+	'vtt-to-srt': {
+		ogImage: '/og/vtt-to-srt.jpg',
+		preset: { kind: 'subtitle', to: 'srt' },
+		accept: 'text/vtt,.vtt',
+		dropSubject: 'VTT files',
+		dropHint: 'VTT only · converted locally',
+		title: 'VTT to SRT Converter — Free, Private, No Upload | Compress Pro',
+		description:
+			'Convert WebVTT captions to SRT right in your browser — the format every player and TV accepts. Instant and private, nothing is uploaded. Free, no limits.',
+		tagline: 'Web captions turned into classic SRT — right on-device.',
+		related: ['/srt-to-vtt', '/ass-to-srt', '/compress-video']
+	},
+	'ass-to-srt': {
+		ogImage: '/og/ass-to-srt.jpg',
+		preset: { kind: 'subtitle', to: 'srt' },
+		accept: '.ass,.ssa',
+		dropSubject: 'ASS files',
+		dropHint: 'ASS/SSA · styling stripped, timing kept',
+		title: 'ASS to SRT Converter — Free, Private, No Upload | Compress Pro',
+		description:
+			'Convert ASS/SSA subtitles to plain SRT in your browser — styling stripped, text and timing kept. Instant and private, nothing gets uploaded. Free.',
+		tagline: 'ASS subtitles flattened to clean SRT — all on your device.',
+		related: ['/srt-to-vtt', '/vtt-to-srt', '/compress-video']
+	},
+	'remove-audio-from-video': {
+		ogImage: '/og/remove-audio-from-video.jpg',
+		preset: { kind: 'video', container: 'mp4', removeAudio: true },
+		accept: 'video/mp4,video/quicktime,video/webm,.mp4,.m4v,.mov,.webm',
+		dropSubject: 'video files',
+		dropHint: 'MP4/MOV/WebM · audio track removed locally',
+		title: 'Remove Audio from Video — Mute MP4, No Upload | Compress Pro',
+		description:
+			'Strip the audio track from MP4, MOV or WebM videos right in your browser — the picture stays, the sound goes, nothing is uploaded. Free and private.',
+		tagline: 'Mute any video on your own device — the audio just goes.',
+		related: ['/compress-video', '/compress-mp4', '/mp4-to-mp3']
 	}
 };

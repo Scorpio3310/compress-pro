@@ -114,5 +114,50 @@ each entry in `src/lib/seo.ts` — pages without one fall back to `/og.jpg`.
 | `/webp-to-avif`            | WebP → AVIF         | One generation newer, one size smaller.                        |
 | `/avif-to-png`             | AVIF → PNG          | Lossless pixels for every editor. Local.                       |
 | `/heic-to-avif`            | HEIC → AVIF         | iPhone photos, web-ready. Converted locally.                   |
+| `/gif-to-webp`             | GIF → WebP          | Animation kept, 50–70% smaller. Locally.                       |
+| `/heic-to-webp`            | HEIC → WebP         | iPhone photos the whole web can show. Local.                   |
+| `/tiff-to-png`             | TIFF → PNG          | Lossless scans for every editor. Local.                        |
+| `/bmp-to-png`              | BMP → PNG           | Same pixels, a fraction of the bytes.                          |
+| `/webm-to-mp3`             | WebM → MP3          | The soundtrack of any screen recording. Local.                 |
+| `/mov-to-mp3`              | MOV → MP3           | iPhone video audio, extracted locally.                         |
+| `/mp3-to-m4a`              | MP3 → M4A           | Apple-native audio, converted on-device.                       |
+| `/wav-to-m4a`              | WAV → M4A           | A tenth of the size, nothing you can hear.                     |
+| `/mp3-to-ogg`              | MP3 → OGG           | Opus for games and the web. No uploads.                        |
+| `/wav-to-opus`             | WAV → Opus          | The efficiency king, encoded locally.                          |
+| `/create-tar-bz2`          | Create TAR.BZ2.     | Tighter than gzip — built in your browser.                     |
+| `/create-tar-xz`           | Create TAR.XZ.      | The hardest-squeezing tarball. On-device.                      |
+| `/extract-z`               | Extract .Z.         | Unix compress, opened without unix.                            |
+| `/remove-audio-from-video` | Remove audio.       | The picture stays, the sound goes. Locally.                    |
+| `/png-to-svg`              | PNG → SVG           | Pixels become paths — vectorized locally.                      |
+| `/jpg-to-svg`              | JPG → SVG           | Logos traced into real vectors. On-device.                     |
+| `/raw-to-jpg`              | RAW → JPG           | CR2, NEF, ARW & DNG — developed locally.                       |
+| `/cr2-to-jpg`              | CR2 → JPG           | Canon RAW, developed in your browser.                          |
+| `/nef-to-jpg`              | NEF → JPG           | Nikon RAW, developed in your browser.                          |
+| `/arw-to-jpg`              | ARW → JPG           | Sony RAW, developed in your browser.                           |
+| `/dng-to-jpg`              | DNG → JPG           | Digital negatives, developed on-device.                        |
+| `/image-to-text`           | Image → Text.       | OCR in 8 languages — read on your device.                      |
+| `/ocr-pdf`                 | OCR PDF.            | Scans become searchable. Recognized locally.                   |
+| `/rotate-pdf`              | Rotate PDF.         | Sideways scans, turned upright. Locally.                       |
+| `/watermark-pdf`           | Watermark PDF.      | Your stamp on every page — added locally.                      |
+| `/pdf-page-numbers`        | Number pages.       | Page / total on every page. On-device.                         |
+| `/pdf-to-text`             | PDF → Text          | All the words, extracted in your browser.                      |
+| `/grayscale-pdf`           | Grayscale PDF.      | Print-ready mono, converted locally.                           |
+| `/pdf-to-pdfa`             | PDF → PDF/A         | ISO archival grade, made on your device.                       |
+| `/srt-to-vtt`              | SRT → VTT           | Web-ready captions, converted on-device.                       |
+| `/vtt-to-srt`              | VTT → SRT           | Captions every player accepts. Locally.                        |
+| `/ass-to-srt`              | ASS → SRT           | Styling out, dialogue kept. On-device.                         |
+| `/jxl-to-jpg`              | JXL → JPG           | JPEG XL opened everywhere. Decoded locally.                    |
+| `/jpg-to-jxl`              | JPG → JXL           | JPEG XL: smaller archives, made on-device.                     |
+| `/compress-jxl`            | Compress JXL.       | JPEG XL re-encoded on your device.                             |
+| `/psd-to-jpg`              | PSD → JPG           | Photoshop files opened as JPG. Locally.                        |
+| `/psd-to-png`              | PSD → PNG           | Flattened lossless, transparency kept.                         |
+| `/compress-epub`           | Compress EPUB.      | Lighter e-books, text untouched. Local.                        |
+| `/compress-cbz`            | Compress CBZ.       | Comics slimmed page by page. On-device.                        |
+| `/cbr-to-cbz`              | CBR → CBZ           | RAR comics repacked. Pages bit-exact.                          |
+| `/compress-glb`            | Compress GLB.       | 3D models crushed with Draco. On-device.                       |
+| `/csv-to-xlsx`             | CSV → XLSX          | A real Excel workbook, made on-device.                         |
+| `/xlsx-to-csv`             | XLSX → CSV          | Clean CSV out of Excel. Values, locally.                       |
+| `/json-to-yaml`            | JSON → YAML         | Readable configs, rewritten on-device.                         |
+| `/yaml-to-json`            | YAML → JSON         | Anchors resolved, JSON out. Locally.                           |
 | `/about`                   | About Compress Pro. | Free, open source — and your files never leave your device.    |
 | `/privacy`                 | Privacy.            | No uploads, no cookies, no analytics — nothing to leak.        |

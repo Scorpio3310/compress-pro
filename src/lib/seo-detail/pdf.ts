@@ -75,9 +75,81 @@ export const DETAILS: Record<string, SeoDetail | ConverterDetail> = {
 		dropHint: 'PDF files · password-protected locally',
 		title: 'Protect PDF with a Password — Free & Private | Compress Pro',
 		description:
-			'Add a password to a PDF right in your browser. Encryption runs locally — the file and the password never leave your device. Free, private and unlimited.',
+			'Add a password to a PDF right in your browser — real AES-256 encryption, run locally. The file and the password never leave your device. Free & unlimited.',
 		tagline: 'Password-protect PDFs locally — no uploads, no accounts.',
 		related: ['/compress-pdf', '/unlock-pdf', '/split-pdf']
+	},
+	'rotate-pdf': {
+		ogImage: '/og/rotate-pdf.jpg',
+		preset: { kind: 'pdf-op', op: 'rotate' },
+		accept: 'application/pdf,.pdf',
+		dropSubject: 'PDF files',
+		dropHint: 'Sideways PDFs · rotated locally',
+		title: 'Rotate PDF Online — Free, Private, No Upload | Compress Pro',
+		description:
+			'Rotate PDF pages right in your browser — 90° either way or 180°, applied structurally without re-encoding. No uploads, no accounts, free & unlimited.',
+		tagline: 'Sideways scans turned upright — rotated on your device.',
+		related: ['/split-pdf', '/compress-pdf', '/merge-pdf']
+	},
+	'watermark-pdf': {
+		ogImage: '/og/watermark-pdf.jpg',
+		preset: { kind: 'pdf-op', op: 'watermark' },
+		accept: 'application/pdf,.pdf',
+		dropSubject: 'PDF files',
+		dropHint: 'PDF documents · stamped locally',
+		title: 'Watermark PDF — Stamp Text Across Pages | Compress Pro',
+		description:
+			'Add a diagonal text watermark to every PDF page right in your browser — CONFIDENTIAL, DRAFT or your own text. Nothing is uploaded anywhere. Free.',
+		tagline: 'Your stamp on every page — added right in your browser.',
+		related: ['/pdf-page-numbers', '/protect-pdf', '/compress-pdf']
+	},
+	'pdf-page-numbers': {
+		ogImage: '/og/pdf-page-numbers.jpg',
+		preset: { kind: 'pdf-op', op: 'pageNumbers' },
+		accept: 'application/pdf,.pdf',
+		dropSubject: 'PDF files',
+		dropHint: 'PDF documents · numbered locally',
+		title: 'Add Page Numbers to PDF — Free & Private | Compress Pro',
+		description:
+			'Add page numbers to a PDF right in your browser — “page / total” at the bottom of every page, nothing else touched. No uploads, no sign-up. Free.',
+		tagline: 'Every page numbered in seconds — done on your own device.',
+		related: ['/watermark-pdf', '/merge-pdf', '/compress-pdf']
+	},
+	'pdf-to-text': {
+		ogImage: '/og/pdf-to-text.jpg',
+		preset: { kind: 'pdf-op', op: 'toText' },
+		accept: 'application/pdf,.pdf',
+		dropSubject: 'PDF files',
+		dropHint: 'Digital PDFs · text extracted locally',
+		title: 'PDF to Text Converter — Extract Text Free | Compress Pro',
+		description:
+			'Extract all text from a PDF into a .txt file right in your browser — digital documents only, scans need OCR. No uploads, no length limits. Free.',
+		tagline: 'The words out of any digital PDF — extracted on-device.',
+		related: ['/ocr-pdf', '/pdf-to-jpg', '/compress-pdf']
+	},
+	'grayscale-pdf': {
+		ogImage: '/og/grayscale-pdf.jpg',
+		preset: { kind: 'pdf-op', op: 'grayscale' },
+		accept: 'application/pdf,.pdf',
+		dropSubject: 'PDF files',
+		dropHint: 'Color PDFs · converted to grayscale locally',
+		title: 'Grayscale PDF — Convert to Black & White | Compress Pro',
+		description:
+			'Convert a color PDF to grayscale right in your browser — smaller files, ink-friendly printing, consistent mono look. Nothing is uploaded. Free.',
+		tagline: 'Color PDFs turned print-ready grayscale — all in-browser.',
+		related: ['/compress-pdf', '/pdf-to-pdfa', '/pdf-to-jpg']
+	},
+	'pdf-to-pdfa': {
+		ogImage: '/og/pdf-to-pdfa.jpg',
+		preset: { kind: 'pdf-op', op: 'toPdfa' },
+		accept: 'application/pdf,.pdf',
+		dropSubject: 'PDF files',
+		dropHint: 'PDF documents · archived as PDF/A locally',
+		title: 'PDF to PDF/A Converter — ISO Archival | Compress Pro',
+		description:
+			'Convert PDFs to PDF/A-2b right in your browser — the ISO archival standard courts and registries require. Ghostscript runs locally, zero uploads. Free.',
+		tagline: 'Archive-grade PDF/A-2b conversion — run on your device.',
+		related: ['/compress-pdf', '/grayscale-pdf', '/merge-pdf']
 	},
 	'merge-pdf': {
 		ogImage: '/og/merge-pdf.jpg',

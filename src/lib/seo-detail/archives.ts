@@ -130,6 +130,30 @@ export const DETAILS: Record<string, SeoDetail | ConverterDetail> = {
 		tagline: 'Make tar.gz tarballs in your browser — nothing uploaded.',
 		related: ['/zip-to-tar-gz', '/tar-gz-to-zip', '/create-tar']
 	},
+	'create-tar-bz2': {
+		ogImage: '/og/create-tar-bz2.jpg',
+		preset: { kind: 'archive', op: 'create', to: 'tbz2' },
+		accept: '',
+		dropSubject: 'any files',
+		dropHint: 'Any files · packed into one tar.bz2 locally',
+		title: 'Create TAR.BZ2 Online — Private, No Upload | Compress Pro',
+		description:
+			'Bundle files into a .tar.bz2 right in your browser — bzip2 squeezes tighter than gzip for text and source trees. Nothing is uploaded anywhere. Free.',
+		tagline: 'Tarballs with bzip2 compression — built in your browser.',
+		related: ['/create-tar-gz', '/create-tar', '/bzip2-files']
+	},
+	'create-tar-xz': {
+		ogImage: '/og/create-tar-xz.jpg',
+		preset: { kind: 'archive', op: 'create', to: 'txz' },
+		accept: '',
+		dropSubject: 'any files',
+		dropHint: 'Any files · packed into one tar.xz locally',
+		title: 'Create TAR.XZ Online — Private, No Upload | Compress Pro',
+		description:
+			'Bundle files into a .tar.xz right in your browser — the tightest mainstream tarball format, ideal for releases. Nothing is uploaded anywhere. Free.',
+		tagline: 'The hardest-squeezing tarballs — built in your browser.',
+		related: ['/create-tar-gz', '/xz-files', '/create-7z']
+	},
 	'gzip-files': {
 		ogImage: '/og/gzip-files.jpg',
 		preset: { kind: 'archive', op: 'create', to: 'gz' },
@@ -214,6 +238,18 @@ export const DETAILS: Record<string, SeoDetail | ConverterDetail> = {
 		tagline: 'Gunzip .gz files in your browser — nothing gets uploaded.',
 		related: ['/gzip-files', '/extract-tar-gz', '/zip-files']
 	},
+	'extract-z': {
+		ogImage: '/og/extract-z.jpg',
+		preset: { kind: 'archive', op: 'extract' },
+		accept: '.z,application/x-compress',
+		dropSubject: '.Z files',
+		dropHint: 'Unix compress .Z · decompressed locally',
+		title: 'Extract .Z Files Online — Unix Compress | Compress Pro',
+		description:
+			'Open unix .Z (compress) files right in your browser — decompress ancient archives and .tar.Z chains without installing anything. No uploads. Free.',
+		tagline: 'Ancient unix .Z archives, opened right in your browser.',
+		related: ['/extract-gz', '/zip-files', '/extract-tar-gz']
+	},
 	'extract-iso': {
 		ogImage: '/og/extract-iso.jpg',
 		preset: { kind: 'archive', op: 'extract' },
@@ -285,6 +321,99 @@ export const DETAILS: Record<string, SeoDetail | ConverterDetail> = {
 			'Open LHA and LZH archives in your browser — the format of 90s Japan, Amiga scenes and retro software. Extracted locally; nothing gets uploaded.',
 		tagline: 'Open LHA and LZH archives — retro formats, done locally.',
 		related: ['/extract-arj', '/zip-files', '/create-7z']
+	},
+	// Hub page of the ebook tab (pathFor target) — FORMATS entries carry no
+	// preset (and converterFor never resolves them, so accept/dropSubject
+	// would be dead weight); the tab defaults + TAB_ACCEPT are the behavior.
+	'compress-epub': {
+		ogImage: '/og/compress-epub.jpg',
+		title: 'Compress EPUB Online — Free, Private, No Upload | Compress Pro',
+		description:
+			'Compress EPUB e-books right in your browser — the images inside are re-encoded, text and layout stay untouched. No uploads, no accounts. Free & private.',
+		tagline: 'Lighter e-books, same text — shrunk on your own device.',
+		related: ['/compress-cbz', '/cbr-to-cbz', '/compress-image']
+	},
+	'compress-cbz': {
+		ogImage: '/og/compress-cbz.jpg',
+		preset: { kind: 'ebook' },
+		accept: '.cbz',
+		dropSubject: 'CBZ comics',
+		dropHint: 'CBZ archives · pages recompressed locally',
+		title: 'Compress CBZ Comics Online — Private, No Upload | Compress Pro',
+		description:
+			'Compress CBZ comic archives right in your browser — pages re-encoded at your quality, optional downscale for e-readers. Nothing is uploaded. Free.',
+		tagline: 'Comic archives slimmed page by page — all on your device.',
+		related: ['/compress-epub', '/cbr-to-cbz', '/compress-jpg']
+	},
+	'cbr-to-cbz': {
+		ogImage: '/og/cbr-to-cbz.jpg',
+		// quality 100: the per-entry keep-original guard then returns every
+		// page bit-identical — the converter promises a container change only.
+		preset: { kind: 'ebook', quality: 100 },
+		accept: '.cbr',
+		dropSubject: 'CBR comics',
+		dropHint: 'RAR comics · repacked as CBZ locally',
+		title: 'CBR to CBZ Converter — Free, Private, No Upload | Compress Pro',
+		description:
+			'Convert CBR comics to CBZ right in your browser — pages carried over bit-exact by default, optional recompression. Nothing uploaded. Free, no limits.',
+		tagline: 'RAR comics repacked as CBZ locally — pages bit-identical.',
+		related: ['/compress-cbz', '/extract-rar', '/compress-epub']
+	},
+	// Hub page of the model tab (pathFor target) — FORMATS entries carry no
+	// preset and converterFor never resolves them (no accept/dropSubject here).
+	'compress-glb': {
+		ogImage: '/og/compress-glb.jpg',
+		title: 'Compress GLB 3D Models — Draco, Free, No Upload | Compress Pro',
+		description:
+			'Compress GLB 3D models right in your browser — Draco or Meshopt geometry, texture recompression, optional simplify. Nothing is uploaded. Free & private.',
+		tagline: '3D models crushed with Draco — right on your own device.',
+		related: ['/compress-image', '/compress-video', '/zip-files']
+	},
+	// Hub page of the data tab (pathFor target) — FORMATS entries carry no
+	// preset and converterFor never resolves them (no accept/dropSubject here).
+	'csv-to-xlsx': {
+		ogImage: '/og/csv-to-xlsx.jpg',
+		title: 'CSV to Excel (XLSX) — Free, Private, No Upload | Compress Pro',
+		description:
+			'Convert CSV files to Excel XLSX right in your browser — delimiters auto-detected, numbers typed, nothing uploaded. Free, no accounts, no limits.',
+		tagline: 'CSV turned into a real Excel workbook — on your device.',
+		related: ['/xlsx-to-csv', '/json-to-yaml', '/zip-files']
+	},
+	'xlsx-to-csv': {
+		ogImage: '/og/xlsx-to-csv.jpg',
+		preset: { kind: 'data' },
+		accept: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,.xlsx,.xls',
+		dropSubject: 'Excel files',
+		dropHint: 'XLSX & legacy XLS · first sheet exported locally',
+		title: 'XLSX to CSV — Excel Export, Private, Free | Compress Pro',
+		description:
+			'Convert Excel XLSX files to clean CSV right in your browser — pick the delimiter, dates and formulas come out as values. Nothing is uploaded. Free.',
+		tagline: 'Excel sheets exported as clean CSV — all on your device.',
+		related: ['/csv-to-xlsx', '/yaml-to-json', '/zip-files']
+	},
+	'json-to-yaml': {
+		ogImage: '/og/json-to-yaml.jpg',
+		preset: { kind: 'data' },
+		accept: 'application/json,.json',
+		dropSubject: 'JSON files',
+		dropHint: 'JSON · rewritten as YAML locally',
+		title: 'JSON to YAML — Free, Private, No Upload | Compress Pro',
+		description:
+			'Convert JSON to readable YAML right in your browser — key order kept, values untouched, nothing uploaded. Free, no accounts, works offline too.',
+		tagline: 'JSON rewritten as readable YAML — right on your device.',
+		related: ['/yaml-to-json', '/csv-to-xlsx', '/compress-image']
+	},
+	'yaml-to-json': {
+		ogImage: '/og/yaml-to-json.jpg',
+		preset: { kind: 'data' },
+		accept: '.yaml,.yml',
+		dropSubject: 'YAML files',
+		dropHint: 'YAML · anchors resolved, output JSON',
+		title: 'YAML to JSON — Free, Private, No Upload | Compress Pro',
+		description:
+			'Convert YAML to JSON right in your browser — anchors resolved, pretty or minified output, nothing uploaded. Free, no accounts, works offline too.',
+		tagline: 'YAML flattened to portable JSON — right on your device.',
+		related: ['/json-to-yaml', '/csv-to-xlsx', '/compress-pdf']
 	},
 	'extract-arj': {
 		ogImage: '/og/extract-arj.jpg',

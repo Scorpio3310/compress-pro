@@ -698,6 +698,168 @@ export const BODIES: Record<string, SeoBody> = {
 			{ q: 'Is it private?', a: PRIVACY_A_AUDIO }
 		]
 	},
+	'webm-to-mp3': {
+		intro:
+			'Extract the audio track from WebM videos as MP3 — **decoded and encoded entirely in your browser**, with no upload and no length gate. Screen recordings, browser captures and downloaded clips: drop them in, the soundtrack comes out as its own file.',
+		guide: [
+			{
+				heading: 'From screen recording to shareable audio',
+				paragraphs: [
+					'WebM is what browser-based recorders and most capture tools produce, and the audio inside is often the part that matters — a call, a talk, a walkthrough narration. Extraction discards the picture and re-encodes the sound to MP3, the format that plays absolutely anywhere. [MP4 to MP3](/mp4-to-mp3) covers the MP4/MOV twin, and for editing-grade PCM instead, [MP4 to WAV](/mp4-to-wav) extracts losslessly.'
+				]
+			}
+		],
+		faq: [
+			{
+				q: 'Which WebM files work?',
+				a: 'Anything your browser can play — VP8 or VP9 video with Opus or Vorbis audio. The video track is discarded; the audio is decoded and re-encoded to MP3 at the bitrate you pick.'
+			},
+			{
+				q: 'Is quality lost in the conversion?',
+				a: 'One lossy encode to MP3 happens — inaudible for speech at 128 kbps and safe for music at 192 kbps and up. Pick a higher bitrate when the source matters.'
+			},
+			{
+				q: 'Can I get lossless audio instead?',
+				a: 'Yes — on the audio tab choose WAV or FLAC as the output; MP3 is simply the small, plays-anywhere option this page arrives set to.'
+			},
+			{ q: 'Is it private?', a: PRIVACY_A_AUDIO }
+		]
+	},
+	'mov-to-mp3': {
+		intro:
+			'Pull the audio out of iPhone and QuickTime MOV videos as MP3 — **everything runs in your browser**, nothing is uploaded, and there is no length limit. Concert clips, interviews, lectures, voice-heavy footage: the soundtrack downloads as a file of its own.',
+		guide: [
+			{
+				heading: 'iPhone video, audio-first',
+				paragraphs: [
+					'Sometimes the camera was just the way the sound got recorded. Extraction discards the picture and encodes the audio to MP3, so an hour of lecture footage becomes a small file any phone, player or notes app opens. [MP4 to MP3](/mp4-to-mp3) is the same tool for MP4 files, [MP4 to WAV](/mp4-to-wav) extracts editing-grade PCM instead, and the video itself shrinks on [Compress MOV](/compress-mov).'
+				]
+			}
+		],
+		faq: [
+			{
+				q: 'Does it work with any MOV?',
+				a: 'Any MOV your browser can decode — iPhone recordings (H.264 or HEVC with AAC audio) are exactly that. The audio re-encodes to MP3; the picture is discarded.'
+			},
+			{
+				q: 'What bitrate should I pick?',
+				a: '128 kbps is clean for speech; 192 kbps and up for music and gigs. The preset default suits voice-heavy recordings.'
+			},
+			{
+				q: 'Is there a length limit?',
+				a: 'No — an hour-long recording is fine. Processing runs on your device at roughly real-time speed or faster, and nothing queues on a server.'
+			},
+			{ q: 'Is it private?', a: PRIVACY_A_AUDIO }
+		]
+	},
+	'mp3-to-m4a': {
+		intro:
+			'Convert MP3 files to M4A (AAC) entirely in your browser — **no uploads, no accounts**. M4A is the native audio format of the Apple ecosystem and the container audiobook and podcast tooling prefers; the re-encode happens on your own device.',
+		guide: [
+			{
+				heading: 'When M4A makes sense — and when it does not',
+				paragraphs: [
+					'M4A/AAC is what iPhones, iTunes and audiobook apps speak natively, and some of them accept nothing else. But this is a lossy-to-lossy re-encode: quality cannot improve, only the packaging changes — so keep the MP3 masters and convert only where a tool demands M4A. The reverse trip is [M4A to MP3](/m4a-to-mp3); everything size-focused lives on [Compress audio](/compress-audio).'
+				]
+			}
+		],
+		faq: [
+			{
+				q: 'Will my audio sound better as M4A?',
+				a: 'No — re-encoding lossy audio cannot restore what MP3 encoding removed. AAC holds quality slightly better at matching bitrates, but converting existing MP3s is about compatibility, not fidelity.'
+			},
+			{
+				q: 'Why do some apps insist on M4A?',
+				a: 'Apple tooling, audiobook chapters and some podcast pipelines are built around the MP4 audio container. M4A slots in natively where MP3 gets refused or re-processed.'
+			},
+			{
+				q: 'What bitrate should I use?',
+				a: 'Match or exceed the source — 192 kbps is a safe default that avoids stacking audible loss on top of the original encode.'
+			},
+			{ q: 'Is it private?', a: PRIVACY_A_AUDIO }
+		]
+	},
+	'wav-to-m4a': {
+		intro:
+			'Convert WAV recordings to M4A (AAC) right in your browser — **roughly a tenth of the size with no audible difference at sensible bitrates**, encoded on your device. The natural export for recordings headed to Apple devices and modern apps.',
+		guide: [
+			{
+				heading: 'A tenth of the size, none of the drama',
+				paragraphs: [
+					'WAV stores raw samples at about 10 MB per stereo minute; AAC keeps what the ear actually hears. At 192 kbps the difference is inaudible for nearly all material, and the files shrink by an order of magnitude. Archival masters belong in lossless [WAV to FLAC](/wav-to-flac); maximum-compatibility sharing in [WAV to MP3](/wav-to-mp3) — M4A sits between them: small, modern, Apple-native.'
+				]
+			}
+		],
+		faq: [
+			{
+				q: 'M4A or MP3 for my WAVs?',
+				a: 'Both are lossy and small. M4A/AAC sounds slightly better at the same bitrate and is native across Apple devices; MP3 opens on absolutely everything ever made. Pick by where the file is headed.'
+			},
+			{
+				q: 'Is M4A lossless?',
+				a: 'No — AAC is lossy. For a mathematically perfect archive convert to FLAC instead; for listening and sharing, 192 kbps AAC is transparent for nearly all material.'
+			},
+			{
+				q: 'How much smaller will files get?',
+				a: 'Around 10× at 192 kbps — an hour-long WAV of ~600 MB lands near 80 MB as M4A with no audible change.'
+			},
+			{ q: 'Is it private?', a: PRIVACY_A_AUDIO }
+		]
+	},
+	'mp3-to-ogg': {
+		intro:
+			'Convert MP3 audio to OGG entirely in your browser — **encoded on your device, never uploaded**. The output is modern Opus in an OGG container: the license-free combination game engines, web stacks and voice platforms standardized on.',
+		guide: [
+			{
+				heading: 'Opus in OGG, and why that matters',
+				paragraphs: [
+					'This page writes Opus — the best lossy codec in wide use — into the standard .ogg container. Game engines load it, browsers decode it natively, and there are no licensing strings attached anywhere in the chain. One honest note: some very old players expect Vorbis inside .ogg and may refuse Opus; anything from the last decade reads it fine. Quality cannot improve on a lossy-to-lossy trip, so keep the MP3 sources. The reverse direction is [OGG to MP3](/ogg-to-mp3).'
+				]
+			}
+		],
+		faq: [
+			{
+				q: 'Is the output Vorbis or Opus?',
+				a: 'Opus — the modern successor, in a standard OGG container. Current software reads it everywhere; only very old Vorbis-era players may refuse it.'
+			},
+			{
+				q: 'Why OGG for games and the web?',
+				a: 'License-free, small, loops cleanly and is decoded natively by engines and browsers — which is why game pipelines and web apps ask for it over MP3.'
+			},
+			{
+				q: 'Does converting improve quality?',
+				a: 'No — lossy to lossy never does. The point is compatibility and size, not fidelity; pick a bitrate at or above the source to avoid audible stacking.'
+			},
+			{ q: 'Is it private?', a: PRIVACY_A_AUDIO }
+		]
+	},
+	'wav-to-opus': {
+		intro:
+			'Convert WAV audio to Opus right in your browser — **the most efficient lossy codec in wide use, encoded locally**. Voice recordings collapse from megabytes to almost nothing; music holds up at bitrates MP3 cannot touch.',
+		guide: [
+			{
+				heading: 'What Opus is unreasonably good at',
+				paragraphs: [
+					'Opus wins listening tests at every bitrate: speech is clean at 32–64 kbps, music rivals higher-rate MP3 at 96–128 kbps. That makes it the right target for voice notes, podcasts, streaming and game audio — WhatsApp voice messages are Opus already. For a lossless archive use [WAV to FLAC](/wav-to-flac); when a legacy player must open the file, [WAV to MP3](/wav-to-mp3) stays the compatibility pick.'
+				]
+			}
+		],
+		faq: [
+			{
+				q: 'What plays .opus files?',
+				a: 'Browsers, VLC, modern phones and every messaging platform. Older car stereos and iTunes-era software may refuse them — MP3 remains the safe pick for legacy gear.'
+			},
+			{
+				q: 'What bitrate should I pick for voice?',
+				a: '32–64 kbps sounds clean for speech — an hour of voice lands around 15–30 MB. Music is comfortable at 96–128 kbps.'
+			},
+			{
+				q: 'Is Opus really better than MP3?',
+				a: 'At the same bitrate, clearly — especially below 128 kbps, where MP3 degrades audibly and Opus stays composed. That efficiency is why voice platforms adopted it.'
+			},
+			{ q: 'Is it private?', a: PRIVACY_A_AUDIO }
+		]
+	},
 	'compress-mp4': {
 		intro:
 			'Compress MP4 files right on your own device — **no upload, no queue, no watermark**. Set a quality for a smaller look-alike, or type the limit you’re fighting and target-size mode finds the settings that fit. Audio is carried over untouched whenever possible.',
@@ -792,6 +954,153 @@ export const BODIES: Record<string, SeoBody> = {
 				a: 'The video is re-encoded to H.264 for reliable playback, and HDR colors are tone-mapped to standard range — the tool warns you when that applies. Raise the quality slider for extra headroom on detailed clips.'
 			},
 			{ q: 'Is my MOV uploaded?', a: PRIVACY_NO_VIDEO }
+		]
+	},
+	'remove-audio-from-video': {
+		intro:
+			'Remove the audio track from a video right in your browser — **the file never leaves your device**. Drop MP4, MOV or WebM; the muted result comes back as an MP4 with voices, noise and music gone from the file itself, not just turned down.',
+		guide: [
+			{
+				heading: 'Muted for good, not just in the player',
+				paragraphs: [
+					'Muting in a player hides the sound; this removes the track from the file, which is what you want before sharing clips whose audio is private, noisy or copyrighted. The page arrives with the remove-audio switch already on, and the output simply contains no audio stream. Need it under a size cap too? The quality and target-size controls work in the same run — this is [Compress video](/compress-video) machinery with the sound taken out.'
+				]
+			},
+			{
+				heading: 'What happens to the picture',
+				paragraphs: [
+					'The video is re-encoded through the same pipeline as the compressors — visually faithful at the default quality, and the removed audio alone saves whatever its bitrate cost. For the opposite job — keeping the sound and discarding the picture — [MP4 to MP3](/mp4-to-mp3) extracts the audio instead.'
+				]
+			}
+		],
+		faq: [
+			{
+				q: 'Is the audio really gone from the file?',
+				a: 'Yes — the output contains no audio track at all, which any player’s stream info confirms. It is not muted metadata; the stream is absent.'
+			},
+			{
+				q: 'Does removing audio make the video smaller?',
+				a: 'Somewhat — audio typically costs 128–256 kbps, so a 10-minute clip drops 10–20 MB from that alone. Lower the quality or set a target size in the same run to shrink the picture too.'
+			},
+			{
+				q: 'Which formats can I drop?',
+				a: 'MP4, M4V, MOV and WebM. The muted result is written as universal MP4, so it plays everywhere the original did — minus the sound.'
+			},
+			{ q: 'Is my video uploaded?', a: PRIVACY_NO_VIDEO }
+		]
+	},
+	'srt-to-vtt': {
+		intro:
+			'Convert SRT subtitles to WebVTT entirely in your browser — **the caption format HTML5 `<track>`, YouTube and every modern web player expects**. Drop the files and the .vtt twins come straight back; ASS files convert the same way. Nothing is ever uploaded.',
+		guide: [
+			{
+				heading: 'Why players want VTT',
+				paragraphs: [
+					'Browsers only render WebVTT in a `<track>` element — hand them an SRT and the captions simply never appear. The two formats are near twins: VTT adds a `WEBVTT` header, writes milliseconds with a dot instead of a comma, and drops the numeric counters. Small differences, but they are exactly what a strict parser rejects, which is why the conversion exists at all.'
+				]
+			},
+			{
+				heading: 'What changes — and what stays',
+				paragraphs: [
+					'Timing and text survive untouched: every cue keeps its start, end and lines. The header is added, commas become dots, counters go. ASS input works too — styling override tags are stripped and `\\N` line breaks unfold, so heavily styled karaoke tracks flatten into plain readable captions. Need the opposite direction? [VTT to SRT](/vtt-to-srt) is one click away.'
+				]
+			},
+			{
+				heading: 'Under the hood',
+				paragraphs: [
+					'The whole conversion is a few hundred lines of pure JavaScript running on your device — no WebAssembly engine, no server round-trip, which is why it is instant even for feature-length tracks. Files are parsed into cues, sorted, and rewritten in the target dialect; the text itself never leaves your browser. That matters for unreleased footage, court transcripts and anything else subtitles tend to spoil.'
+				]
+			}
+		],
+		faq: [
+			{
+				q: 'Which input formats can I drop?',
+				a: 'SRT, VTT and ASS/SSA — the format is detected from the file’s content, not its extension, so mislabeled files convert fine too.'
+			},
+			{
+				q: 'Do formatting tags survive?',
+				a: 'Basic ones do — <i>, <b> and <u> pass through. ASS styling overrides (colors, positioning, karaoke timing) are stripped, because SRT and most VTT players cannot render them anyway.'
+			},
+			{
+				q: 'Can I convert many files at once?',
+				a: 'Yes — drop a whole season. Each file converts independently and downloads on its own row, or grab everything as a ZIP.'
+			},
+			{
+				q: 'Are my subtitle files uploaded?',
+				a: 'No. The conversion is plain text processing that runs entirely in your browser — the server only delivers this page.' + PRIVACY_PROOF
+			}
+		]
+	},
+	'vtt-to-srt': {
+		intro:
+			'Convert WebVTT captions to SRT entirely in your browser — **the classic format practically every desktop player, TV and set-top box accepts**. Drop the .vtt files, download the .srt twins. Nothing is uploaded anywhere.',
+		guide: [
+			{
+				heading: 'When SRT is the right target',
+				paragraphs: [
+					'VTT rules the web, but the living room still speaks SRT: VLC, TVs, media servers and older players all expect it. The conversion re-numbers the cues, turns dot-milliseconds into commas and drops web-only cue settings like position and alignment — the text and timing carry over exactly.'
+				]
+			},
+			{
+				heading: 'Web-only markup is cleaned out',
+				paragraphs: [
+					'VTT allows voice spans, class tags and karaoke timestamps inside the text; SRT players would show those as literal angle-bracket noise. They are stripped on the way through, while <i>, <b> and <u> — which SRT understands — stay. NOTE and STYLE blocks disappear with them. The reverse trip is [SRT to VTT](/srt-to-vtt).'
+				]
+			}
+		],
+		faq: [
+			{
+				q: 'Do positions and colors carry over?',
+				a: 'No — SRT has no standard way to express them, so cue settings and styling tags are removed. The words and timing, the part that matters, stay exact.'
+			},
+			{
+				q: 'Will the file work on my TV?',
+				a: 'That is the point of SRT: it is the most widely accepted subtitle format there is. Name it after the video file and most players pick it up automatically.'
+			},
+			{
+				q: 'Can I fix out-of-order cues?',
+				a: 'Cues are sorted by start time during conversion, so a track stitched from fragments comes out in playable order.'
+			},
+			{
+				q: 'Is anything uploaded?',
+				a: 'No. The conversion is plain text processing that runs entirely in your browser — the server only delivers this page.' + PRIVACY_PROOF
+			}
+		]
+	},
+	'ass-to-srt': {
+		intro:
+			'Convert ASS and SSA subtitles to plain SRT entirely in your browser — **styling overrides stripped, dialogue and timing kept**. The anime-fansub format becomes something every player understands. Nothing is uploaded.',
+		guide: [
+			{
+				heading: 'What flattening means',
+				paragraphs: [
+					'ASS is a typesetting format: fonts, colors, positioning, karaoke effects — all encoded as override tags inside the dialogue. SRT carries none of that, so the tags are removed, `\\N` breaks become real line breaks, and each Dialogue line becomes a numbered SRT cue. Centisecond ASS timing is converted to milliseconds exactly.'
+				]
+			},
+			{
+				heading: 'Honest about the losses',
+				paragraphs: [
+					'Signs, songs and karaoke that relied on positioning will read as plain stacked text — that is inherent to SRT, not a converter flaw. Dialogue tracks convert cleanly. If the target is web video rather than a desktop player, [SRT to VTT](/srt-to-vtt) takes the result the rest of the way.'
+				]
+			}
+		],
+		faq: [
+			{
+				q: 'Are SSA files supported too?',
+				a: 'Yes — SSA is the older dialect of the same format and parses the same way. Both .ass and .ssa extensions are accepted.'
+			},
+			{
+				q: 'What happens to karaoke and sign typesetting?',
+				a: 'The effects are stripped and the underlying text stays. SRT simply cannot express animated or positioned text, so this is the honest best any converter can do.'
+			},
+			{
+				q: 'Does the timing stay frame-accurate?',
+				a: 'ASS stores centiseconds; SRT stores milliseconds. Conversion is exact — cues start and end precisely where they did.'
+			},
+			{
+				q: 'Are my files uploaded?',
+				a: 'No. The conversion is plain text processing that runs entirely in your browser — the server only delivers this page.' + PRIVACY_PROOF
+			}
 		]
 	}
 };
