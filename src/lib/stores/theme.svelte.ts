@@ -8,8 +8,15 @@ let mode: ThemeMode = $state('system');
 const systemDark = new MediaQuery('(prefers-color-scheme: dark)');
 
 if (browser) {
-	const stored = localStorage.getItem('theme') as ThemeMode | null;
-	if (stored === 'dark' || stored === 'light') mode = stored;
+	// Blocked storage (strict privacy modes) throws on ACCESS — an uncaught
+	// throw here takes the whole app down at module init (F-61). Degrade to
+	// the system theme instead.
+	try {
+		const stored = localStorage.getItem('theme') as ThemeMode | null;
+		if (stored === 'dark' || stored === 'light') mode = stored;
+	} catch {
+		// No storage — 'system' default stands.
+	}
 }
 
 const resolved: 'light' | 'dark' = $derived(
@@ -20,7 +27,11 @@ if (browser) {
 	$effect.root(() => {
 		$effect(() => {
 			document.documentElement.classList.toggle('dark', resolved === 'dark');
-			localStorage.setItem('theme', mode);
+			try {
+				localStorage.setItem('theme', mode);
+			} catch {
+				// Blocked/quota storage — the theme still applies, just not persisted.
+			}
 		});
 	});
 }

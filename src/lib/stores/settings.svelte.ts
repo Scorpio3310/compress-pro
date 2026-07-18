@@ -33,10 +33,17 @@ if (browser) {
 	// Module scope has no component owner — root the persisting effect manually.
 	$effect.root(() => {
 		$effect(() => {
-			localStorage.setItem(
-				STORAGE_KEY,
-				serializeSettings(SETTINGS_VERSION, $state.snapshot(settings))
-			);
+			// Guarded like the read above: quota-exceeded / blocked storage must
+			// degrade to "settings don't persist", never to an uncaught throw on
+			// every settings mutation (quality sweep F-61).
+			try {
+				localStorage.setItem(
+					STORAGE_KEY,
+					serializeSettings(SETTINGS_VERSION, $state.snapshot(settings))
+				);
+			} catch {
+				// Private-mode/quota storage — in-memory settings keep working.
+			}
 		});
 	});
 }
