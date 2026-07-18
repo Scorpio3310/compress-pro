@@ -204,10 +204,15 @@ async function decodePsd(bytes: ArrayBuffer): Promise<ImageData> {
 		throw new Error('Only 8-bit RGB or grayscale PSD files are supported — CMYK and 16/32-bit need a re-save');
 	}
 	// Upstream reads RAW-compression planes from one offset (all channels come
-	// back as the red plane) — real Photoshop always writes RLE, so refusing
-	// the raw layout beats silently producing wrong colors.
+	// back as the red plane) — and real-world flattened PSDs commonly store raw
+	// composites (quality sweep F-05: every real sample did). Decode the raw
+	// composite section ourselves; the honest refusal stays as the fallback.
 	const red = (psd as unknown as { imageData?: { red?: { compression?: number } } }).imageData?.red;
 	if (psd.colorMode === 3 && red?.compression === 0) {
+		const { decodeRawPsdComposite } = await import('../codecs/psd-raw');
+		const raw = decodeRawPsdComposite(bytes);
+		// Fresh copy — same ImageData foreign-buffer rule as the composite path.
+		if (raw) return new ImageData(new Uint8ClampedArray(raw.data), raw.width, raw.height);
 		throw new Error('This PSD stores uncompressed image data — re-save it in Photoshop and try again');
 	}
 	const rgba = await psd.composite();

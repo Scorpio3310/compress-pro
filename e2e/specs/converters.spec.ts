@@ -703,6 +703,26 @@ test('CV-45: /psd-to-jpg flattens a Photoshop file via @webtoon/psd', async ({ p
 	assertDiffBudget(ratio, DIFF_BUDGET.q90, 'CV-45 psd→jpg');
 });
 
+test('CV-45b: /psd-to-jpg decodes RAW-composite PSDs (the real-world default)', async ({
+	page
+}) => {
+	// F-05 (quality sweep 2026-07-18): every real sample PSD stores an
+	// uncompressed (RawData) composite, and the app refused them all with a
+	// "re-save it in Photoshop" error — @webtoon/psd misreads raw planes, so
+	// codecs/psd-raw.ts now decodes the raw composite section directly.
+	await gotoPath(page, '/psd-to-jpg');
+	await upload(page, fx('photo-640x400-raw.psd'));
+	await compress(page);
+	const art = await downloadRow(page);
+	const m = await imageMeta(art.bytes);
+	expect(m.format).toBe('jpeg');
+	expect([m.width, m.height]).toEqual([640, 400]);
+	// Same-pixels PNG twin — proves the raw planes decoded as R,G,B (the
+	// upstream bug would tint everything red).
+	const { ratio } = await pixelDiff(readFileSync(fx('psd-ref.png')), art.bytes);
+	assertDiffBudget(ratio, DIFF_BUDGET.q90, 'CV-45b raw psd→jpg');
+});
+
 test('CV-46: /psd-to-png converts losslessly at quality 100', async ({ page }) => {
 	await gotoPath(page, '/psd-to-png');
 	await expect(page).toHaveTitle(/PSD to PNG/);

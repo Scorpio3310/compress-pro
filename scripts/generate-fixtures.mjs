@@ -479,6 +479,41 @@ async function generateImages() {
 		manifest['psd-ref.png'] = { width: w, height: h };
 	}
 
+	// 20b. photo-640x400-raw.psd — SAME pixels, compression=0 (RawData planes).
+	// Real-world PSDs commonly store raw composites (every filesamples.com
+	// sample does — quality sweep F-05); the app decodes them via
+	// codecs/psd-raw.ts because @webtoon/psd misreads raw planes upstream.
+	// Shares psd-ref.png with the RLE twin.
+	{
+		const w = 640,
+			h = 400;
+		const src = await photoScene(w, h, { seed: 77 });
+		const { data } = await sharp(src).removeAlpha().raw().toBuffer({ resolveWithObject: true });
+		const header = new DataView(new ArrayBuffer(26));
+		header.setUint32(0, 0x38425053); // '8BPS'
+		header.setUint16(4, 1); // version
+		header.setUint16(12, 3); // channels (RGB)
+		header.setUint32(14, h);
+		header.setUint32(18, w);
+		header.setUint16(22, 8); // depth
+		header.setUint16(24, 3); // color mode RGB
+		const sections = new Uint8Array(24); // see the RLE twin for the layout
+		const sv = new DataView(sections.buffer);
+		sv.setUint32(8, 12);
+		sv.setUint32(12, 8);
+		// Raw: u16 compression=0, then planar channel dumps (R plane, G, B).
+		const img = new Uint8Array(2 + 3 * w * h);
+		for (let c = 0; c < 3; c++) {
+			for (let i = 0; i < w * h; i++) img[2 + c * w * h + i] = data[i * 3 + c];
+		}
+		const psd = new Uint8Array(26 + sections.length + img.length);
+		psd.set(new Uint8Array(header.buffer), 0);
+		psd.set(sections, 26);
+		psd.set(img, 26 + sections.length);
+		await write('photo-640x400-raw.psd', Buffer.from(psd));
+		manifest['photo-640x400-raw.psd'] = { width: w, height: h };
+	}
+
 	// 21. photo-720x480.jxl — sharp has no libjxl, so the JXL rides icodec's
 	// node build (the same decoder e2e/verify.ts uses to read it back).
 	{
