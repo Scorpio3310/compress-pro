@@ -7,9 +7,11 @@ import { expect, fx, fxMeta, test } from '../fixtures';
 import {
 	compress,
 	downloadCombined,
+	downloadRow,
 	dropFiles,
 	dropOnZone,
 	gotoTab,
+	rowByName,
 	rows,
 	upload
 } from '../helpers';
@@ -107,4 +109,55 @@ test('Z-06: zip-create accepts ANY file dropped on its dropzone', async ({ page 
 	await dropOnZone(page, [{ path: fx('notes.txt'), mimeType: 'text/plain' }]);
 	await expect(rows(page)).toHaveCount(1);
 	await expect(page.getByTestId('error-banner')).toHaveCount(0);
+});
+
+test('Z-07: extract keeps real dotfiles and 0-byte entries, drops macOS noise', async ({
+	page
+}) => {
+	const meta = fxMeta<{ rows: string[] }>('bundle-dotfiles.zip');
+	await gotoTab(page, 'zip');
+	await setZipOp(page, 'Extract');
+	await upload(page, fx('bundle-dotfiles.zip'));
+	await compress(page);
+	// 1 upload row + .env, .htaccess, empty.txt, index.html — never the
+	// __MACOSX/AppleDouble/.DS_Store sidecars.
+	await expect(rows(page)).toHaveCount(1 + meta.rows.length);
+	for (const entry of meta.rows) {
+		await expect(rowByName(page, entry).first()).toBeVisible();
+	}
+	await expect(page.getByText('.DS_Store')).toHaveCount(0);
+	// The 0-byte placeholder downloads as an honest empty file.
+	const art = await downloadRow(page, 'empty.txt');
+	expect(art.bytes.length).toBe(0);
+});
+
+test('Z-08: ZipCrypto stored zip — password error, then real plaintext, never ciphertext', async ({
+	page
+}) => {
+	const meta = fxMeta<{ password: string; text: string }>('bundle-zipcrypto.zip');
+	await gotoTab(page, 'zip');
+	await setZipOp(page, 'Extract');
+	await upload(page, fx('bundle-zipcrypto.zip'));
+	// No password: fflate would silently return key-header+XOR ciphertext —
+	// the run must route to the worker and say so instead.
+	await compress(page, { expectError: true, timeout: 120_000 });
+	await expect(page.getByTestId('error-banner')).toContainText(/password/i);
+
+	await page.locator('#archive-password').fill(meta.password);
+	await compress(page, { timeout: 120_000 });
+	const art = await downloadRow(page, 'secret.txt');
+	expect(art.bytes.toString('utf8'), 'decrypted plaintext, not ciphertext').toBe(meta.text);
+});
+
+test('Z-09: legacy cp437 name decodes to its real characters', async ({ page }) => {
+	const meta = fxMeta<{ displayName: string; text: string }>('bundle-cp437.zip');
+	await gotoTab(page, 'zip');
+	await setZipOp(page, 'Extract');
+	await upload(page, fx('bundle-cp437.zip'));
+	await compress(page);
+	// 'Résumé.pdf', not 'Rsum.pdf' with invisible C1 controls.
+	await expect(rowByName(page, meta.displayName)).toBeVisible();
+	const art = await downloadRow(page, meta.displayName);
+	expect(art.name).toBe(meta.displayName);
+	expect(art.bytes.toString('utf8')).toBe(meta.text);
 });

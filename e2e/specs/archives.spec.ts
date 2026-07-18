@@ -110,7 +110,8 @@ test('AR-04: extract RAR v5 @smoke', async ({ page, rec }) => {
 });
 
 // The long tail rides one table — every format the extract op advertises.
-// (cab's 0-byte "empty" member is dropped by design, same as fflate always did.)
+// (cab's 0-byte "empty" member gets a row too — empty placeholders are real
+// files; only macOS sidecar noise is dropped.)
 for (const fixture of [
 	'sample-v4.rar',
 	'sample-v5.rar',
@@ -123,7 +124,7 @@ for (const fixture of [
 ] as const) {
 	test(`AR-05 extracts ${fixture}`, async ({ page }) => {
 		const meta = ARCHIVE_FIXTURES[fixture];
-		const expected = meta.entries.filter((e) => e !== 'empty');
+		const expected = meta.entries;
 		await gotoTab(page, 'zip');
 		await setOp(page, 'Extract');
 		await upload(page, fxArchive(fixture));

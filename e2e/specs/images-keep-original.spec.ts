@@ -4,7 +4,7 @@
  */
 import { readFileSync } from 'node:fs';
 import { expect, fx, test } from '../fixtures';
-import { compress, downloadRow, gotoTab, setOutputFormat, upload } from '../helpers';
+import { compress, downloadRow, gotoTab, rows, setOutputFormat, upload } from '../helpers';
 import { imageMeta } from '../verify';
 
 test('K-01: pre-optimized jpg → jpg keeps original bytes @smoke', async ({ page, rec }) => {
@@ -35,6 +35,9 @@ test('K-02: conversion is honored even when the output is larger', async ({ page
 	await upload(page, fx('tiny-optimized.jpg'));
 	await setOutputFormat(page, 'PNG'); // lossless png of a photo ≫ jpg source
 	await compress(page);
+	// The row chip must agree with the "↑ larger" summary: a grown conversion
+	// reads "+N%", never the old clamped "−0%".
+	await expect(rows(page).first()).toContainText(/\+\d+%/);
 	const art = await downloadRow(page);
 	const m = await imageMeta(art.bytes);
 	expect(m.format, 'conversion must not silently keep the jpg').toBe('png');
@@ -46,7 +49,7 @@ test('K-02: conversion is honored even when the output is larger', async ({ page
 		input: { name: 'tiny-optimized.jpg', bytes: input.length },
 		output: { name: art.name, bytes: art.bytes.length, format: m.format },
 		metrics: { grewBytes: art.bytes.length - input.length },
-		note: 'Row chip floors savings at 0% while the summary shows "↑ larger" — asymmetry by design, documented.',
+		note: 'Chip and summary agree since the savings clamp fix: grown conversions read "+N%" and "↑ larger".',
 		assets: {
 			original: rec.saveAsset('K-02', 'original', 'tiny-optimized.jpg', fx('tiny-optimized.jpg')),
 			output: rec.saveAsset('K-02', 'output', art.name, art.bytes)

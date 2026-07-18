@@ -20,6 +20,8 @@ import type {
 } from '$lib/types';
 import { isBundlingArchiveFormat, isImageFormat } from '$lib/types';
 import { ARCHIVE_OUTPUT_EXT, sanitizeEntryName } from '$lib/codecs/sevenzip-args';
+import { readZipEntryMeta, stripC1 } from '$lib/zip-meta';
+import { spreadCombinedProgress } from '$lib/combined-progress';
 import { runWithConcurrency } from '$lib/concurrency';
 import { compressImage, type ImageProgress } from '$lib/codecs/image';
 import { compressSvg } from '$lib/codecs/svg';
@@ -73,8 +75,13 @@ function replaceExtension(filename: string, newExt: string | undefined): string 
 	return (dot > 0 ? filename.slice(0, dot) : filename) + newExt;
 }
 
-function savingsPercent(originalSize: number, compressedSize: number): number {
-	return Math.max(0, Math.round((1 - compressedSize / originalSize) * 100));
+/** Signed: NEGATIVE when the output grew. Conversions legitimately grow
+ *  (jpg→png, vectorize) and formatSignedPercent renders negatives as "+N%" —
+ *  the old 0-floor made every grown row read "−0%" while the summary said
+ *  "↑ larger" on the same screen. Exported for unit tests. */
+export function savingsPercent(originalSize: number, compressedSize: number): number {
+	if (!originalSize) return 0;
+	return Math.round((1 - compressedSize / originalSize) * 100);
 }
 
 /** True only when THIS run's own signal fired. Error identity is deliberately
@@ -206,7 +213,9 @@ function entryRow(
 	used: Set<string>,
 	info: string | null
 ): CompressedFile {
-	const short = uniqueEntryName(sanitizeEntryName(entryPath.split('/').pop()!), used);
+	// stripC1 first: sanitizeEntryName only strips C0 controls, and latin1-
+	// decoded legacy names (or hostile archives) carry invisible C1s.
+	const short = uniqueEntryName(sanitizeEntryName(stripC1(entryPath.split('/').pop()!)), used);
 	used.add(short);
 	// SVG is never content-sniffed; '' keeps today's default otherwise.
 	const blob = new Blob([bytes as BlobPart], { type: displayableImageMime(short) ?? '' });
@@ -223,11 +232,24 @@ function entryRow(
 	};
 }
 
-/** Entries worth a row: real files, not folder markers, empty blobs or
- *  dotfile noise (__MACOSX/.DS_Store) — same rule fflate extract always had. */
-function extractableEntry(path: string, size: number): boolean {
-	return !path.endsWith('/') && size > 0 && !path.split('/').pop()!.startsWith('.');
+/** Entries worth a row: real files — not folder markers, and not macOS
+ *  sidecar noise (__MACOSX/, .DS_Store, AppleDouble ._*). Real dotfiles
+ *  (.env, .gitignore) and 0-byte placeholders DO get rows: the old
+ *  "starts with a dot or is empty" rule silently withheld files the
+ *  archive genuinely contains. */
+function extractableEntry(path: string): boolean {
+	if (path.endsWith('/')) return false;
+	const segments = path.split('/');
+	if (segments.includes('__MACOSX')) return false;
+	const base = segments[segments.length - 1];
+	return base !== '.DS_Store' && !base.startsWith('._');
 }
+
+/** The fflate fast paths buffer the whole batch AND the output in main-thread
+ *  renderer RAM (fflate's internal workers copy rather than transfer — ~2-3×
+ *  input peak). Above this the streaming 7z worker path takes over: WORKERFS
+ *  mounts read inputs lazily and the heap lives in the worker. */
+export const FFLATE_FAST_PATH_MAX_BYTES = 500 * 1024 * 1024;
 
 /**
  * Archive tab (fflate + 7z-wasm).
@@ -265,11 +287,19 @@ async function createArchiveBundle(
 ): Promise<PdfToolOutput> {
 	const sum = files.reduce((total, f) => total + f.size, 0);
 	const outName = `archive${ARCHIVE_OUTPUT_EXT[settings.outputFormat]}`;
-	const base = { fileIndex: 0, fileCount: 1, fileName: outName };
-	onProgress({ ...base, fileFraction: 0, detail: null, stage: 'processing' });
+	// One output from N inputs — the spreader advances the page's N rows so
+	// they don't all sit on "queued" under a "0/N done" header for the run.
+	const spread = spreadCombinedProgress(files.length, outName, onProgress);
+	spread.report(0, null);
 	try {
-		if (settings.outputFormat === 'zip' && !settings.password) {
-			// fflate fast path — no wasm download for the everyday case.
+		if (
+			settings.outputFormat === 'zip' &&
+			!settings.password &&
+			sum <= FFLATE_FAST_PATH_MAX_BYTES
+		) {
+			// fflate fast path — no wasm download for the everyday case. Bigger
+			// batches take the worker path below: this one buffers every input
+			// plus the whole output in main-thread RAM.
 			const fflate = await import('fflate');
 			const entries: Record<string, Uint8Array> = {};
 			const used = new Set<string>();
@@ -278,12 +308,7 @@ async function createArchiveBundle(
 				const name = uniqueEntryName(files[i].name, used);
 				used.add(name);
 				entries[name] = new Uint8Array(await files[i].file.arrayBuffer());
-				onProgress({
-					...base,
-					fileFraction: ((i + 1) / files.length) * 0.7,
-					detail: `reading ${files[i].name}`,
-					stage: 'processing'
-				});
+				spread.report(((i + 1) / files.length) * 0.7, `reading ${files[i].name}`);
 			}
 			const data = await new Promise<Uint8Array>((resolve, reject) =>
 				fflate.zip(entries, { level: settings.level }, (error, out) =>
@@ -295,25 +320,22 @@ async function createArchiveBundle(
 			// if that CPU burn ever needs reclaiming); the catch below maps this
 			// to the empty cancelled output.
 			signal?.throwIfAborted();
-			onProgress({ ...base, fileFraction: 1, detail: null, stage: 'done' });
+			spread.finish();
 			const blob = new Blob([data as BlobPart], { type: 'application/zip' });
 			return { results: [], failures: [], combined: makeCombined(outName, blob, sum, null) };
 		}
 
 		const tools = await import('$lib/codecs/archive-tools');
-		let lastFraction = 0;
 		const { blob, name } = await tools.createBundle(
 			files,
 			settings,
 			'archive',
-			(fraction, detail) => {
-				// Monotonic clamp — see the identical per-file sites below.
-				lastFraction = fraction == null ? lastFraction : Math.max(lastFraction, fraction);
-				onProgress({ ...base, fileFraction: lastFraction, detail, stage: 'processing' });
-			},
+			// The spreader holds the peak itself (chained/two-stage creates
+			// restart their scale window; null = indeterminate pulse).
+			(fraction, detail) => spread.report(fraction, detail),
 			signal
 		);
-		onProgress({ ...base, fileFraction: 1, detail: null, stage: 'done' });
+		spread.finish();
 		return { results: [], failures: [], combined: makeCombined(name, blob, sum, null) };
 	} catch (error) {
 		if (wasCancelled(signal, error)) return { results: [], failures: [], combined: null };
@@ -437,29 +459,56 @@ async function extractArchives(
 		onProgress({ ...base, fileFraction: 0, detail: null, stage: 'processing' });
 		try {
 			let rows: CompressedFile[] | null = null;
+			let noExtractable = false;
 
-			if (!settings.password && /\.zip$/i.test(file.name)) {
-				// fflate fast path; ANY failure (encrypted entries, zip64 quirks,
+			if (
+				!settings.password &&
+				/\.zip$/i.test(file.name) &&
+				file.size <= FFLATE_FAST_PATH_MAX_BYTES
+			) {
+				// fflate fast path; ANY failure (AES entries, zip64 quirks,
 				// misnamed file) falls through to the worker for a better answer.
+				// Oversized zips skip it — this path buffers the archive plus
+				// every entry in main-thread RAM.
 				try {
 					const fflate = await import('fflate');
 					const bytes = new Uint8Array(await file.file.arrayBuffer());
 					signal?.throwIfAborted();
-					const entries = await new Promise<Record<string, Uint8Array>>((resolve, reject) =>
-						fflate.unzip(bytes, (error, out) => (error ? reject(error) : resolve(out)))
-					);
-					// A cancel mid-unzip must not commit rows (result discarded; see
-					// the createArchiveBundle note on fflate's internal workers).
-					signal?.throwIfAborted();
-					const names = Object.keys(entries).filter((n) => extractableEntry(n, entries[n].length));
-					if (names.length) {
-						rows = names.map((n, e) => entryRow(file.id, e, n, entries[n], used, null));
+					// fflate never reads general-purpose bit 0: a ZipCrypto STORED
+					// entry "extracts" as key-header + XOR ciphertext with no error.
+					// Only the worker can decrypt — or answer 'password-protected'
+					// honestly — so encrypted zips must never take this path.
+					const meta = readZipEntryMeta(bytes);
+					if (!meta?.some((entry) => entry.encrypted)) {
+						const entries = await new Promise<Record<string, Uint8Array>>((resolve, reject) =>
+							fflate.unzip(bytes, (error, out) => (error ? reject(error) : resolve(out)))
+						);
+						// A cancel mid-unzip must not commit rows (result discarded; see
+						// the createArchiveBundle note on fflate's internal workers).
+						signal?.throwIfAborted();
+						// fflate decodes non-UTF-8 names as latin1, but legacy Windows
+						// archivers wrote cp437 — accents become invisible C1 controls.
+						// Label rows with the central directory's correct decode.
+						const displayName = new Map(
+							(meta ?? []).map((entry) => [entry.fflateName, entry.name])
+						);
+						const names = Object.keys(entries).filter((n) => extractableEntry(n));
+						if (names.length) {
+							rows = names.map((n, e) =>
+								entryRow(file.id, e, displayName.get(n) ?? n, entries[n], used, null)
+							);
+						} else if (Object.keys(entries).length) {
+							// Parsed fine, holds nothing extractable — the worker would
+							// only re-derive the same answer after a 1.65 MB wasm download.
+							noExtractable = true;
+						}
 					}
 				} catch (error) {
 					if (wasCancelled(signal, error)) break;
 					rows = null;
 				}
 			}
+			if (noExtractable) throw new Error('The archive contains no extractable files');
 
 			if (!rows) {
 				const tools = await import('$lib/codecs/archive-tools');
@@ -476,7 +525,7 @@ async function extractArchives(
 					},
 					signal
 				);
-				const real = entries.filter((e) => extractableEntry(e.path, e.bytes.byteLength));
+				const real = entries.filter((e) => extractableEntry(e.path));
 				if (!real.length) throw new Error('The archive contains no extractable files');
 				// The chaining note (e.g. deb control files skipped) rides on the
 				// first row — once per archive, not once per entry.
@@ -511,20 +560,21 @@ export async function runPdfTool(
 	const tools = await import('$lib/codecs/pdf-tools');
 
 	if (settings.op === 'merge') {
+		const spread = spreadCombinedProgress(files.length, 'merged.pdf', onProgress);
 		try {
 			const sum = files.reduce((total, f) => total + f.size, 0);
-			const base = { fileIndex: 0, fileCount: 1, fileName: 'merged.pdf' };
 			const mergeShare = settings.mergeCompress ? 0.2 : 1;
 			let blob = await tools.mergePdfs(
 				files.map((f) => f.file),
-				(done, total, detail) =>
-					onProgress({
-						...base,
-						fileFraction: mergeShare * (done / total),
-						detail: detail ? `merging ${detail}` : null,
-						stage: 'processing'
-					})
+				(done, total, detail) => {
+					// mergePdfs (pdf-lib, main thread) takes no signal — this
+					// per-file tick is the only Cancel seam the merge has, so gate
+					// it here; otherwise a cancelled run grinds on and commits.
+					signal?.throwIfAborted();
+					spread.report(mergeShare * (done / total), detail ? `merging ${detail}` : null);
+				}
 			);
+			signal?.throwIfAborted();
 			let warning: string | null = null;
 			if (settings.mergeCompress) {
 				const merged = new File([blob], 'merged.pdf', { type: 'application/pdf' });
@@ -533,19 +583,15 @@ export async function runPdfTool(
 				const out = await compressPdf(
 					merged,
 					settings,
-					(p) =>
-						onProgress({
-							...base,
-							fileFraction: 0.2 + 0.8 * peak(pdfFraction(p)),
-							detail: pdfDetail(p),
-							stage: 'processing'
-						}),
+					(p) => spread.report(0.2 + 0.8 * peak(pdfFraction(p)), pdfDetail(p)),
 					signal
 				);
+				// A cancel during the gs pass must never commit its result.
+				signal?.throwIfAborted();
 				blob = out.blob;
 				warning = out.warning;
 			}
-			onProgress({ ...base, fileFraction: 1, detail: null, stage: 'done' });
+			spread.finish();
 			return {
 				results: [],
 				failures: [],
@@ -558,17 +604,18 @@ export async function runPdfTool(
 	}
 
 	if (settings.op === 'fromImages') {
+		const spread = spreadCombinedProgress(files.length, 'images.pdf', onProgress);
 		try {
 			const sum = files.reduce((total, f) => total + f.size, 0);
-			const base = { fileIndex: 0, fileCount: 1, fileName: 'images.pdf' };
 			const blob = await tools.imagesToPdf(
 				files.map((f) => f.file),
 				{ quality: settings.imageQuality },
-				(done, total, detail) =>
-					onProgress({ ...base, fileFraction: done / total, detail, stage: 'processing' }),
+				(done, total, detail) => spread.report(done / total, detail),
 				signal
 			);
-			onProgress({ ...base, fileFraction: 1, detail: null, stage: 'done' });
+			// imagesToPdf consults the signal itself, but gate the commit too.
+			signal?.throwIfAborted();
+			spread.finish();
 			return { results: [], failures: [], combined: makeCombined('images.pdf', blob, sum, null) };
 		} catch (error) {
 			if (wasCancelled(signal, error)) return { results: [], failures: [], combined: null };
@@ -678,6 +725,33 @@ export async function runPdfTool(
 	return { results, failures, combined: null };
 }
 
+/** Raster formats the jpg tab accepts that only the image worker's wasm
+ *  decoders can read (utif2/psd/libjxl) — createImageBitmap, the vtracer
+ *  worker's decoder, fails on all of them in every browser. RAW is detected
+ *  separately (isRawFile) because it predecodes outside the worker. */
+function needsBitmapBridge(name: string, mime: string): boolean {
+	const lower = name.toLowerCase();
+	const mimeLower = mime.toLowerCase();
+	return (
+		/\.(tiff?|psd|jxl)$/.test(lower) ||
+		mimeLower === 'image/tiff' ||
+		mimeLower === 'image/jxl' ||
+		/photoshop/.test(mimeLower)
+	);
+}
+
+/** '%PDF-' in the first KB (the spec tolerates junk before the header), or
+ *  the file's own name/mime claim — OCR dispatch follows what the file IS. */
+async function isPdfInput(file: File): Promise<boolean> {
+	if (file.type === 'application/pdf' || /\.pdf$/i.test(file.name)) return true;
+	const head = new Uint8Array(await file.slice(0, 1024).arrayBuffer());
+	const magic = [0x25, 0x50, 0x44, 0x46, 0x2d]; // %PDF-
+	for (let i = 0; i + magic.length <= head.length; i++) {
+		if (magic.every((byte, at) => head[i + at] === byte)) return true;
+	}
+	return false;
+}
+
 /**
  * Images fan out across the worker pool; caps keep memory and nested-thread
  * counts sane. SVG/PDF stay serial (single worker per kind anyway).
@@ -768,7 +842,44 @@ export async function compressFiles(
 		if (isImage && (settings as ImageCompressionSettings).outputFormat === 'svg') {
 			const imageSettings = settings as ImageCompressionSettings;
 			const { vectorizeImage } = await import('$lib/codecs/vectorize');
-			blob = await vectorizeImage(file.file, imageSettings, signal);
+			let input = file.file;
+			// The vtracer worker decodes via createImageBitmap, which cannot read
+			// RAW/TIFF/PSD/JXL in any browser — formats this tab accepts and
+			// happily converts to JPG. Bridge them to a lossless full-quality PNG
+			// through the same decoders the raster outputs use, then vectorize.
+			if (isRawFile(file.name, file.file.type) || needsBitmapBridge(file.name, file.file.type)) {
+				let predecoded: PredecodedPixels | undefined;
+				if (isRawFile(file.name, file.file.type)) {
+					const { decodeRaw } = await import('$lib/codecs/raw');
+					predecoded = await decodeRaw(file.file, signal);
+				}
+				const bridged = await compressImage(
+					file.file,
+					// Lossless intermediate: q100 png, no resize, no target search.
+					{
+						...imageSettings,
+						outputFormat: 'png',
+						quality: 100,
+						mode: 'quality',
+						maxDimension: null,
+						keepMetadata: false
+					},
+					(p) =>
+						onProgress({
+							...base,
+							fileFraction: imageFraction(p) * 0.4,
+							detail: imageDetail(p),
+							stage: 'processing'
+						}),
+					format,
+					signal,
+					predecoded
+				);
+				input = new File([bridged.blob], replaceExtension(file.name, extMap.png), {
+					type: 'image/png'
+				});
+			}
+			blob = await vectorizeImage(input, imageSettings, signal);
 			// The keep-original guard must never hand back raster bytes for an
 			// SVG request — vectorized photos are legitimately larger.
 			formatChanged = true;
@@ -859,6 +970,21 @@ export async function compressFiles(
 			// original File naturally (savings 0, info "No metadata found").
 		} else if (format === 'ocr') {
 			const ocrSettings = settings as OcrSettings;
+			// Parked files survive an op toggle, so op alone can't drive dispatch:
+			// a PDF under 'Extract text' would die inside tesseract's image decode,
+			// an image under 'Searchable PDF' inside pdf.js ('Invalid PDF
+			// structure'). Check what the file IS and refuse honestly instead.
+			const isPdf = await isPdfInput(file.file);
+			if (ocrSettings.op === 'toPdf' && !isPdf) {
+				throw new Error(
+					"'Searchable PDF' works on PDF scans — switch to 'Extract text' for images, or turn them into a PDF on /jpg-to-pdf first"
+				);
+			}
+			if (ocrSettings.op === 'toText' && isPdf) {
+				throw new Error(
+					"'Extract text' reads images — switch to 'Searchable PDF' for PDF scans, or export the pages as images on /pdf-to-jpg first"
+				);
+			}
 			const { ocrImage, ocrPdf } = await import('$lib/codecs/ocr');
 			const run = ocrSettings.op === 'toPdf' ? ocrPdf : ocrImage;
 			const out = await run(
@@ -1032,6 +1158,10 @@ export async function compressFiles(
 			// ebook's/model's "N of M … recompressed". EXIF keeps its info —
 			// "No metadata found" relies on exactly this branch.
 			if (isImage || format === 'ebook' || format === 'model') info = null;
+			// A warning always narrates the DISCARDED encode ("first frame
+			// only", "smallest achievable is N KB") — on the untouched original
+			// those claims are false. Reverts ship warning-free.
+			warning = null;
 		}
 
 		const result: CompressedFile = {
