@@ -472,6 +472,25 @@ for (const container of ['ttf', 'otf'] as const) {
 			await expect(outputPill(page, 'Basic Latin')).toHaveAttribute('aria-pressed', 'true');
 			await outputPill(page, PILL[container]).click();
 			await expect(outputPill(page, PILL[container])).toHaveAttribute('aria-pressed', 'true');
+			if (inInfo.flavor === 'cff') {
+				// hb-subset cannot process CFF outlines (fonts-phase2 memory) — the
+				// CONTRACT here is the honest refusal, not a subset.
+				const run = await compress(page, { expectError: true, timeout: 240_000 });
+				const honest = /CFF|PostScript/i.test(run.error ?? '');
+				rec.cell({
+					family: 'fonts',
+					file: f!.rel,
+					tool: '/subset-font',
+					action: 'subset',
+					level: 'basic-latin',
+					status: honest ? 'pass' : 'fail',
+					inBytes: input.length,
+					durationMs: elapsed(),
+					notes: `CFF refusal contract: ${String(run.error).slice(0, 120)}`
+				});
+				expect(honest, `honest CFF refusal, got: ${run.error}`).toBe(true);
+				return;
+			}
 			await compress(page, { timeout: 240_000 });
 			const art = await downloadRow(page);
 			const outInfo = fontInfo(art.bytes); // decode-back

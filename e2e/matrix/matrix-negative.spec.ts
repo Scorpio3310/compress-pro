@@ -88,9 +88,13 @@ for (const cluster of [...clusters.keys()].sort()) {
 					batch.map((f) => ({ path: f.abs, mimeType: '' }))
 				);
 				const banner = page.getByTestId('error-banner');
-				await expect(banner, 'honest unsupported banner within 10 s').toContainText(
+				// dropFiles ferries base64 payloads through CDP — a 50 MB CR3 batch
+				// needs transfer headroom before the banner can possibly appear.
+				const batchBytes = batch.reduce((n, f) => n + f.bytes, 0);
+				const bannerTimeout = Math.max(10_000, Math.min(60_000, Math.round(batchBytes / 2_000)));
+				await expect(banner, 'honest unsupported banner (transfer-scaled)').toContainText(
 					'Unsupported file type',
-					{ timeout: 10_000 }
+					{ timeout: bannerTimeout }
 				);
 				await expect(banner, 'banner names the first rejected file').toContainText(batch[0].name);
 				await expect(rows(page), 'nothing may park on /').toHaveCount(0);
