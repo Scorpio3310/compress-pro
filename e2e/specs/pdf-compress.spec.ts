@@ -15,7 +15,7 @@ import {
 	setTargetMb,
 	upload
 } from '../helpers';
-import { pdfDocInfo, pdfInfo, pixelDiff } from '../verify';
+import { pdfDocInfo, pdfInfo, pdfTextContent, pixelDiff } from '../verify';
 
 // Ghostscript: 15 MB wasm compile + multi-pass runs need generous room.
 test.describe.configure({ timeout: 240_000 });
@@ -211,4 +211,47 @@ test('P-08: strip-metadata removes XMP and DOCINFO on medium AND low', async ({ 
 			}
 		});
 	}
+});
+
+test('P-30: filled form values stay visible and links survive compression', async ({
+	page,
+	rec
+}) => {
+	// F-03 (quality sweep 2026-07-18): the gs wasm build drops EVERY annotation
+	// on rewrite — filled AcroForm values and hyperlinks silently vanished. The
+	// fix flattens filled forms into page content before gs (values stay
+	// visible; text extraction sees them) and transplants /Link annotations
+	// back onto the compressed output.
+	const input = readFileSync(fx('form-filled.pdf'));
+	await gotoTab(page, 'pdf');
+	await upload(page, fx('form-filled.pdf'));
+	const run = await compress(page, { timeout: 120_000 });
+	const art = await downloadRow(page);
+	expect((await pdfInfo(art.bytes)).pageCount).toBe(2);
+
+	// The filled value must remain VISIBLE content (flatten), not vanish.
+	const text = await pdfTextContent(art.bytes);
+	expect(text, 'filled field value visible after compression').toContain('MATRIX-VALUE-42');
+
+	// Both link annotations survive: external URI + internal GoTo.
+	const raw = art.bytes.toString('latin1');
+	expect(raw, 'URI link survives').toContain('example.com/matrix-link');
+	expect((raw.match(/\/Link/g) ?? []).length, 'both /Link annots present').toBeGreaterThanOrEqual(
+		2
+	);
+
+	// Honesty: the flatten is surfaced to the user as a row note/warning.
+	expect(
+		run.warnings.join(' '),
+		'flatten surfaced to the user'
+	).toMatch(/form/i);
+
+	rec.record({
+		id: 'P-30',
+		settings: { tab: 'pdf', op: 'compress', level: 'medium' },
+		input: { name: 'form-filled.pdf', bytes: input.length, pages: 2 },
+		output: { name: art.name, bytes: art.bytes.length },
+		note: 'Filled AcroForm flattened before gs (values stay visible); /Link annots transplanted after.',
+		assets: { output: rec.saveAsset('P-30', 'output', art.name, art.bytes) }
+	});
 });

@@ -1514,6 +1514,66 @@ async function generatePdfs() {
 		manifest['text-3pages.pdf'] = { pages: 3 };
 	}
 
+	// 22b. form-filled.pdf — filled AcroForm + link annotations. The gs wasm
+	// build drops EVERY annotation on rewrite (quality sweep F-03): filled form
+	// values and hyperlinks vanish. This fixture proves the preservation path:
+	// values must stay VISIBLE (flatten pre-pass) and links must survive
+	// (post-pass transplant).
+	{
+		const doc = await PDFDocument.create();
+		const font = await doc.embedFont(StandardFonts.Helvetica);
+		const page1 = doc.addPage(A4);
+		const page2 = doc.addPage(A4);
+		page1.drawText('Interactive fixture — filled form + links', { x: 50, y: 780, size: 16, font });
+		page2.drawText('Second page (GoTo link target)', { x: 50, y: 780, size: 16, font });
+		const form = doc.getForm();
+		const nameField = form.createTextField('fixture.name');
+		nameField.setText('MATRIX-VALUE-42');
+		nameField.addToPage(page1, { x: 50, y: 700, width: 240, height: 24, font });
+		const agree = form.createCheckBox('fixture.agree');
+		agree.addToPage(page1, { x: 50, y: 660, width: 18, height: 18 });
+		agree.check();
+		form.updateFieldAppearances(font);
+		// pdf-lib has no high-level link API — raw /Link annots (URI + GoTo).
+		const uriLink = doc.context.register(
+			doc.context.obj({
+				Type: 'Annot',
+				Subtype: 'Link',
+				Rect: [50, 600, 260, 620],
+				Border: [0, 0, 0],
+				A: { Type: 'Action', S: 'URI', URI: pdfLib.PDFString.of('https://example.com/matrix-link') }
+			})
+		);
+		const gotoLink = doc.context.register(
+			doc.context.obj({
+				Type: 'Annot',
+				Subtype: 'Link',
+				Rect: [50, 560, 260, 580],
+				Border: [0, 0, 0],
+				Dest: [page2.ref, 'Fit']
+			})
+		);
+		page1.node.set(PDFName.of('Annots'), doc.context.obj([uriLink, gotoLink]));
+		page1.drawText('Visit example.com/matrix-link', {
+			x: 52,
+			y: 605,
+			size: 11,
+			font,
+			color: rgb(0.1, 0.3, 0.8)
+		});
+		page1.drawText('Jump to page 2', { x: 52, y: 565, size: 11, font, color: rgb(0.1, 0.3, 0.8) });
+		writeFileSync(join(OUT, 'form-filled.pdf'), await doc.save());
+		const check = await PDFDocument.load(readFileSync(join(OUT, 'form-filled.pdf')));
+		assertEq('form-filled.pdf', 'pageCount', check.getPageCount(), 2);
+		assertEq(
+			'form-filled.pdf',
+			'field value',
+			check.getForm().getTextField('fixture.name').getText(),
+			'MATRIX-VALUE-42'
+		);
+		manifest['form-filled.pdf'] = { pages: 2, fieldValue: 'MATRIX-VALUE-42' };
+	}
+
 	// 23. image-heavy.pdf — 3 A4 pages, full-bleed ~300 DPI JPEGs (compressible)
 	{
 		const doc = await PDFDocument.create();

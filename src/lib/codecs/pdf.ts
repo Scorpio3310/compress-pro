@@ -1,5 +1,11 @@
 import type { PdfCompressionSettings, PdfLevel } from '$lib/types';
 import { callWorker } from '$lib/workers/rpc';
+import {
+	prepareInteractive,
+	scanInteractive,
+	transplantLinks,
+	type CollectedLink
+} from './pdf-interactive';
 import { searchTargetSize, targetNotReachableWarning } from './target-search';
 
 export interface PdfProgress {
@@ -345,6 +351,37 @@ async function runPipeline(
 	return runGs(intermediate.buffer as ArrayBuffer, params, onPage, signal);
 }
 
+/** F-03: the gs engine drops every annotation — flatten filled forms up front
+ *  (values stay visible) and remember /Link annots for the post-pass. On any
+ *  pdf-lib parse failure the raw bytes go to gs unchanged. */
+async function prepInteractive(
+	input: ArrayBuffer
+): Promise<{ gsInput: ArrayBuffer; links: CollectedLink[]; flattenNote: string | null }> {
+	if (!scanInteractive(input)) return { gsInput: input, links: [], flattenNote: null };
+	try {
+		const prep = await prepareInteractive(input);
+		return {
+			gsInput: prep.bytes,
+			links: prep.links,
+			flattenNote: prep.flattened
+				? 'Form fields were flattened so filled-in values stay visible.'
+				: null
+		};
+	} catch {
+		return { gsInput: input, links: [], flattenNote: null };
+	}
+}
+
+/** Best-effort link restore — a transplant failure keeps the gs output. */
+async function restoreLinks(out: Uint8Array, links: CollectedLink[]): Promise<Uint8Array> {
+	if (links.length === 0) return out;
+	try {
+		return await transplantLinks(out, links);
+	} catch {
+		return out;
+	}
+}
+
 export async function compressPdf(
 	file: File,
 	settings: PdfCompressionSettings,
@@ -352,31 +389,42 @@ export async function compressPdf(
 	signal?: AbortSignal
 ): Promise<{ blob: Blob; warning: string | null }> {
 	const input = await file.arrayBuffer();
+	const { gsInput, links, flattenNote } = await prepInteractive(input);
 
 	if (settings.mode === 'target') {
 		return compressToTarget(
 			input,
+			gsInput,
+			links,
+			flattenNote,
 			Math.max(1, Math.round(settings.targetMb * 1_000_000)),
 			onProgress,
 			signal
 		);
 	}
 
-	const out = await runPipeline(
-		input,
-		LEVELS[settings.level],
-		(page, pageCount) => onProgress({ page, pageCount }),
-		signal
+	const out = await restoreLinks(
+		await runPipeline(
+			gsInput,
+			LEVELS[settings.level],
+			(page, pageCount) => onProgress({ page, pageCount }),
+			signal
+		),
+		links
 	);
-	// Ghostscript can inflate already-optimized PDFs; keep the original then.
+	// Ghostscript can inflate already-optimized PDFs; keep the original then
+	// (the original still carries its live form + links — nothing to flag).
 	if (out.byteLength >= input.byteLength) {
 		return { blob: new Blob([input], { type: 'application/pdf' }), warning: null };
 	}
-	return { blob: new Blob([out as BlobPart], { type: 'application/pdf' }), warning: null };
+	return { blob: new Blob([out as BlobPart], { type: 'application/pdf' }), warning: flattenNote };
 }
 
 async function compressToTarget(
 	input: ArrayBuffer,
+	gsInput: ArrayBuffer,
+	links: CollectedLink[],
+	flattenNote: string | null,
 	targetBytes: number,
 	onProgress: (p: PdfProgress) => void,
 	signal?: AbortSignal
@@ -386,7 +434,7 @@ async function compressToTarget(
 		targetBytes,
 		(rung, state) =>
 			runPipeline(
-				input,
+				gsInput,
 				LADDER[rung],
 				(page, pageCount) => onProgress({ ...state, page, pageCount }),
 				signal
@@ -396,19 +444,27 @@ async function compressToTarget(
 		signal
 	);
 
-	// The original already fitting beats any lossy rung of the same size class.
+	// The original already fitting beats any lossy rung of the same size class
+	// (and keeps its live form + links — nothing to flag).
 	if (input.byteLength <= targetBytes && (!best || best.byteLength >= input.byteLength)) {
 		return { blob: new Blob([input], { type: 'application/pdf' }), warning: null };
 	}
 
 	if (best) {
-		return { blob: new Blob([best as BlobPart], { type: 'application/pdf' }), warning: null };
+		const withLinks = await restoreLinks(best, links);
+		return {
+			blob: new Blob([withLinks as BlobPart], { type: 'application/pdf' }),
+			warning: flattenNote
+		};
 	}
 
 	// Nothing fits — return the smallest result with a warning.
+	const withLinks = await restoreLinks(smallest, links);
 	return {
-		blob: new Blob([smallest as BlobPart], { type: 'application/pdf' }),
-		warning: targetNotReachableWarning(targetBytes, smallest.byteLength)
+		blob: new Blob([withLinks as BlobPart], { type: 'application/pdf' }),
+		warning: [targetNotReachableWarning(targetBytes, smallest.byteLength), flattenNote]
+			.filter(Boolean)
+			.join(' ')
 	};
 }
 
@@ -433,7 +489,9 @@ export async function grayscalePdf(
 		'-f',
 		'/in.pdf'
 	];
-	const out = await runGsArgs(await file.arrayBuffer(), args, onPage, signal);
+	// Same engine, same annotation loss as compress — flatten + re-link (F-03).
+	const { gsInput, links } = await prepInteractive(await file.arrayBuffer());
+	const out = await restoreLinks(await runGsArgs(gsInput, args, onPage, signal), links);
 	return new Blob([out as BlobPart], { type: 'application/pdf' });
 }
 
@@ -471,6 +529,10 @@ export async function pdfaPdf(
 		'-f',
 		'/in.pdf'
 	];
-	const out = await runGsArgs(await file.arrayBuffer(), args, onPage, signal);
+	// Flatten filled forms so their values survive (F-03); PDF/A-2b allows
+	// /Link annots, and the transplant re-save keeps the catalog's XMP +
+	// OutputIntents objects intact (verified by PT-24's conformance greps).
+	const { gsInput, links } = await prepInteractive(await file.arrayBuffer());
+	const out = await restoreLinks(await runGsArgs(gsInput, args, onPage, signal), links);
 	return new Blob([out as BlobPart], { type: 'application/pdf' });
 }
