@@ -528,10 +528,17 @@ async function generateImages() {
 		// diffs measure a single JPG generation (CV-19's tiff shape) — and
 		// compress-jxl gets a genuinely compressible input.
 		const encoded = jxl.encode(
-			{ data: new Uint8Array(data.buffer, data.byteOffset, data.byteLength), width: info.width, height: info.height },
+			{
+				data: new Uint8Array(data.buffer, data.byteOffset, data.byteLength),
+				width: info.width,
+				height: info.height
+			},
 			{ lossless: true, effort: 5 }
 		);
-		await write('photo-720x480.jxl', Buffer.from(encoded.buffer, encoded.byteOffset, encoded.byteLength));
+		await write(
+			'photo-720x480.jxl',
+			Buffer.from(encoded.buffer, encoded.byteOffset, encoded.byteLength)
+		);
 		manifest['photo-720x480.jxl'] = { width: 720, height: 480 };
 	}
 }
@@ -990,9 +997,13 @@ async function generateRaw() {
 	const { createRequire } = await import('node:module');
 	const require = createRequire(import.meta.url);
 	const factory = (await import('libraw-wasm/dist/libraw.js')).default;
-	const mod = await factory({ wasmBinary: readFileSync(require.resolve('libraw-wasm/dist/libraw.wasm')) });
+	const mod = await factory({
+		wasmBinary: readFileSync(require.resolve('libraw-wasm/dist/libraw.wasm'))
+	});
 	const lr = new mod.LibRaw();
-	lr.open(new Uint8Array(dng), {});
+	// MUST mirror RAW_OPEN_SETTINGS (src/lib/codecs/raw.ts) — the twin is the
+	// ground truth for CV-40's pixel diff, so the develop settings must match.
+	lr.open(new Uint8Array(dng), { outputBps: 8, useCameraWb: true });
 	const img = lr.imageData();
 	assertEq('photo.dng', 'width', img.width, W);
 	assertEq('photo.dng', 'height', img.height, H);
@@ -1106,6 +1117,50 @@ async function generateColorAndGiants() {
 			displayWidth: 3800,
 			displayHeight: 5600
 		};
+	}
+
+	// 33. wide-17000x260.jpg — wider than the 16383 px WebP hard cap (and at
+	// 4.4 MP above the AUTO_AVIF gate): static WebP output must clamp with an
+	// info line (R-07), Auto must keep full resolution via the JPG candidate
+	// (R-08) — both used to die with a bare "Encoding error.".
+	{
+		const src = await photoScene(17000, 260, { seed: 92, noise: 30 });
+		await write(
+			'wide-17000x260.jpg',
+			await sharp(src).jpeg({ quality: 80, mozjpeg: true }).toBuffer()
+		);
+		const m = await meta('wide-17000x260.jpg');
+		assertEq('wide-17000x260.jpg', 'dims', [m.width, m.height], [17000, 260]);
+		manifest['wide-17000x260.jpg'] = { width: 17000, height: 260, size: m.size };
+	}
+
+	// 34. wide-alpha-17000x120.png — over the WebP cap WITH transparency: on
+	// Auto, WebP is the only candidate that can carry the alpha, so the encode
+	// must clamp to 16383 px and say so (R-09) instead of failing.
+	{
+		const src = await sharp(Buffer.from(alphaGraphicSvg(17000, 120)))
+			.png()
+			.toBuffer();
+		await write('wide-alpha-17000x120.png', src);
+		const m = await meta('wide-alpha-17000x120.png');
+		assertEq('wide-alpha-17000x120.png', 'dims', [m.width, m.height], [17000, 120]);
+		assertEq('wide-alpha-17000x120.png', 'hasAlpha', m.hasAlpha ?? false, true);
+		manifest['wide-alpha-17000x120.png'] = { width: 17000, height: 120 };
+	}
+
+	// 35. pano-30000x2000.jpg — 60 MP panorama for the ICO path: padToSquare
+	// BEFORE downscaling would allocate a 30000² RGBA square (~3.6 GB) for an
+	// output that is at most 256 px (CV-47). Upscaled from a small scene —
+	// content quality is irrelevant, geometry is the point.
+	{
+		const src = await photoScene(3000, 200, { seed: 93, noise: 25 });
+		await write(
+			'pano-30000x2000.jpg',
+			await sharp(src).resize(30000, 2000).jpeg({ quality: 70, mozjpeg: true }).toBuffer()
+		);
+		const m = await meta('pano-30000x2000.jpg');
+		assertEq('pano-30000x2000.jpg', 'dims', [m.width, m.height], [30000, 2000]);
+		manifest['pano-30000x2000.jpg'] = { width: 30000, height: 2000, size: m.size };
 	}
 }
 
@@ -2258,9 +2313,15 @@ function generateErrorFiles() {
 async function generateEbooks() {
 	// Structurally honest minimal EPUB 3 + CBZ fixtures. Images ride STORED
 	// (tuple form, level 0) like the app writes them; XML deflates at 6.
-	const jpg1 = await sharp(await photoScene(1200, 800, { seed: 96 })).jpeg({ quality: 90 }).toBuffer();
-	const jpg2 = await sharp(await photoScene(900, 1200, { seed: 97, noise: 60 })).jpeg({ quality: 88 }).toBuffer();
-	const png1 = await sharp(Buffer.from(alphaGraphicSvg(600, 400))).png().toBuffer();
+	const jpg1 = await sharp(await photoScene(1200, 800, { seed: 96 }))
+		.jpeg({ quality: 90 })
+		.toBuffer();
+	const jpg2 = await sharp(await photoScene(900, 1200, { seed: 97, noise: 60 }))
+		.jpeg({ quality: 88 })
+		.toBuffer();
+	const png1 = await sharp(Buffer.from(alphaGraphicSvg(600, 400)))
+		.png()
+		.toBuffer();
 	const enc = (s) => new TextEncoder().encode(s);
 
 	const containerXml =
@@ -2284,13 +2345,20 @@ async function generateEbooks() {
 	};
 	const epub = zipSync(epubEntries);
 	// gen-verify the OCF rule the e2e later asserts on the OUTPUT
-	if ((epub[8] | (epub[9] << 8)) !== 0 || Buffer.from(epub.slice(30, 38)).toString() !== 'mimetype') {
+	if (
+		(epub[8] | (epub[9] << 8)) !== 0 ||
+		Buffer.from(epub.slice(30, 38)).toString() !== 'mimetype'
+	) {
 		throw new Error('sample.epub: mimetype-first/stored rule broken in generator');
 	}
 	await write('sample.epub', Buffer.from(epub));
 	manifest['sample.epub'] = {
 		entries: Object.keys(epubEntries).length,
-		imageSizes: { 'OEBPS/images/photo1.jpg': jpg1.length, 'OEBPS/images/photo2.jpg': jpg2.length, 'OEBPS/images/diagram.png': png1.length }
+		imageSizes: {
+			'OEBPS/images/photo1.jpg': jpg1.length,
+			'OEBPS/images/photo2.jpg': jpg2.length,
+			'OEBPS/images/diagram.png': png1.length
+		}
 	};
 
 	// DRM variant — real encryption algorithm, must be refused by the app.
@@ -2306,18 +2374,34 @@ async function generateEbooks() {
 	// page01 is an oversized scan (1400×2000) so the 1200 px cap has real work;
 	// the rest sit under every cap and must pass through un-resized.
 	const pages = [
-		await sharp(await photoScene(1400, 2000, { seed: 98 })).jpeg({ quality: 90 }).toBuffer()
+		await sharp(await photoScene(1400, 2000, { seed: 98 }))
+			.jpeg({ quality: 90 })
+			.toBuffer()
 	];
 	for (let i = 1; i < 4; i++) {
 		pages.push(
-			await sharp(await photoScene(700, 1000, { seed: 98 + i })).jpeg({ quality: 90 }).toBuffer()
+			await sharp(await photoScene(700, 1000, { seed: 98 + i }))
+				.jpeg({ quality: 90 })
+				.toBuffer()
 		);
 	}
-	const pageWebp = await sharp(await photoScene(700, 1000, { seed: 102 })).webp({ quality: 90 }).toBuffer();
-	const pageGif = await sharp(await photoScene(320, 460, { seed: 103 })).gif().toBuffer();
+	const pageWebp = await sharp(await photoScene(700, 1000, { seed: 102 }))
+		.webp({ quality: 90 })
+		.toBuffer();
+	const pageGif = await sharp(await photoScene(320, 460, { seed: 103 }))
+		.gif()
+		.toBuffer();
 	const comicInfo =
 		'<?xml version="1.0" encoding="utf-8"?><ComicInfo xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><Title>Fixture Comic</Title><Series>Compress Pro Fixtures</Series><PageCount>6</PageCount></ComicInfo>';
-	const cbzOrder = ['page01.jpg', 'page02.jpg', 'page03.jpg', 'page04.jpg', 'page05.webp', 'page06.gif', 'ComicInfo.xml'];
+	const cbzOrder = [
+		'page01.jpg',
+		'page02.jpg',
+		'page03.jpg',
+		'page04.jpg',
+		'page05.webp',
+		'page06.gif',
+		'ComicInfo.xml'
+	];
 	const cbzBytes = [
 		...pages.map((p) => new Uint8Array(p)),
 		new Uint8Array(pageWebp),
@@ -2448,10 +2532,21 @@ async function generateModels() {
 		const buffer = doc.createBuffer();
 		const prim = doc
 			.createPrimitive()
-			.setIndices(doc.createAccessor().setType('SCALAR').setArray(new Uint16Array(indices)).setBuffer(buffer))
-			.setAttribute('POSITION', doc.createAccessor().setType('VEC3').setArray(new Float32Array(positions)).setBuffer(buffer))
-			.setAttribute('NORMAL', doc.createAccessor().setType('VEC3').setArray(new Float32Array(normals)).setBuffer(buffer))
-			.setAttribute('TEXCOORD_0', doc.createAccessor().setType('VEC2').setArray(new Float32Array(uvs)).setBuffer(buffer));
+			.setIndices(
+				doc.createAccessor().setType('SCALAR').setArray(new Uint16Array(indices)).setBuffer(buffer)
+			)
+			.setAttribute(
+				'POSITION',
+				doc.createAccessor().setType('VEC3').setArray(new Float32Array(positions)).setBuffer(buffer)
+			)
+			.setAttribute(
+				'NORMAL',
+				doc.createAccessor().setType('VEC3').setArray(new Float32Array(normals)).setBuffer(buffer)
+			)
+			.setAttribute(
+				'TEXCOORD_0',
+				doc.createAccessor().setType('VEC2').setArray(new Float32Array(uvs)).setBuffer(buffer)
+			);
 		if (withTexture) {
 			const texture = doc.createTexture('photo').setImage(withTexture).setMimeType('image/jpeg');
 			prim.setMaterial(doc.createMaterial('mat').setBaseColorTexture(texture));
@@ -2459,22 +2554,38 @@ async function generateModels() {
 		const node = doc.createNode('sphere').setMesh(doc.createMesh('sphere').addPrimitive(prim));
 		doc.getRoot().setDefaultScene(doc.createScene().addChild(node));
 		// 3-keyframe rotation — animation survival is an e2e assertion, not hope.
-		const input = doc.createAccessor().setType('SCALAR').setArray(new Float32Array([0, 1, 2])).setBuffer(buffer);
+		const input = doc
+			.createAccessor()
+			.setType('SCALAR')
+			.setArray(new Float32Array([0, 1, 2]))
+			.setBuffer(buffer);
 		const output = doc
 			.createAccessor()
 			.setType('VEC4')
 			.setArray(new Float32Array([0, 0, 0, 1, 0, Math.SQRT1_2, 0, Math.SQRT1_2, 0, 1, 0, 0]))
 			.setBuffer(buffer);
-		const sampler = doc.createAnimationSampler().setInput(input).setOutput(output).setInterpolation('LINEAR');
+		const sampler = doc
+			.createAnimationSampler()
+			.setInput(input)
+			.setOutput(output)
+			.setInterpolation('LINEAR');
 		doc
 			.createAnimation('spin')
 			.addSampler(sampler)
-			.addChannel(doc.createAnimationChannel().setTargetNode(node).setTargetPath('rotation').setSampler(sampler));
+			.addChannel(
+				doc
+					.createAnimationChannel()
+					.setTargetNode(node)
+					.setTargetPath('rotation')
+					.setSampler(sampler)
+			);
 		return { triangles: indices.length / 3, vertices: positions.length / 3 };
 	}
 
 	const textureJpeg = new Uint8Array(
-		await sharp(await photoScene(2048, 1024, { seed: 110 })).jpeg({ quality: 92 }).toBuffer()
+		await sharp(await photoScene(2048, 1024, { seed: 110 }))
+			.jpeg({ quality: 92 })
+			.toBuffer()
 	);
 	const io = new NodeIO().registerExtensions(ALL_EXTENSIONS).registerDependencies({
 		'draco3d.encoder': await draco3d.createEncoderModule({}),
@@ -2573,6 +2684,43 @@ await generatePdfs();
 	page.drawImage(img, { x: 0, y: 0, width: w, height: h });
 	await write('scan-text.pdf', Buffer.from(await doc.save()));
 	manifest['scan-text.pdf'] = { pages: 1 };
+}
+
+// scan-text-rot90.pdf — the same scan stored the way ADF scanners store
+// landscape pages: image drawn 90° CCW into a portrait page + /Rotate 90.
+// Viewers (and pdf.js renders) show it upright; the raw MediaBox does not.
+{
+	const { degrees } = pdfLib;
+	const png = readFileSync(join(OUT, 'graphic-bmp-ref.png'));
+	const doc = await PDFDocument.create();
+	const img = await doc.embedPng(png);
+	const w = img.width * 0.6;
+	const h = img.height * 0.6;
+	const page = doc.addPage([h, w]); // portrait MediaBox
+	// rotate 90° CCW around (x, y): the w×h image lands in x-h..x, y..y+w.
+	page.drawImage(img, { x: h, y: 0, width: w, height: h, rotate: degrees(90) });
+	page.setRotation(degrees(90));
+	await write('scan-text-rot90.pdf', Buffer.from(await doc.save()));
+	manifest['scan-text-rot90.pdf'] = { pages: 1, rotate: 90 };
+}
+
+// scan-text-locked.pdf — the SAME scan, owner-locked (empty user password,
+// AES-256): opens fine in every viewer/pdf.js, but pdf-lib cannot decrypt it,
+// so tools built on pdf-lib must refuse it up front instead of corrupting it.
+{
+	const { createRequire } = await import('node:module');
+	const require = createRequire(import.meta.url);
+	const qpdfFactory = require('@neslinesli93/qpdf-wasm');
+	const qpdf = await qpdfFactory({
+		locateFile: () => require.resolve('@neslinesli93/qpdf-wasm/dist/qpdf.wasm'),
+		print: () => {},
+		printErr: () => {}
+	});
+	qpdf.FS.writeFile('/in.pdf', readFileSync(join(OUT, 'scan-text.pdf')));
+	const exit = qpdf.callMain(['--encrypt', '', 'owner-secret', '256', '--', '/in.pdf', '/out.pdf']);
+	if (exit !== 0) throw new Error(`qpdf --encrypt failed (exit ${exit})`);
+	await write('scan-text-locked.pdf', Buffer.from(qpdf.FS.readFile('/out.pdf')));
+	manifest['scan-text-locked.pdf'] = { pages: 1, ownerLocked: true };
 }
 
 await generateAudio();

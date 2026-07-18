@@ -753,3 +753,26 @@ test('CV-46: /psd-to-png converts losslessly at quality 100', async ({ page }) =
 	const { ratio } = await pixelDiff(readFileSync(fx('psd-ref.png')), art.bytes);
 	expect(ratio, 'lossless PSD→PNG must be pixel-exact').toBe(0);
 });
+
+test('CV-47: /jpg-to-ico handles a 60 MP panorama without a giant square', async ({ page }) => {
+	// padToSquare BEFORE the downscale used to allocate a 30000² RGBA square
+	// (~3.6 GB) in the worker — for an output that is at most 256 px. The
+	// shrink-first order must finish comfortably inside a normal run.
+	test.slow(); // the 60 MP decode needs headroom under parallel-suite load
+	await gotoPath(page, '/jpg-to-ico');
+	await upload(page, fx('pano-30000x2000.jpg'));
+	await compress(page, { timeout: 90_000 });
+	const art = await downloadRow(page);
+	expect(art.name).toBe('pano-30000x2000.ico');
+	const ico = icoInfo(art.bytes);
+	expect(ico.count).toBe(5);
+	expect(ico.sizes).toContain(256);
+	expect(ico.sizes).toContain(16);
+	for (const entry of ico.entries) expect(entry.isPng, `${entry.size}px entry is PNG`).toBe(true);
+	// The panorama strip sits centered on a transparent square.
+	const big = ico.entries.find((e) => e.size === 256);
+	const raw = await decodeRaw(big!.bytes);
+	let transparent = 0;
+	for (let i = 3; i < raw.data.length; i += 4) if (raw.data[i] === 0) transparent++;
+	expect(transparent, 'square padding is transparent').toBeGreaterThan(0);
+});
