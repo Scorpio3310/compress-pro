@@ -69,6 +69,11 @@ function findAscii(hay: Uint8Array, needle: string): boolean {
 export async function prepareInteractive(input: ArrayBuffer): Promise<InteractivePrep> {
 	const { PDFDocument } = await import('pdf-lib');
 	const doc = await PDFDocument.load(input, { ignoreEncryption: true, updateMetadata: false });
+	// Encrypted (incl. owner-locked) inputs: pdf-lib parses the STRUCTURE but
+	// has no decryption — every string is ciphertext. Flattening would paint
+	// garbage and collected URIs would be mojibake (F-12). Bail; gs decrypts
+	// owner-locked files transparently on its own.
+	if (doc.isEncrypted) return { bytes: input, flattened: false, links: [] };
 	const links = await collectLinks(doc);
 
 	let flattened = false;
@@ -131,11 +136,27 @@ async function markAllFieldsDirty(form: PdfLibForm): Promise<void> {
 }
 
 async function collectLinks(doc: PdfLibDoc): Promise<CollectedLink[]> {
-	const { PDFArray, PDFDict, PDFName, PDFHexString, PDFNumber, PDFRef, PDFString } = await import(
-		'pdf-lib'
-	);
+	const libs = await import('pdf-lib');
+	const { PDFArray, PDFDict, PDFName, PDFHexString, PDFNumber, PDFString } = libs;
 	const pages = doc.getPages();
 	const refToIndex = new Map(pages.map((p, i) => [p.ref.toString(), i]));
+	const resolveNamed = makeNamedDestResolver(doc, libs);
+
+	/** Explicit array dest OR a named dest (PDFString/PDFName — hyperref,
+	 *  InDesign, Word TOCs) resolved through the catalog trees (F-13). */
+	const destToIndex = (dest: unknown): number | undefined => {
+		let arr = dest;
+		if (dest instanceof PDFString || dest instanceof PDFHexString) {
+			arr = resolveNamed(dest.decodeText());
+		} else if (dest instanceof PDFName) {
+			arr = resolveNamed(dest.toString().slice(1));
+		}
+		if (!(arr instanceof PDFArray) || arr.size() < 1) return undefined;
+		const ref = arr.get(0);
+		if (!(ref instanceof libs.PDFRef)) return undefined;
+		return refToIndex.get(ref.toString());
+	};
+
 	const links: CollectedLink[] = [];
 	pages.forEach((p, pageIndex) => {
 		const annots = p.node.Annots?.();
@@ -163,11 +184,11 @@ async function collectLinks(doc: PdfLibDoc): Promise<CollectedLink[]> {
 					const u = action.lookup(PDFName.of('URI'));
 					if (u instanceof PDFString || u instanceof PDFHexString) uri = u.decodeText();
 				} else if (kind === '/GoTo') {
-					destPageIndex = destIndex(action.lookup(PDFName.of('D')), refToIndex, PDFArray, PDFRef);
+					destPageIndex = destToIndex(action.lookup(PDFName.of('D')));
 				}
 			}
 			if (uri === undefined && destPageIndex === undefined) {
-				destPageIndex = destIndex(dict.lookup(PDFName.of('Dest')), refToIndex, PDFArray, PDFRef);
+				destPageIndex = destToIndex(dict.lookup(PDFName.of('Dest')));
 			}
 			if (uri !== undefined || destPageIndex !== undefined) {
 				links.push({
@@ -182,16 +203,52 @@ async function collectLinks(doc: PdfLibDoc): Promise<CollectedLink[]> {
 	return links;
 }
 
-function destIndex(
-	dest: unknown,
-	refToIndex: Map<string, number>,
-	PDFArrayCtor: typeof import('pdf-lib').PDFArray,
-	PDFRefCtor: typeof import('pdf-lib').PDFRef
-): number | undefined {
-	if (!(dest instanceof PDFArrayCtor) || dest.size() < 1) return undefined;
-	const ref = dest.get(0);
-	if (!(ref instanceof PDFRefCtor)) return undefined;
-	return refToIndex.get(ref.toString());
+type PdfLibModule = typeof import('pdf-lib');
+
+/** Lazy lookup over BOTH named-destination encodings: the old-style catalog
+ *  /Dests dictionary and the PDF 1.2+ /Names → /Dests name tree (Kids/Names
+ *  walked recursively). Values may be the dest array directly or a {D: array}
+ *  wrapper — both normalized here. */
+function makeNamedDestResolver(
+	doc: PdfLibDoc,
+	libs: PdfLibModule
+): (name: string) => unknown {
+	const { PDFArray, PDFDict, PDFName, PDFHexString, PDFString } = libs;
+	let map: Map<string, unknown> | null = null;
+	const build = (): Map<string, unknown> => {
+		const out = new Map<string, unknown>();
+		const catalog = doc.catalog;
+		const dests = catalog.lookup(PDFName.of('Dests'));
+		if (dests instanceof PDFDict) {
+			for (const [key] of dests.entries()) out.set(key.toString().slice(1), dests.lookup(key));
+		}
+		const names = catalog.lookup(PDFName.of('Names'));
+		const tree = names instanceof PDFDict ? names.lookup(PDFName.of('Dests')) : undefined;
+		const walk = (node: unknown, depth: number): void => {
+			if (depth > 32 || !(node instanceof PDFDict)) return;
+			const kids = node.lookup(PDFName.of('Kids'));
+			if (kids instanceof PDFArray) {
+				for (let i = 0; i < kids.size(); i++) walk(kids.lookup(i), depth + 1);
+			}
+			const pairs = node.lookup(PDFName.of('Names'));
+			if (pairs instanceof PDFArray) {
+				for (let i = 0; i + 1 < pairs.size(); i += 2) {
+					const key = pairs.lookup(i);
+					if (key instanceof PDFString || key instanceof PDFHexString) {
+						out.set(key.decodeText(), pairs.lookup(i + 1));
+					}
+				}
+			}
+		};
+		walk(tree, 0);
+		return out;
+	};
+	return (name) => {
+		map ??= build();
+		let value = map.get(name);
+		if (value instanceof PDFDict) value = value.lookup(PDFName.of('D'));
+		return value;
+	};
 }
 
 /**

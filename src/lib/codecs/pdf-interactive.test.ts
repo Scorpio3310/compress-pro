@@ -131,6 +131,88 @@ describe('prepareInteractive', () => {
 	});
 });
 
+describe('encrypted inputs (F-12)', () => {
+	it('leaves encrypted documents untouched — no mojibake links, no fake flatten', async () => {
+		// Owner-locked file (empty user password): pdf-lib parses the structure
+		// but every string is ciphertext — prepare must bail and let gs handle it.
+		const { dirname, join } = await import('node:path');
+		const { fileURLToPath } = await import('node:url');
+		const plain = await buildInteractivePdf();
+		const factory = (await import('@neslinesli93/qpdf-wasm')).default;
+		const wasmPath = join(
+			dirname(fileURLToPath(import.meta.url)),
+			'../../../node_modules/@neslinesli93/qpdf-wasm/dist/qpdf.wasm'
+		);
+		const origLog = console.log;
+		const origErr = console.error;
+		console.log = () => {};
+		console.error = () => {};
+		let encrypted: Uint8Array;
+		try {
+			const qpdf = await factory({ locateFile: () => wasmPath });
+			(qpdf.FS as unknown as { writeFile(p: string, d: Uint8Array): void }).writeFile(
+				'/in.pdf',
+				plain
+			);
+			qpdf.callMain(['--warning-exit-0', '--encrypt', '', 'owner-pw', '256', '--', '/in.pdf', '/out.pdf']);
+			encrypted = qpdf.FS.readFile('/out.pdf');
+		} finally {
+			console.log = origLog;
+			console.error = origErr;
+		}
+		const input = toArrayBuffer(encrypted);
+		const prep = await prepareInteractive(input);
+		expect(prep.flattened).toBe(false);
+		expect(prep.links).toEqual([]);
+		expect(prep.bytes).toBe(input);
+	});
+});
+
+describe('named destinations (F-13)', () => {
+	it('resolves /Names-tree GoTo destinations to page indices', async () => {
+		const doc = await PDFDocument.create();
+		const font = await doc.embedFont(StandardFonts.Helvetica);
+		const page1 = doc.addPage([595, 842]);
+		const page2 = doc.addPage([595, 842]);
+		page1.drawText('toc', { x: 50, y: 800, size: 12, font });
+		page2.drawText('target', { x: 50, y: 800, size: 12, font });
+		// Catalog /Names/Dests name tree: (sec1) -> [page2 /Fit]
+		const destArray = doc.context.obj([page2.ref, 'Fit']);
+		const destsTree = doc.context.obj({ Names: [PDFString.of('sec1'), destArray] });
+		doc.catalog.set(PDFName.of('Names'), doc.context.obj({ Dests: destsTree }));
+		const link = doc.context.register(
+			doc.context.obj({
+				Type: 'Annot',
+				Subtype: 'Link',
+				Rect: [50, 780, 150, 800],
+				A: { Type: 'Action', S: 'GoTo', D: PDFString.of('sec1') }
+			})
+		);
+		page1.node.set(PDFName.of('Annots'), doc.context.obj([link]));
+		const prep = await prepareInteractive(toArrayBuffer(await doc.save()));
+		expect(prep.links).toEqual([expect.objectContaining({ pageIndex: 0, destPageIndex: 1 })]);
+	});
+
+	it('resolves old-style catalog /Dests dictionary destinations', async () => {
+		const doc = await PDFDocument.create();
+		const page1 = doc.addPage([300, 300]);
+		const page2 = doc.addPage([300, 300]);
+		const destArray = doc.context.obj([page2.ref, 'Fit']);
+		doc.catalog.set(PDFName.of('Dests'), doc.context.obj({ chap2: destArray }));
+		const link = doc.context.register(
+			doc.context.obj({
+				Type: 'Annot',
+				Subtype: 'Link',
+				Rect: [10, 10, 100, 30],
+				Dest: 'chap2' // PDFName-style dest
+			})
+		);
+		page1.node.set(PDFName.of('Annots'), doc.context.obj([link]));
+		const prep = await prepareInteractive(toArrayBuffer(await doc.save()));
+		expect(prep.links).toEqual([expect.objectContaining({ pageIndex: 0, destPageIndex: 1 })]);
+	});
+});
+
 describe('transplantLinks', () => {
 	it('re-attaches links onto an annotation-stripped document', async () => {
 		const prep = await prepareInteractive(toArrayBuffer(await buildInteractivePdf()));
