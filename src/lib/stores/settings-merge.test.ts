@@ -16,7 +16,9 @@ describe('mergeStoredSettings', () => {
 			maxDimension: 1920,
 			outputFormat: 'webp',
 			downscaleToTarget: false,
-			keepMetadata: false
+			keepMetadata: false,
+			vectorMode: 'color',
+			vectorDetail: 60
 		});
 		expect(target.svg.precision).toBe(1);
 		expect(target.svg.aggressive).toBe(true);

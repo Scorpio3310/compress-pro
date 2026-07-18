@@ -4,6 +4,8 @@
  * visual diffs, pdf-lib for PDF structure, fflate for ZIP inspection.
  * (HEIC fixtures still carry a .preview.png proxy — report visuals only.)
  */
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import sharp from 'sharp';
 import pixelmatch from 'pixelmatch';
 import { unzipSync } from 'fflate';
@@ -35,6 +37,29 @@ export interface ImageMeta {
 }
 
 export async function imageMeta(buf: Buffer): Promise<ImageMeta> {
+	// sharp has no libjxl — sniff JXL up front and decode via icodec instead.
+	if (isJxlBuffer(buf)) {
+		const raw = await decodeJxlRaw(buf);
+		let hasAlpha = false;
+		for (let i = 3; i < raw.data.length; i += 4) {
+			if (raw.data[i] !== 255) {
+				hasAlpha = true;
+				break;
+			}
+		}
+		return {
+			format: 'jxl',
+			width: raw.width,
+			height: raw.height,
+			pages: 1,
+			delay: null,
+			hasAlpha,
+			space: undefined,
+			depth: undefined,
+			isProgressive: false,
+			bytes: buf.length
+		};
+	}
 	const m = await sharp(buf, { pages: -1 }).metadata();
 	let format: string = m.format ?? 'unknown';
 	if (format === 'heif') format = m.compression === 'av1' ? 'avif' : 'heic';
@@ -143,9 +168,57 @@ async function decodeHeicRaw(buf: Buffer): Promise<RawImage> {
 	};
 }
 
+// --- JXL (sharp has no libjxl either; same icodec node build) --------------
+
+/** Bare codestream (FF 0A) or ISO BMFF container ('JXL ' box). */
+export function isJxlBuffer(buf: Buffer): boolean {
+	if (buf.length >= 2 && buf[0] === 0xff && buf[1] === 0x0a) return true;
+	return (
+		buf.length >= 12 &&
+		buf.readUInt32BE(0) === 0x0c &&
+		buf.toString('latin1', 4, 8) === 'JXL ' &&
+		buf.readUInt32BE(8) === 0x0d0a870a
+	);
+}
+
+let jxlReady: Promise<HeicModule> | null = null;
+
+async function decodeJxlRaw(buf: Buffer): Promise<RawImage> {
+	(globalThis as Record<string, unknown>)._icodec_ImageData ??= (
+		data: Uint8Array,
+		width: number,
+		height: number,
+		depth: number
+	) => ({ data, width, height, depth });
+	jxlReady ??= import('icodec/node').then(async (m) => {
+		const jxl = m.jxl as unknown as HeicModule;
+		await jxl.loadDecoder();
+		return jxl;
+	});
+	const jxl = await jxlReady;
+	const img = jxl.decode(new Uint8Array(buf));
+	// No sRGB pass here: detectColorSpace cannot parse JXL containers, so the
+	// app's worker leaves these pixels alone too — parity by construction.
+	let rgba: Uint8Array;
+	if (img.depth && img.depth !== 8) {
+		const words = new Uint16Array(img.data.buffer, img.data.byteOffset, img.width * img.height * 4);
+		rgba = new Uint8Array(words.length);
+		const shift = img.depth - 8;
+		for (let i = 0; i < words.length; i++) rgba[i] = words[i] >> shift;
+	} else {
+		rgba = new Uint8Array(img.data.buffer, img.data.byteOffset, img.data.byteLength);
+	}
+	return {
+		data: Buffer.from(rgba.buffer, rgba.byteOffset, rgba.byteLength),
+		width: img.width,
+		height: img.height
+	};
+}
+
 /** Decode one frame to raw RGBA — doubles as the "decodes cleanly" check. */
 export async function decodeRaw(buf: Buffer, page = 0): Promise<RawImage> {
 	if (isHeicBuffer(buf)) return decodeHeicRaw(buf); // single-frame by nature
+	if (isJxlBuffer(buf)) return decodeJxlRaw(buf);
 	// toColourspace normalizes CMYK/16-bit inputs to comparable 8-bit sRGB.
 	const { data, info } = await sharp(buf, { page })
 		.toColourspace('srgb')
@@ -425,6 +498,44 @@ export async function pdfIsEncrypted(buf: Buffer): Promise<boolean> {
 	}
 }
 
+/** Per-page /Rotate angles (pdf-lib parse) — rotate-op verification. */
+export async function pdfRotations(buf: Buffer): Promise<number[]> {
+	const doc = await PDFDocument.load(new Uint8Array(buf), { ignoreEncryption: true });
+	return doc.getPages().map((p) => p.getRotation().angle);
+}
+
+/** Full text content of every page — searchable-PDF (OCR layer) verification. */
+export async function pdfTextContent(buf: Buffer): Promise<string> {
+	const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
+	const task = pdfjs.getDocument({ data: new Uint8Array(buf) });
+	const doc = await task.promise;
+	const parts: string[] = [];
+	for (let p = 1; p <= doc.numPages; p++) {
+		const page = await doc.getPage(p);
+		const content = await page.getTextContent();
+		parts.push(content.items.map((item) => ('str' in item ? item.str : '')).join(' '));
+	}
+	await task.destroy();
+	return parts.join('\n');
+}
+
+export interface PdfEncryptionMeta {
+	encrypted: boolean;
+	/** AES-256 (encryption revision 6) markers present in the Encrypt dict. */
+	aesv3: boolean;
+}
+
+/** Raw-byte scan — qpdf (and most writers) keep the Encrypt dict uncompressed,
+ *  so /AESV3 and /R 6 are greppable. pdf-lib's pdfIsEncrypted can't tell
+ *  revisions apart; this can, without decrypting anything. */
+export function pdfEncryptionMeta(buf: Buffer): PdfEncryptionMeta {
+	const text = buf.toString('latin1');
+	return {
+		encrypted: /\/Encrypt\b/.test(text),
+		aesv3: /\/AESV3/.test(text) && /\/R\s*6\b/.test(text)
+	};
+}
+
 /** DOCINFO fields as a reader sees them (updateMetadata off — no rewrite). */
 export async function pdfDocInfo(buf: Buffer): Promise<{ title?: string; author?: string }> {
 	const doc = await PDFDocument.load(new Uint8Array(buf), {
@@ -483,6 +594,53 @@ export async function sevenZipEntries(
 	return entries;
 }
 
+/**
+ * Encrypts a PDF via qpdf-wasm (the engine the app ships) with EXACT password
+ * bytes — no NFC pinning, unlike the app's protect path. Exists so specs can
+ * fabricate what Apple's PDF stack writes for non-ASCII passwords (NFD bytes)
+ * and prove the unlock retry path opens it. This build prunes the print/printErr
+ * hooks (they bind console at factory time — see qpdf.worker.ts), so console is
+ * patched around the run to keep qpdf's chatter out of test output.
+ */
+export async function qpdfEncrypt(buf: Buffer, password: string): Promise<Uint8Array> {
+	const factory = (await import('@neslinesli93/qpdf-wasm')).default;
+	const wasmPath = join(
+		dirname(fileURLToPath(import.meta.url)),
+		'../node_modules/@neslinesli93/qpdf-wasm/dist/qpdf.wasm'
+	);
+	const lines: string[] = [];
+	const capture = (...parts: unknown[]) => void lines.push(parts.join(' '));
+	const originalLog = console.log;
+	const originalError = console.error;
+	console.log = capture;
+	console.error = capture;
+	let exit: number;
+	let out: Uint8Array;
+	try {
+		const qpdf = await factory({ locateFile: () => wasmPath });
+		(qpdf.FS as unknown as { writeFile(path: string, data: Uint8Array): void }).writeFile(
+			'/in.pdf',
+			new Uint8Array(buf)
+		);
+		exit = qpdf.callMain([
+			'--warning-exit-0',
+			'--encrypt',
+			password,
+			password,
+			'256',
+			'--',
+			'/in.pdf',
+			'/out.pdf'
+		]);
+		out = qpdf.FS.readFile('/out.pdf');
+	} finally {
+		console.log = originalLog;
+		console.error = originalError;
+	}
+	if (exit !== 0) throw new Error(`qpdf encrypt exit ${exit}: ${lines.slice(-3).join(' | ')}`);
+	return out;
+}
+
 /** gunzip via node:zlib — independent of both fflate and 7zz. */
 export async function gunzipBuf(buf: Buffer): Promise<Buffer> {
 	const { gunzipSync } = await import('node:zlib');
@@ -494,6 +652,42 @@ export async function gunzipBuf(buf: Buffer): Promise<Buffer> {
  * an AES-256 extra field (0x9901) — how e2e proves "this zip is really
  * password-protected" without decrypting it.
  */
+/** First LOCAL file header: raw name + compression method — the OCF
+ *  "mimetype first and stored" rule can only be proven at the byte level. */
+export function zipFirstEntry(buf: Buffer): { name: string; method: number } {
+	if (buf.readUInt32LE(0) !== 0x04034b50) throw new Error('not a zip (no local file header)');
+	return {
+		method: buf.readUInt16LE(8),
+		name: buf.toString('utf8', 30, 30 + buf.readUInt16LE(26))
+	};
+}
+
+/** Entry names in CENTRAL-DIRECTORY order — the order readers/tools see.
+ *  (fflate's unzipSync loses order for integer-like names; this never does.) */
+export function zipCentralNames(buf: Buffer): string[] {
+	// EOCD: scan back over the (≤64 KB) comment for the 0x06054b50 signature.
+	let eocd = -1;
+	for (let at = buf.length - 22; at >= Math.max(0, buf.length - 22 - 65_535); at--) {
+		if (buf.readUInt32LE(at) === 0x06054b50) {
+			eocd = at;
+			break;
+		}
+	}
+	if (eocd === -1) throw new Error('not a zip (no end-of-central-directory)');
+	const count = buf.readUInt16LE(eocd + 10);
+	let at = buf.readUInt32LE(eocd + 16);
+	const names: string[] = [];
+	for (let i = 0; i < count; i++) {
+		if (buf.readUInt32LE(at) !== 0x02014b50) throw new Error('central directory walk desynced');
+		const nameLen = buf.readUInt16LE(at + 28);
+		const extraLen = buf.readUInt16LE(at + 30);
+		const commentLen = buf.readUInt16LE(at + 32);
+		names.push(buf.toString('utf8', at + 46, at + 46 + nameLen));
+		at += 46 + nameLen + extraLen + commentLen;
+	}
+	return names;
+}
+
 export function zipEntryEncrypted(buf: Buffer): boolean {
 	if (buf.readUInt32LE(0) !== 0x04034b50) return false;
 	const flags = buf.readUInt16LE(6);
@@ -676,4 +870,118 @@ export function sfntTableBytes(buf: Buffer): Record<string, Buffer> {
 /** tag → exact INNER table bytes of a WOFF — the byte-level losslessness probe. */
 export function woffTableBytes(buf: Buffer): Record<string, Buffer> {
 	return sfntTableBytes(Buffer.from(unwrapWoff1(new Uint8Array(buf))));
+}
+
+// --- GLB (gltf-transform NodeIO — the same engine the app runs) ------------
+
+export interface GlbInfo {
+	/** RAW-BYTE layer: read from the GLB JSON chunk, not the decoded document. */
+	extensionsRequired: string[];
+	extensionsUsed: string[];
+	/** Library layer, AFTER decode (draco/meshopt decoders registered). */
+	triangles: number;
+	vertices: number;
+	textures: { mime: string; width: number; height: number; bytes: number }[];
+	animations: number;
+	animationChannels: number;
+}
+
+/** Raw chunk-0 JSON of a .glb — magic + version checked, nothing decoded. */
+export function glbJson(buf: Buffer): Record<string, unknown> {
+	if (buf.readUInt32LE(0) !== 0x46546c67) throw new Error('not a glb (magic)');
+	if (buf.readUInt32LE(4) !== 2) throw new Error('not glTF 2.0');
+	const jsonLength = buf.readUInt32LE(12);
+	if (buf.readUInt32LE(16) !== 0x4e4f534a) throw new Error('chunk 0 is not JSON');
+	return JSON.parse(buf.toString('utf8', 20, 20 + jsonLength));
+}
+
+type GltfIo = import('@gltf-transform/core').NodeIO;
+let glbIoReady: Promise<GltfIo> | null = null;
+
+async function getGlbIo(): Promise<GltfIo> {
+	glbIoReady ??= (async () => {
+		const { NodeIO } = await import('@gltf-transform/core');
+		const { ALL_EXTENSIONS } = await import('@gltf-transform/extensions');
+		const draco3d = (await import('draco3d')).default;
+		const { MeshoptDecoder, MeshoptEncoder } = await import('meshoptimizer');
+		await Promise.all([MeshoptDecoder.ready, MeshoptEncoder.ready]);
+		return new NodeIO().registerExtensions(ALL_EXTENSIONS).registerDependencies({
+			'draco3d.encoder': await draco3d.createEncoderModule({}),
+			'draco3d.decoder': await draco3d.createDecoderModule({}),
+			'meshopt.encoder': MeshoptEncoder,
+			'meshopt.decoder': MeshoptDecoder
+		});
+	})();
+	return glbIoReady;
+}
+
+export async function glbInfo(buf: Buffer): Promise<GlbInfo> {
+	const json = glbJson(buf) as { extensionsRequired?: string[]; extensionsUsed?: string[] };
+	const io = await getGlbIo();
+	const document = await io.readBinary(new Uint8Array(buf));
+	let triangles = 0;
+	let vertices = 0;
+	for (const mesh of document.getRoot().listMeshes()) {
+		for (const primitive of mesh.listPrimitives()) {
+			const position = primitive.getAttribute('POSITION');
+			if (!position) continue;
+			const indices = primitive.getIndices();
+			triangles += Math.floor((indices ? indices.getCount() : position.getCount()) / 3);
+			vertices += position.getCount();
+		}
+	}
+	const textures: GlbInfo['textures'] = [];
+	for (const texture of document.getRoot().listTextures()) {
+		const image = texture.getImage();
+		if (!image) continue;
+		const meta = await imageMeta(Buffer.from(image));
+		textures.push({
+			mime: texture.getMimeType(),
+			width: meta.width,
+			height: meta.height,
+			bytes: image.byteLength
+		});
+	}
+	const animations = document.getRoot().listAnimations();
+	return {
+		extensionsRequired: json.extensionsRequired ?? [],
+		extensionsUsed: json.extensionsUsed ?? [],
+		triangles,
+		vertices,
+		textures,
+		animations: animations.length,
+		animationChannels: animations.reduce((n, a) => n + a.listChannels().length, 0)
+	};
+}
+
+/** True when the .glb decodes WITHOUT any compression decoders registered —
+ *  the "opens in every viewer as-is" proof for compression: none output. */
+export async function glbDecodesWithoutCodecs(buf: Buffer): Promise<boolean> {
+	const { NodeIO } = await import('@gltf-transform/core');
+	const { ALL_EXTENSIONS } = await import('@gltf-transform/extensions');
+	const io = new NodeIO().registerExtensions(ALL_EXTENSIONS);
+	try {
+		await io.readBinary(new Uint8Array(buf));
+		return true;
+	} catch {
+		return false;
+	}
+}
+
+// --- XLSX (SheetJS — the same engine the app runs) -------------------------
+
+export interface XlsxFileInfo {
+	sheetNames: string[];
+	/** First sheet as formatted-text rows (header:1, raw:false). */
+	rows: string[][];
+}
+
+export async function xlsxInfo(buf: Buffer): Promise<XlsxFileInfo> {
+	const XLSX = await import('xlsx');
+	const wb = XLSX.read(buf, { type: 'buffer' });
+	const ws = wb.Sheets[wb.SheetNames[0]];
+	return {
+		sheetNames: wb.SheetNames,
+		rows: XLSX.utils.sheet_to_json(ws, { header: 1, raw: false }) as string[][]
+	};
 }

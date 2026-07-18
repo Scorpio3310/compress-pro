@@ -1,8 +1,9 @@
 /**
- * PT-01…18: pdf-lib tools — merge (order via page-size fingerprint), reorder,
+ * PT-01…26: pdf-lib tools — merge (order via page-size fingerprint), reorder,
  * page keep/remove grammar, toImages (ZIP vs single), fromImages (dims,
- * white-flattened alpha), AVIF acceptance, unlock/protect round-trip,
- * Ghostscript warm-up gating by op.
+ * white-flattened alpha), AVIF acceptance, unlock/protect round-trip (qpdf,
+ * AES-256, NFC/NFD password normalization), per-op engine warm-up gating
+ * (gs vs qpdf).
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 import { basename } from 'node:path';
@@ -23,7 +24,18 @@ import {
 	toggle,
 	upload
 } from '../helpers';
-import { decodeRaw, imageMeta, pdfInfo, pdfIsEncrypted, pixelAt, unzip } from '../verify';
+import {
+	decodeRaw,
+	imageMeta,
+	pdfEncryptionMeta,
+	pdfInfo,
+	pdfIsEncrypted,
+	pdfRotations,
+	pdfTextContent,
+	pixelAt,
+	qpdfEncrypt,
+	unzip
+} from '../verify';
 
 test.describe.configure({ timeout: 180_000 });
 
@@ -306,7 +318,7 @@ test('PT-13: fromImages accepts AVIF input', async ({ page, rec }) => {
 	});
 });
 
-test('PT-14: protect → unlock round-trip (128-bit R3, in-app fixture)', async ({
+test('PT-14: protect → unlock round-trip (AES-256 R6, in-app fixture)', async ({
 	page,
 	rec
 }, testInfo) => {
@@ -319,6 +331,7 @@ test('PT-14: protect → unlock round-trip (128-bit R3, in-app fixture)', async 
 	const locked = await downloadRow(page);
 	expect(locked.name).toBe('text-3pages-protected.pdf');
 	expect(await pdfIsEncrypted(locked.bytes), 'output must be encrypted').toBe(true);
+	expect(pdfEncryptionMeta(locked.bytes).aesv3, 'AES-256 / R6 encryption dict').toBe(true);
 
 	// Round-trip: the protected artifact goes back in through Unlock.
 	const lockedPath = testInfo.outputPath('protected.pdf');
@@ -335,10 +348,10 @@ test('PT-14: protect → unlock round-trip (128-bit R3, in-app fixture)', async 
 	expect((await pdfInfo(unlocked.bytes)).pageCount).toBe(3);
 	rec.record({
 		id: 'PT-14',
-		settings: { tab: 'pdf', op: 'protect→unlock', encryption: 'RC4-128 (R3 — pdfwrite max)' },
+		settings: { tab: 'pdf', op: 'protect→unlock', encryption: 'AES-256 (R6 — qpdf)' },
 		input: { name: 'text-3pages.pdf', bytes: input.length, pages: 3 },
 		output: { name: unlocked.name, bytes: unlocked.bytes.length, pages: 3 },
-		note: 'In-app round-trip — no encrypted fixture needed. pdfwrite writes R2/R3 only (measured).',
+		note: 'In-app round-trip — no encrypted fixture needed. qpdf writes AES-256/R6 structurally; page content is never re-encoded.',
 		assets: {
 			original: rec.saveAsset('PT-14', 'original', locked.name, locked.bytes),
 			output: rec.saveAsset('PT-14', 'output', unlocked.name, unlocked.bytes)
@@ -367,6 +380,59 @@ test('PT-15: unlock with the WRONG password fails with a password message', asyn
 	const run = await compress(page, { expectError: true, timeout: 120_000 });
 	expect(run.error).toMatch(/password/i);
 	await expect(page.getByTestId('compress-cta'), 'CTA recovers').toBeEnabled();
+});
+
+test('PT-25: non-ASCII password round-trips, protect warns about Preview', async ({
+	page
+}, testInfo) => {
+	await gotoTab(page, 'pdf');
+	await setPdfOp(page, 'Protect');
+	await upload(page, fx('text-3pages.pdf'));
+
+	// The interop hint: privacy copy for ASCII, Preview warning once č/š/ž land.
+	const hint = page.getByText(/never leaves your device/);
+	await page.locator('#pdf-password').fill('plain ascii');
+	await expect(hint).toBeVisible();
+	await page.locator('#pdf-password').fill('ččč'.normalize('NFC'));
+	await expect(page.getByText(/won't open in Apple Preview/)).toBeVisible();
+	await expect(hint).not.toBeVisible();
+
+	await compress(page, { timeout: 120_000 });
+	const locked = await downloadRow(page);
+	expect(pdfEncryptionMeta(locked.bytes).aesv3, 'AES-256 / R6').toBe(true);
+
+	const lockedPath = testInfo.outputPath('protected-nfc.pdf');
+	writeFileSync(lockedPath, locked.bytes);
+	await page.reload();
+	await gotoTab(page, 'pdf');
+	await setPdfOp(page, 'Unlock');
+	await upload(page, lockedPath);
+	await page.locator('#pdf-password').fill('ččč'.normalize('NFC'));
+	await compress(page, { timeout: 120_000 });
+	const unlocked = await downloadRow(page);
+	expect(await pdfIsEncrypted(unlocked.bytes), 'password removed').toBe(false);
+	expect((await pdfInfo(unlocked.bytes)).pageCount).toBe(3);
+});
+
+test('PT-26: unlock retries NFD bytes — Apple-encrypted non-ASCII passwords open', async ({
+	page
+}, testInfo) => {
+	// Apple's PDF stack hashes the NFD form of the typed password (probed
+	// 2026-07-18 against PDFKit — see qpdf-args.ts). Fabricate such a file with
+	// exact NFD bytes, then unlock it by typing the NFC form every keyboard
+	// produces: only the worker's candidate retry can make this pass.
+	const locked = await qpdfEncrypt(readFileSync(fx('text-3pages.pdf')), 'ččč'.normalize('NFD'));
+	const lockedPath = testInfo.outputPath('protected-nfd.pdf');
+	writeFileSync(lockedPath, locked);
+
+	await gotoTab(page, 'pdf');
+	await setPdfOp(page, 'Unlock');
+	await upload(page, lockedPath);
+	await page.locator('#pdf-password').fill('ččč'.normalize('NFC'));
+	await compress(page, { timeout: 120_000 });
+	const unlocked = await downloadRow(page);
+	expect(await pdfIsEncrypted(unlocked.bytes), 'password removed').toBe(false);
+	expect((await pdfInfo(unlocked.bytes)).pageCount).toBe(3);
 });
 
 test('PT-17: unlock a REAL protected pdf with its password', async ({ page, rec }) => {
@@ -422,25 +488,130 @@ test('PT-16: /unlock-pdf and /protect-pdf pages preset the op and gate the CTA',
 	);
 });
 
-test('PT-18: file-drop warms Ghostscript only for ops that run it @smoke', async ({ page }) => {
-	// The 15 MB engine: /gs.wasm in dev, /_app/…/gs.<hash>.wasm in preview.
+test('PT-18: file-drop warms the right engine per op @smoke', async ({ page }) => {
+	// gs = the 15 MB engine, qpdf = the small crypto one. Dev serves /X.wasm;
+	// preview hashes them as gs.<hash>.wasm but qpdf-<hash>.wasm (?url asset).
 	const gsWasmRequests: string[] = [];
+	const qpdfWasmRequests: string[] = [];
 	page.on('request', (request) => {
 		const path = new URL(request.url()).pathname;
-		if (/\/gs(\.[\w-]+)?\.wasm$/.test(path)) gsWasmRequests.push(path);
+		if (/\/gs([.-][\w-]+)?\.wasm$/.test(path)) gsWasmRequests.push(path);
+		if (/\/qpdf([.-][\w-]+)?\.wasm$/.test(path)) qpdfWasmRequests.push(path);
 	});
 
 	// /merge-pdf presets op=merge (mergeCompress off): pdf-lib does the whole
-	// job, so the drop must not pull the Ghostscript engine. The warm fetch
-	// starts synchronously with the drop, so a short settle catches a regression.
+	// job, so the drop must pull neither engine. The warm fetch starts
+	// synchronously with the drop, so a short settle catches a regression.
 	await gotoPath(page, '/merge-pdf');
 	await upload(page, fx('merge-a.pdf'));
 	await page.waitForTimeout(1000);
 	expect(gsWasmRequests, 'merge drop must not warm gs').toEqual([]);
+	expect(qpdfWasmRequests, 'merge drop must not warm qpdf').toEqual([]);
 
-	// Switching to Compress and dropping again must start the warm fetch during
-	// think time — and proves the matcher above still matches the real URL.
+	// Switching to Compress and dropping again must start the gs warm fetch
+	// during think time — and proves the matcher still matches the real URL.
 	await setPdfOp(page, 'Compress');
 	await upload(page, fx('merge-b.pdf'));
 	await expect.poll(() => gsWasmRequests.length, { timeout: 15_000 }).toBeGreaterThan(0);
+
+	// Protect rides the qpdf worker — its drop warms qpdf, never more gs.
+	// Settle first: the gs warm may issue a legitimate second fetch when
+	// compileStreaming falls back to arrayBuffer; snapshot after it lands.
+	await page.waitForTimeout(1000);
+	const gsAfterCompress = gsWasmRequests.length;
+	await setPdfOp(page, 'Protect');
+	await upload(page, fx('merge-c.pdf'));
+	await expect.poll(() => qpdfWasmRequests.length, { timeout: 15_000 }).toBeGreaterThan(0);
+	await page.waitForTimeout(500);
+	expect(gsWasmRequests.length, 'protect drop must not warm gs again').toBe(gsAfterCompress);
+});
+
+test('PT-19: /rotate-pdf turns every page 90° clockwise', async ({ page }) => {
+	await gotoPath(page, '/rotate-pdf');
+	await expect(page).toHaveTitle(/Rotate PDF/);
+	await expect(page.getByRole('button', { name: 'Rotate', exact: true })).toHaveAttribute(
+		'aria-pressed',
+		'true'
+	);
+	await upload(page, fx('text-3pages.pdf'));
+	await compress(page, { timeout: 120_000 });
+	const art = await downloadRow(page);
+	expect(art.name).toBe('text-3pages-rotated.pdf');
+	expect(await pdfRotations(art.bytes)).toEqual([90, 90, 90]);
+	expect((await pdfInfo(art.bytes)).pageCount).toBe(3);
+});
+
+test('PT-20: /watermark-pdf stamps custom text across every page', async ({ page }) => {
+	await gotoPath(page, '/watermark-pdf');
+	await expect(page).toHaveTitle(/Watermark PDF/);
+	await upload(page, fx('text-3pages.pdf'));
+	await page.locator('#watermark-text').fill('COMPRESSPRO');
+	await compress(page, { timeout: 120_000 });
+	const art = await downloadRow(page);
+	expect(art.name).toBe('text-3pages-watermarked.pdf');
+	expect((await pdfInfo(art.bytes)).pageCount).toBe(3);
+	// The stamp is real page content — text extraction must see it on pages.
+	const stamps = (await pdfTextContent(art.bytes)).match(/COMPRESSPRO/g) ?? [];
+	expect(stamps.length).toBe(3);
+});
+
+test('PT-21: /pdf-page-numbers adds page/total footers', async ({ page }) => {
+	await gotoPath(page, '/pdf-page-numbers');
+	await upload(page, fx('text-3pages.pdf'));
+	await compress(page, { timeout: 120_000 });
+	const art = await downloadRow(page);
+	expect(art.name).toBe('text-3pages-numbered.pdf');
+	const text = await pdfTextContent(art.bytes);
+	expect(text).toMatch(/1\s*\/\s*3/);
+	expect(text).toMatch(/3\s*\/\s*3/);
+});
+
+test('PT-22: /pdf-to-text extracts the digital text layer to .txt', async ({ page }) => {
+	await gotoPath(page, '/pdf-to-text');
+	await expect(page).toHaveTitle(/PDF to Text/);
+	await upload(page, fx('text-3pages.pdf'));
+	await compress(page, { timeout: 120_000 });
+	const art = await downloadRow(page);
+	expect(art.name).toBe('text-3pages.txt');
+	expect(art.bytes.toString('utf8')).toMatch(/quick brown fox/i);
+});
+
+test('PT-23: /grayscale-pdf desaturates a colorful page', async ({ page }) => {
+	// scan-text.pdf embeds the colorful sunset graphic — a strong color source.
+	await gotoPath(page, '/grayscale-pdf');
+	await upload(page, fx('scan-text.pdf'));
+	await compress(page, { timeout: 180_000 });
+	const art = await downloadRow(page);
+	expect(art.name).toBe('scan-text-grayscale.pdf');
+	const pagePng = await rasterizePdfInPage(page, art.bytes, 1);
+	if (pagePng) {
+		const raw = await decodeRaw(pagePng);
+		// Page is 720×480 pt (the 1200×800 graphic at 0.6): sample the blue sky,
+		// the orange sunset band and a colored bar — all must land neutral.
+		const scale = raw.width / 720;
+		for (const [x, y] of [
+			[360, 30],
+			[60, 200],
+			[300, 160]
+		]) {
+			const [r, g, b] = pixelAt(raw, Math.round(x * scale), Math.round(y * scale));
+			expect(Math.abs(r - g), `neutral at ${x},${y}`).toBeLessThanOrEqual(12);
+			expect(Math.abs(g - b), `neutral at ${x},${y}`).toBeLessThanOrEqual(12);
+		}
+	}
+});
+
+test('PT-24: /pdf-to-pdfa declares PDF/A-2b conformance', async ({ page }) => {
+	await gotoPath(page, '/pdf-to-pdfa');
+	await expect(page).toHaveTitle(/PDF\/A/);
+	await upload(page, fx('text-3pages.pdf'));
+	await compress(page, { timeout: 180_000 });
+	const art = await downloadRow(page);
+	expect(art.name).toBe('text-3pages-pdfa.pdf');
+	expect((await pdfInfo(art.bytes)).pageCount).toBe(3);
+	// XMP is stored uncompressed — the conformance declaration is greppable.
+	const raw = art.bytes.toString('latin1');
+	expect(raw).toMatch(/pdfaid:part='2'/);
+	expect(raw).toMatch(/pdfaid:conformance='B'/);
+	expect(raw).toMatch(/OutputIntent/);
 });

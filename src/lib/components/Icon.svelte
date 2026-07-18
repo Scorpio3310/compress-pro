@@ -60,7 +60,35 @@
 		// crossbar/stem/baseline split — the tab activation draws stem + baseline
 		font: ['M6 5h12', 'M12 5v14', 'M8.5 19h7'],
 		archive: ['M3.5 5h17v4h-17z', 'M5.5 9v10h13V9', 'M10 12.5h4'],
-		tag: ['M4 4h8l8 8-8 8-8-8z', 'M8.5 8a.5.5 0 1 0 0 1 .5.5 0 1 0 0-1']
+		tag: ['M4 4h8l8 8-8 8-8-8z', 'M8.5 8a.5.5 0 1 0 0 1 .5.5 0 1 0 0-1'],
+		// OCR: scan-frame corners around a text line.
+		scan: ['M4 8V5.5h3', 'M20 8V5.5h-3', 'M4 16v2.5h3', 'M20 16v2.5h-3', 'M8 12h8'],
+		// Subtitles: caption box with two ragged text rows.
+		captions: ['M3.5 6h17v12h-17z', 'M7 12.5h4', 'M13.5 12.5h3.5', 'M7 15.5h2.5', 'M12 15.5h5'],
+		// Data: spreadsheet grid — frame + one row line + two column lines.
+		table: ['M3.5 5h17v14h-17z', 'M3.5 10h17', 'M9.5 10v9', 'M15.5 10v9'],
+		// 3D: isometric cube — top face + front edges.
+		cube: [
+			'M12 3.5l7.5 4.25v8.5L12 20.5l-7.5-4.25v-8.5z',
+			'M4.5 7.75L12 12l7.5-4.25',
+			'M12 12v8.5'
+		],
+		// E-books: open book — two page halves meeting at the spine.
+		book: [
+			'M12 6.5C10.5 5 8 4.5 4.5 4.75V18c3.5-.25 6 .25 7.5 1.75',
+			'M12 6.5C13.5 5 16 4.5 19.5 4.75V18c-3.5-.25-6 .25-7.5 1.75',
+			'M12 6.5v13.25'
+		],
+		// Almond built from two mirrored arcs, pupil a circle subpath.
+		eye: [
+			'M2.5 12A11 11 0 0 1 21.5 12A11 11 0 0 1 2.5 12z',
+			'M12 9.25a2.75 2.75 0 1 0 0 5.5 2.75 2.75 0 1 0 0-5.5'
+		],
+		'eye-off': [
+			'M2.5 12A11 11 0 0 1 21.5 12A11 11 0 0 1 2.5 12z',
+			'M12 9.25a2.75 2.75 0 1 0 0 5.5 2.75 2.75 0 1 0 0-5.5',
+			'M4 4l16 16'
+		]
 	} as const;
 
 	export type IconName = keyof typeof GLYPHS;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { familyOf, matchesAccept, routeFileToFormat, TAB_ACCEPT } from './routing';
+import { familyOf, isRawFile, matchesAccept, routeFileToFormat, TAB_ACCEPT } from './routing';
 import type { FileFormat } from '$lib/types';
 
 const file = (name: string, type: string) => new File([], name, { type });
@@ -35,6 +35,14 @@ describe('routeFileToFormat', () => {
 		expect(routeFileToFormat(file('a.bmp', 'image/bmp'))).toBe('jpg');
 		expect(routeFileToFormat(file('scan.tiff', 'image/tiff'))).toBe('jpg');
 		expect(routeFileToFormat(file('SCAN.TIF', ''))).toBe('jpg');
+	});
+
+	it('routes camera RAW to the jpg tab (LibRaw develops on arrival)', () => {
+		expect(routeFileToFormat(file('IMG_1234.CR2', ''))).toBe('jpg');
+		expect(routeFileToFormat(file('shot.NEF', ''))).toBe('jpg');
+		expect(routeFileToFormat(file('a.arw', 'image/x-sony-arw'))).toBe('jpg');
+		expect(routeFileToFormat(file('drone.dng', 'image/x-adobe-dng'))).toBe('jpg');
+		expect(routeFileToFormat(file('fuji.RAF', ''))).toBe('jpg');
 	});
 
 	it('routes audio files to the audio tab (MIME and extension)', () => {
@@ -93,6 +101,20 @@ describe('routeFileToFormat', () => {
 	it('returns null for unknown or extensionless files', () => {
 		expect(routeFileToFormat(file('notes.txt', 'text/plain'))).toBeNull();
 		expect(routeFileToFormat(file('README', ''))).toBeNull();
+	});
+});
+
+describe('isRawFile', () => {
+	it('detects by extension case-insensitively and by RAW MIME', () => {
+		expect(isRawFile('IMG_1234.CR2', '')).toBe(true);
+		expect(isRawFile('drone.dng', 'image/x-adobe-dng')).toBe(true);
+		expect(isRawFile('fuji.RAF', '')).toBe(true);
+		expect(isRawFile('photo.jpg', 'image/jpeg')).toBe(false);
+	});
+
+	it('never claims plain TIFF (shares magic bytes with RAW — name/MIME decide)', () => {
+		expect(isRawFile('scan.tiff', 'image/tiff')).toBe(false);
+		expect(isRawFile('scan.tif', '')).toBe(false);
 	});
 });
 

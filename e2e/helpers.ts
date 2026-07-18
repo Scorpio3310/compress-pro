@@ -86,6 +86,23 @@ export async function setPdfImageQuality(page: Page, value: number): Promise<voi
 	await setRange(page, '#image-quality', value);
 }
 
+export async function setEbookQuality(page: Page, value: number): Promise<void> {
+	await setRange(page, '#ebook-quality', value);
+}
+
+export async function setModelTextureQuality(page: Page, value: number): Promise<void> {
+	await setRange(page, '#model-texture-quality', value);
+}
+
+/** Enables the simplify switch, then drags the keep-ratio slider. */
+export async function setModelSimplify(page: Page, value: number): Promise<void> {
+	const slider = page.locator('#model-simplify');
+	if ((await slider.count()) === 0) {
+		await page.locator('label:has-text("Simplify geometry") input.switch').click();
+	}
+	await setRange(page, '#model-simplify', value);
+}
+
 export async function setSvgPrecision(page: Page, value: number): Promise<void> {
 	await setRange(page, '#precision', value, `${value} decimals`);
 }

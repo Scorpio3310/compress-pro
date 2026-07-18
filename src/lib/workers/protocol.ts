@@ -3,6 +3,7 @@ import type {
 	AudioConversionSettings,
 	FontFormat,
 	ImageFormat,
+	ModelSettings,
 	SvgCompressionSettings
 } from '$lib/types';
 
@@ -19,17 +20,29 @@ export type WorkerResponse =
 
 // --- Per-worker RPC contracts (single source of truth for both ends) ---
 
+/** Pixels decoded OUTSIDE the image worker (camera RAW via LibRaw) — the
+ *  worker builds its ImageData from these and skips its own decode entirely. */
+export interface PredecodedPixels {
+	/** Tightly packed rows, RGB (expanded to RGBA in the worker) or RGBA. */
+	data: ArrayBuffer;
+	width: number;
+	height: number;
+	channels: 3 | 4;
+}
+
 export interface EncodePayload {
 	bytes: ArrayBuffer;
 	quality: number;
 	/** 'auto' = worker races mozjpeg vs webp post-decode (alpha/animation-aware);
-	 *  'ico' = multi-size favicon mux. */
-	output: ImageFormat | 'auto' | 'ico';
+	 *  'ico' = multi-size favicon mux; 'jxl' = libjxl (preset-only pages). */
+	output: ImageFormat | 'auto' | 'ico' | 'jxl';
 	maxDimension: number | null;
 	/** Explicit decode override for formats createImageBitmap can't sniff. */
 	source?: 'heic';
 	/** Composite transparency onto white (mozjpeg would otherwise render it black). */
 	flatten?: boolean;
+	/** When set, `bytes` is empty and decode is skipped (RAW path). */
+	predecoded?: PredecodedPixels;
 }
 
 export interface EncodeResult {
@@ -39,7 +52,7 @@ export interface EncodeResult {
 	width: number;
 	height: number;
 	/** The concrete format actually encoded ('auto' resolves in the worker). */
-	chosenFormat: ImageFormat | 'ico';
+	chosenFormat: ImageFormat | 'ico' | 'jxl';
 	/** True when the output is an animated WebP. */
 	animated?: boolean;
 	frameCount?: number;
@@ -77,9 +90,37 @@ export interface GsProgress {
 	pageCount: number | null;
 }
 
+export interface QpdfCryptPayload {
+	pdf: ArrayBuffer;
+	op: 'unlock' | 'protect';
+	/** RUNTIME ONLY — rides to the worker per call, never persisted anywhere. */
+	password: string;
+}
+
 export interface SvgPayload {
 	svg: string;
 	settings: SvgCompressionSettings;
+}
+
+/** Serde field names of vtracer-wasm's Config (visioncortex vtracer). */
+export interface VtracerConfig {
+	binary: boolean;
+	mode: 'spline' | 'polygon' | 'pixel';
+	hierarchical: 'stacked' | 'cutout';
+	filterSpeckle: number;
+	colorPrecision: number;
+	layerDifference: number;
+	cornerThreshold: number;
+	lengthThreshold: number;
+	maxIterations: number;
+	spliceThreshold: number;
+	pathPrecision: number;
+}
+
+export interface VectorizePayload {
+	/** Rides by structured-clone reference — decoded inside the worker. */
+	file: File;
+	config: VtracerConfig;
 }
 
 // --- Video (mediabunny + WebCodecs) ---
@@ -319,8 +360,16 @@ export interface WorkerContracts {
 	gs: {
 		compress: { payload: GsPayload; result: ArrayBuffer; progress: GsProgress };
 	};
+	qpdf: {
+		/** Structural AES-256 protect / any-revision unlock — atomic, no progress. */
+		crypt: { payload: QpdfCryptPayload; result: ArrayBuffer; progress: never };
+	};
 	svg: {
 		optimize: { payload: SvgPayload; result: string; progress: never };
+	};
+	vtracer: {
+		/** Raster → SVG vectorization — one synchronous to_svg call, atomic. */
+		vectorize: { payload: VectorizePayload; result: string; progress: never };
 	};
 	font: {
 		convert: { payload: FontConvertPayload; result: FontConvertResult; progress: never };
@@ -384,6 +433,48 @@ export interface WorkerContracts {
 			progress: ArchiveProgress;
 		};
 	};
+	model: {
+		optimize: {
+			payload: ModelOptimizePayload;
+			result: ModelOptimizeResult;
+			progress: ModelProgress;
+		};
+	};
+}
+
+export interface ModelOptimizePayload {
+	/** Transferred in — the caller's buffer is detached. */
+	bytes: ArrayBuffer;
+	settings: ModelSettings;
+}
+
+export interface ModelStats {
+	trianglesBefore: number;
+	trianglesAfter: number;
+	verticesBefore: number;
+	verticesAfter: number;
+	/** jpg/png textures actually replaced (per-texture keep-original applied). */
+	texturesChanged: number;
+	texturesTotal: number;
+	/** KTX2/WebP/unknown-mime textures passed through untouched. */
+	texturesSkipped: number;
+	/** Decode failures — kept unchanged, surfaces as a row warning. */
+	texturesFailed: number;
+	/** A committed texture downscale — feeds the codec's `transformed` seam. */
+	textureResized: boolean;
+	/** extensionsRequired scan of the INPUT (before decode). */
+	inputCompression: 'draco' | 'meshopt' | null;
+}
+
+export interface ModelOptimizeResult {
+	/** Transferred out. */
+	bytes: ArrayBuffer;
+	stats: ModelStats;
+}
+
+export interface ModelProgress {
+	fraction: number;
+	detail: string | null;
 }
 
 export type WorkerKind = keyof WorkerContracts;

@@ -267,8 +267,11 @@ test('B-10: cancelling one tab never truncates a concurrent run on another tab @
 	await setOutputFormat(page, 'AVIF');
 	await page.getByTestId('compress-cta').click();
 
-	// Second run on the png tab, cancelled as soon as it starts.
+	// Second run on the png tab, cancelled as soon as it starts. Wait out the
+	// client-side navigation before uploading — upload() counts rows first,
+	// and mid-switch it would still see the jpg tab's three.
 	await page.locator('nav a[data-seg="png"]').click();
+	await expect(page).toHaveURL(/compress-png$/);
 	await upload(page, fx('photo-1200x800.png'));
 	await setOutputFormat(page, 'AVIF');
 	await page.getByTestId('compress-cta').click();

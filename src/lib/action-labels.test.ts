@@ -10,6 +10,8 @@ const image = (over: Partial<SettingsMap['jpg']> = {}): SettingsMap['jpg'] => ({
 	maxDimension: null,
 	downscaleToTarget: false,
 	keepMetadata: false,
+	vectorMode: 'color',
+	vectorDetail: 60,
 	...over
 });
 
@@ -25,6 +27,8 @@ const pdf = (over: Partial<SettingsMap['pdf']> = {}): SettingsMap['pdf'] => ({
 	imageFormat: 'jpg',
 	imageQuality: 80,
 	password: '',
+	rotation: 90,
+	watermarkText: 'CONFIDENTIAL',
 	...over
 });
 

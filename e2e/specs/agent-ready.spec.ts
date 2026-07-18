@@ -115,7 +115,7 @@ test('AR-03: WebMCP tools register and drive the app @smoke', async ({ page }) =
 		].execute();
 		return result.content[0].text;
 	});
-	expect(listing.split('\n').filter((line) => line.startsWith('- '))).toHaveLength(99);
+	expect(listing.split('\n').filter((line) => line.startsWith('- '))).toHaveLength(144);
 	expect(listing).toContain(
 		'- compress-jpg — Compress JPG (JPEG) Online — Private, No Upload: Shrink JPG (JPEG) photos right in your browser. Set a quality or a target size like 500 KB. No uploads — files stay on your device. Free & private.'
 	);

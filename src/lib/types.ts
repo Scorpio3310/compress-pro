@@ -10,7 +10,12 @@ export type FileFormat =
 	| 'audio'
 	| 'font'
 	| 'zip'
-	| 'exif';
+	| 'exif'
+	| 'ocr'
+	| 'subtitle'
+	| 'ebook'
+	| 'model'
+	| 'data';
 
 /** The raster-image pipeline tabs — one family: shared worker pool, shared
  *  ImageCompressionSettings. familyOf(), the CTA labels, the concurrency
@@ -173,8 +178,12 @@ export interface ImageCompressionSettings {
 	quality: number;
 	/** 'auto' = smallest of JPG/WebP per image (alpha/animation stay WebP).
 	 *  'ico' = multi-size favicon — an Output pill on the JPG/PNG tabs, preset
-	 *  by the /png-to-ico and /jpg-to-ico pages. */
-	outputFormat: ImageFormat | 'auto' | 'ico';
+	 *  by the /png-to-ico and /jpg-to-ico pages.
+	 *  'svg' = vtracer vectorization — JPG/PNG tabs only, preset by the
+	 *  /png-to-svg and /jpg-to-svg pages.
+	 *  'jxl' = JPEG XL — preset-only (Chrome can't render it, so no sitewide
+	 *  pill), set by /jpg-to-jxl and /compress-jxl. */
+	outputFormat: ImageFormat | 'auto' | 'ico' | 'svg' | 'jxl';
 	mode: 'quality' | 'target';
 	/** Target size in KB (SI, 1 KB = 1000 B — the safe reading of upload limits). */
 	targetKb: number;
@@ -186,6 +195,11 @@ export interface ImageCompressionSettings {
 	/** Copy source EXIF (date, camera, GPS) into JPG/PNG/WebP outputs.
 	 *  ICC is never copied — pixels are sRGB after decode/conversion. */
 	keepMetadata: boolean;
+	/** SVG output only: color vectorization vs black & white stencil. */
+	vectorMode: 'color' | 'bw';
+	/** SVG output only, 0-100 — one dial mapped onto vtracer's parameters
+	 *  (see codecs/vectorize.ts vectorizeParams). */
+	vectorDetail: number;
 }
 
 export interface SvgCompressionSettings {
@@ -207,7 +221,19 @@ export interface SvgCompressionSettings {
 export type PdfLevel = 'low' | 'medium' | 'high' | 'ultra' | 'extreme';
 
 export type PdfOp =
-	'compress' | 'merge' | 'pages' | 'toImages' | 'fromImages' | 'unlock' | 'protect';
+	| 'compress'
+	| 'merge'
+	| 'pages'
+	| 'toImages'
+	| 'fromImages'
+	| 'unlock'
+	| 'protect'
+	| 'rotate'
+	| 'watermark'
+	| 'pageNumbers'
+	| 'toText'
+	| 'grayscale'
+	| 'toPdfa';
 
 export interface PdfCompressionSettings {
 	op: PdfOp;
@@ -227,6 +253,10 @@ export interface PdfCompressionSettings {
 	/** Unlock/protect ops — RUNTIME ONLY: stripped before persisting and never
 	 *  merged back from storage (see serializeSettings / mergePdf). */
 	password: string;
+	/** Rotate op: clockwise degrees applied to every page. */
+	rotation: 90 | 180 | 270;
+	/** Watermark op: the diagonal stamp text (persisted — not a secret). */
+	watermarkText: string;
 }
 
 export interface VideoConversionSettings {
@@ -340,6 +370,61 @@ export interface ExifSettings {
 	removeIcc: boolean;
 }
 
+/** Self-hosted tessdata languages (static/tessdata/<code>.traineddata.gz). */
+export const OCR_LANGUAGES = [
+	{ code: 'eng', label: 'English' },
+	{ code: 'slv', label: 'Slovenščina' },
+	{ code: 'deu', label: 'Deutsch' },
+	{ code: 'ita', label: 'Italiano' },
+	{ code: 'fra', label: 'Français' },
+	{ code: 'spa', label: 'Español' },
+	{ code: 'por', label: 'Português' },
+	{ code: 'hrv', label: 'Hrvatski' }
+] as const;
+
+export interface OcrSettings {
+	/** 'toText' = image → .txt; 'toPdf' = scanned PDF → searchable PDF. */
+	op: 'toText' | 'toPdf';
+	/** tessdata language code — one of OCR_LANGUAGES. */
+	language: string;
+}
+
+export interface SubtitleSettings {
+	/** Target format — the input (SRT/VTT/ASS) is detected per file from content. */
+	to: 'vtt' | 'srt';
+}
+
+/** CSV/XLSX/JSON/YAML converter — one uniform op: input detected from
+ *  content, target implied (csv→xlsx, xlsx→csv, json→yaml, yaml→json). */
+export interface DataSettings {
+	/** Field separator for CSV OUTPUT (xlsx → csv); input is always sniffed.
+	 *  ';' matters for EU Excel locales. */
+	csvDelimiter: ',' | ';' | 'tab';
+	/** JSON OUTPUT indent (yaml → json). 0 = minified. */
+	jsonIndent: 2 | 0;
+}
+
+/** GLB 3D models — geometry codec + optional simplify + embedded textures. */
+export interface ModelSettings {
+	/** Geometry codec. 'none' = maximum-compatibility output (no decoder needed). */
+	compression: 'none' | 'draco' | 'meshopt';
+	/** Triangle keep-ratio %, 1..100; null = off (destructive when on). */
+	simplify: number | null;
+	/** 1-100 JPEG re-encode quality for embedded textures (PNGs resize-only). */
+	textureQuality: number;
+	/** Longest-side cap for embedded textures; null = off. */
+	textureMaxDimension: number | null;
+}
+
+/** EPUB/CBZ/CBR — images inside the container are re-encoded in their own
+ *  format; per-entry keep-original guards mean q100 ≈ bit-exact repack. */
+export interface EbookSettings {
+	/** 1-100 for the raster images inside (jpg/png/webp). */
+	quality: number;
+	/** Longest-side cap in px for those images, downscale-only; null = off. */
+	maxDimension: number | null;
+}
+
 /** Per-tab settings with the concrete type per key (no cast needed for e.g. `.pdf`). */
 export interface SettingsMap {
 	jpg: ImageCompressionSettings;
@@ -354,6 +439,11 @@ export interface SettingsMap {
 	font: FontConversionSettings;
 	zip: ZipSettings;
 	exif: ExifSettings;
+	ocr: OcrSettings;
+	subtitle: SubtitleSettings;
+	ebook: EbookSettings;
+	model: ModelSettings;
+	data: DataSettings;
 }
 
 /** Per-file progress reported by compressFiles. */

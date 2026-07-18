@@ -26,6 +26,21 @@ export function actionLabel(
 ): string {
 	const plural = filesCount !== 1 ? 's' : '';
 	if (format === 'exif') return `Remove metadata from ${filesCount} file${plural}`;
+	if (format === 'ocr') {
+		return (settings as SettingsMap['ocr']).op === 'toPdf'
+			? `Make ${filesCount} PDF${plural} searchable`
+			: `Recognize text in ${filesCount} file${plural}`;
+	}
+	if (format === 'subtitle') {
+		const to = (settings as SettingsMap['subtitle']).to;
+		return `Convert ${filesCount} file${plural} to ${to.toUpperCase()}`;
+	}
+	// One uniform op — cbr inputs convert as a side effect, the CTA stays honest.
+	if (format === 'ebook') return `Compress ${filesCount} file${plural}`;
+	if (format === 'model') return `Compress ${filesCount} model${plural}`;
+	// Target is per-file (csv→xlsx, json→yaml…) — a mixed batch is legal, so
+	// the CTA names no destination format.
+	if (format === 'data') return `Convert ${filesCount} file${plural}`;
 	if (format === 'audio') return `Convert ${filesCount} file${plural}`;
 	if (format === 'font') {
 		return (settings as SettingsMap['font']).op === 'subset'
@@ -43,6 +58,9 @@ export function actionLabel(
 			? `Create ${label} from ${filesCount} file${plural}`
 			: `Compress ${filesCount} file${plural} to ${label}`;
 	}
+	if (isImageFormat(format) && (settings as SettingsMap['jpg']).outputFormat === 'svg') {
+		return `Convert ${filesCount} image${plural} to SVG`;
+	}
 	if (format !== 'pdf') return `Compress ${filesCount} file${plural}`;
 	const pdf = settings as SettingsMap['pdf'];
 	switch (pdf.op) {
@@ -58,6 +76,18 @@ export function actionLabel(
 			return `Unlock ${filesCount} PDF${plural}`;
 		case 'protect':
 			return `Protect ${filesCount} PDF${plural}`;
+		case 'rotate':
+			return `Rotate ${filesCount} PDF${plural}`;
+		case 'watermark':
+			return `Watermark ${filesCount} PDF${plural}`;
+		case 'pageNumbers':
+			return `Number ${filesCount} PDF${plural}`;
+		case 'toText':
+			return `Convert ${filesCount} file${plural} to text`;
+		case 'grayscale':
+			return `Convert ${filesCount} to grayscale`;
+		case 'toPdfa':
+			return `Convert ${filesCount} to PDF/A`;
 		default:
 			return `Compress ${filesCount} file${plural}`;
 	}
@@ -65,12 +95,20 @@ export function actionLabel(
 
 export function busyLabel(format: FileFormat, settings: ToolSettings): string {
 	if (format === 'exif') return 'Cleaning…';
+	if (format === 'ocr') return 'Recognizing…';
+	if (format === 'subtitle') return 'Converting…';
+	if (format === 'ebook') return 'Working…';
+	if (format === 'model') return 'Working…';
+	if (format === 'data') return 'Converting…';
 	if (format === 'audio') return 'Converting…';
 	if (format === 'font') {
 		return (settings as SettingsMap['font']).op === 'subset' ? 'Subsetting…' : 'Converting…';
 	}
 	if (format === 'zip') return 'Working…';
 	if (format === 'pdf' && (settings as SettingsMap['pdf']).op !== 'compress') return 'Working…';
+	if (isImageFormat(format) && (settings as SettingsMap['jpg']).outputFormat === 'svg') {
+		return 'Vectorizing…';
+	}
 	return 'Compressing…';
 }
 
@@ -87,16 +125,18 @@ export function actionInvalid(
 			(pdf.op === 'compress' && targetInvalid) ||
 			(pdf.op === 'merge' && (filesCount < 2 || (pdf.mergeCompress && targetInvalid))) ||
 			(pdf.op === 'pages' && validatePageRangeSyntax(pdf.pageRange) !== null) ||
-			((pdf.op === 'unlock' || pdf.op === 'protect') && pdf.password.trim() === '')
+			((pdf.op === 'unlock' || pdf.op === 'protect') && pdf.password.trim() === '') ||
+			(pdf.op === 'watermark' && pdf.watermarkText.trim() === '')
 		);
 	}
 	if (isImageFormat(format)) {
 		const image = settings as SettingsMap['jpg'];
-		// Target mode exists for quality-parametric encoders only (not GIF/ICO) —
-		// in those modes the target input is hidden, so it must not gate the CTA.
+		// Target mode exists for quality-parametric encoders only (not GIF/ICO/SVG)
+		// — in those modes the target input is hidden, so it must not gate the CTA.
 		return (
 			image.outputFormat !== 'gif' &&
 			image.outputFormat !== 'ico' &&
+			image.outputFormat !== 'svg' &&
 			image.mode === 'target' &&
 			!(image.targetKb > 0)
 		);

@@ -488,3 +488,233 @@ test('CV-32: /compress-avif scopes the dropzone to AVIF and recompresses', async
 	await compress(page);
 	expect((await imageMeta((await downloadRow(page)).bytes)).format).toBe('avif');
 });
+
+test('CV-33: /gif-to-webp keeps the animation', async ({ page }) => {
+	const meta = fxMeta<{ pages: number }>('anim-12f.gif');
+	await gotoPath(page, '/gif-to-webp');
+	await expect(page).toHaveTitle(/GIF to WebP/);
+	await upload(page, fx('anim-12f.gif'));
+	await expect(outputPill(page, 'WebP')).toHaveAttribute('aria-pressed', 'true');
+	const run = await compress(page);
+	expect(run.warnings, 'animation preserved, no warning').toEqual([]);
+	const art = await downloadRow(page);
+	expect(art.name).toBe('anim-12f.webp');
+	const m = await imageMeta(art.bytes);
+	expect(m.format).toBe('webp');
+	expect(m.pages, 'all frames re-encoded').toBe(meta.pages);
+});
+
+test('CV-34: /mp3-to-m4a presets M4A and converts', async ({ page }) => {
+	await gotoPath(page, '/mp3-to-m4a');
+	await expect(page).toHaveTitle(/MP3 to M4A/);
+	await upload(page, fxAudio('tone-3s.mp3'));
+	await expect(page.getByRole('button', { name: 'M4A', exact: true })).toHaveAttribute(
+		'aria-pressed',
+		'true'
+	);
+	await compress(page, { timeout: 120_000 });
+	const art = await downloadRow(page);
+	expect(art.name).toBe('tone-3s.m4a');
+	const info = await audioInfo(art.bytes);
+	expect(info.audioCodec).toBe('aac');
+	expect(info.hasVideo).toBe(false);
+});
+
+test('CV-35: /webm-to-mp3 extracts the audio track as MP3', async ({ page }) => {
+	await gotoPath(page, '/webm-to-mp3');
+	await expect(page).toHaveTitle(/WebM to MP3/);
+	await expect(page.getByText('Drop WebM files here')).toBeVisible();
+	await upload(page, fxVideo('v-audio-3s.webm'));
+	await expect(page.getByRole('button', { name: 'MP3', exact: true })).toHaveAttribute(
+		'aria-pressed',
+		'true'
+	);
+	await compress(page, { timeout: 120_000 });
+	const art = await downloadRow(page);
+	expect(art.name).toBe('v-audio-3s.mp3');
+	const info = await audioInfo(art.bytes);
+	expect(info.audioCodec).toBe('mp3');
+	expect(info.hasVideo, 'video track discarded').toBe(false);
+});
+
+test('CV-36: /bmp-to-png converts losslessly', async ({ page }) => {
+	const meta = fxMeta<{ width: number; height: number; ref: string }>('graphic.bmp');
+	await gotoPath(page, '/bmp-to-png');
+	await expect(page).toHaveTitle(/BMP to PNG/);
+	await upload(page, fx('graphic.bmp'));
+	await expect(outputPill(page, 'PNG')).toHaveAttribute('aria-pressed', 'true');
+	await expect(page.locator('#quality')).toHaveValue('100');
+	await compress(page);
+	const art = await downloadRow(page);
+	expect(art.name).toBe('graphic.png');
+	const m = await imageMeta(art.bytes);
+	expect(m.format).toBe('png');
+	expect([m.width, m.height]).toEqual([meta.width, meta.height]);
+	// Lossless path — byte-identical pixels vs the PNG twin of the BMP.
+	const { ratio } = await pixelDiff(readFileSync(fx(meta.ref)), art.bytes);
+	expect(ratio, 'lossless conversion').toBe(0);
+});
+
+test('CV-37: /remove-audio-from-video strips the audio track', async ({ page }) => {
+	await gotoPath(page, '/remove-audio-from-video');
+	await expect(page).toHaveTitle(/Remove Audio from Video/);
+	await upload(page, fxVideo('v-audio-3s.mp4'));
+	await compress(page, { timeout: 120_000 });
+	const art = await downloadRow(page);
+	expect(art.name).toBe('v-audio-3s.mp4');
+	const info = await videoInfo(art.bytes);
+	expect(info.audioCodec, 'audio track removed').toBeNull();
+	expect(info.videoCodec).toBeTruthy();
+});
+
+test('CV-38: /png-to-svg vectorizes a flat graphic into real paths', async ({ page }) => {
+	await gotoPath(page, '/png-to-svg');
+	await expect(page).toHaveTitle(/PNG to SVG Converter/);
+	await upload(page, fx('graphic-alpha.png'));
+	await expect(outputPill(page, 'SVG')).toHaveAttribute('aria-pressed', 'true');
+	await expect(page.getByTestId('compress-cta')).toHaveText('Convert 1 image to SVG');
+	await compress(page, { timeout: 120_000 });
+	const art = await downloadRow(page);
+	expect(art.name).toBe('graphic-alpha.svg');
+	const text = art.bytes.toString('utf8');
+	expect(text).toContain('<svg');
+	expect(text).toContain('<path');
+	// The trace must resemble the source — sharp rasterizes the SVG at its
+	// intrinsic (source) size, so a straight pixel diff works. Vectorization
+	// is approximate by nature (the fixture's gradient flattens to one color),
+	// so the bound only catches garbage: healthy trace measures ~0.21 here,
+	// the degrees-instead-of-radians blob soup ≥0.45.
+	const { ratio } = await pixelDiff(readFileSync(fx('graphic-alpha.png')), art.bytes);
+	expect(ratio, 'trace resembles the source graphic').toBeLessThan(0.28);
+});
+
+test('CV-39: /jpg-to-svg traces a photo and flags the approximate result', async ({ page }) => {
+	await gotoPath(page, '/jpg-to-svg');
+	await expect(page).toHaveTitle(/JPG to SVG Converter/);
+	await upload(page, fx('photo-1200x800.jpg'));
+	await expect(outputPill(page, 'SVG')).toHaveAttribute('aria-pressed', 'true');
+	await compress(page, { timeout: 120_000 });
+	const art = await downloadRow(page);
+	expect(art.name).toBe('photo-1200x800.svg');
+	expect(art.bytes.toString('utf8')).toContain('<svg');
+	// A photographic trace lands bigger than the JPG — the row says so honestly.
+	await expect(page.getByTestId('row-info')).toContainText(/vectorization suits logos/i);
+});
+
+test('CV-40: /dng-to-jpg develops a DNG via LibRaw and converts', async ({ page }) => {
+	const meta = fxMeta<{ width: number; height: number; ref: string }>('photo.dng');
+	await gotoPath(page, '/dng-to-jpg');
+	await expect(page).toHaveTitle(/DNG to JPG/);
+	await expect(page.getByText('Drop DNG files here')).toBeVisible();
+	await upload(page, fx('photo.dng'));
+	await expect(outputPill(page, 'JPG')).toHaveAttribute('aria-pressed', 'true');
+	await compress(page, { timeout: 120_000 });
+	const art = await downloadRow(page);
+	expect(art.name).toBe('photo.jpg');
+	const m = await imageMeta(art.bytes);
+	expect(m.format).toBe('jpeg');
+	expect([m.width, m.height]).toEqual([meta.width, meta.height]);
+	// Diff against the LibRaw ground-truth twin (generated by the fixture
+	// script from the same wasm). The browser runs the pthreads build, whose
+	// develop drifts ~±1 level on grain vs the single-threaded node twin —
+	// measured healthy ratio ≈0.09; garbage (channel swap, wrong gamma)
+	// lands ≥0.5. The bound proves a correct develop, not bit-exactness.
+	const { ratio } = await pixelDiff(readFileSync(fx(meta.ref)), art.bytes);
+	expect(ratio, 'browser develop matches the LibRaw twin').toBeLessThan(0.15);
+});
+
+test('CV-41: /raw-to-jpg accepts the whole RAW family and develops', async ({ page }) => {
+	await gotoPath(page, '/raw-to-jpg');
+	await expect(page).toHaveTitle(/RAW to JPG/);
+	await expect(page.getByText('Drop RAW files here')).toBeVisible();
+	await expect(page.locator('input[type=file]')).toHaveAttribute('accept', /\.cr2.*\.dng/);
+	await upload(page, fx('photo.dng'));
+	await expect(outputPill(page, 'JPG')).toHaveAttribute('aria-pressed', 'true');
+	await compress(page, { timeout: 120_000 });
+	expect((await imageMeta((await downloadRow(page)).bytes)).format).toBe('jpeg');
+});
+
+test('CV-42: /jxl-to-jpg decodes JPEG XL via icodec and converts', async ({ page }) => {
+	await gotoPath(page, '/jxl-to-jpg');
+	await expect(page).toHaveTitle(/JXL to JPG/);
+	await expect(page.locator('input[type=file]')).toHaveAttribute('accept', 'image/jxl,.jxl');
+	await upload(page, fx('photo-720x480.jxl'));
+	await expect(outputPill(page, 'JPG')).toHaveAttribute('aria-pressed', 'true');
+	await compress(page);
+	const art = await downloadRow(page);
+	expect(art.name).toBe('photo-720x480.jpg');
+	const m = await imageMeta(art.bytes);
+	expect(m.format).toBe('jpeg');
+	expect([m.width, m.height]).toEqual([720, 480]);
+	// Diff against the .jxl source itself (decodeRaw decodes it via icodec's
+	// node build) — proves a REAL decode while measuring only the JPG
+	// generation (the fixture is lossless JXL; the page presets quality 90).
+	const { ratio } = await pixelDiff(readFileSync(fx('photo-720x480.jxl')), art.bytes);
+	assertDiffBudget(ratio, DIFF_BUDGET.q90, 'CV-42 jxl→jpg');
+});
+
+test('CV-43: /jpg-to-jxl presets the JXL pill and encodes JPEG XL', async ({ page }) => {
+	await gotoPath(page, '/jpg-to-jxl');
+	await expect(page).toHaveTitle(/JPG to JXL/);
+	await upload(page, fx('photo-1200x800.jpg'));
+	// preset-only pill: rendered (and active) because the preset selected it
+	await expect(outputPill(page, 'JXL')).toHaveAttribute('aria-pressed', 'true');
+	await compress(page);
+	const art = await downloadRow(page);
+	expect(art.name).toBe('photo-1200x800.jxl');
+	const m = await imageMeta(art.bytes);
+	expect(m.format).toBe('jxl');
+	expect([m.width, m.height]).toEqual([1200, 800]);
+	// JXL results can't render in Chromium — the Compare button must not appear.
+	await expect(rows(page).getByRole('button', { name: 'Compare' })).toHaveCount(0);
+});
+
+test('CV-44: /compress-jxl scopes the dropzone to JXL and re-encodes', async ({ page }) => {
+	await gotoPath(page, '/compress-jxl');
+	await expect(page.getByText('Drop JXL files here')).toBeVisible();
+	await expect(page.locator('input[type=file]')).toHaveAttribute('accept', 'image/jxl,.jxl');
+	await upload(page, fx('photo-720x480.jxl'));
+	await expect(outputPill(page, 'JXL')).toHaveAttribute('aria-pressed', 'true');
+	await compress(page);
+	const art = await downloadRow(page);
+	expect(art.name).toBe('photo-720x480.jxl');
+	expect((await imageMeta(art.bytes)).format).toBe('jxl');
+});
+
+test('CV-45: /psd-to-jpg flattens a Photoshop file via @webtoon/psd', async ({ page }) => {
+	await gotoPath(page, '/psd-to-jpg');
+	await expect(page).toHaveTitle(/PSD to JPG/);
+	await expect(page.getByText('Drop PSD files here')).toBeVisible();
+	await expect(page.locator('input[type=file]')).toHaveAttribute(
+		'accept',
+		'image/vnd.adobe.photoshop,.psd'
+	);
+	await upload(page, fx('photo-640x400.psd'));
+	await expect(outputPill(page, 'JPG')).toHaveAttribute('aria-pressed', 'true');
+	await compress(page);
+	const art = await downloadRow(page);
+	expect(art.name).toBe('photo-640x400.jpg');
+	const m = await imageMeta(art.bytes);
+	expect(m.format).toBe('jpeg');
+	expect([m.width, m.height]).toEqual([640, 400]);
+	// Diff against the same-pixels PNG twin — proves the RLE planes really
+	// decoded (sharp cannot read the .psd source directly).
+	const { ratio } = await pixelDiff(readFileSync(fx('psd-ref.png')), art.bytes);
+	assertDiffBudget(ratio, DIFF_BUDGET.q90, 'CV-45 psd→jpg');
+});
+
+test('CV-46: /psd-to-png converts losslessly at quality 100', async ({ page }) => {
+	await gotoPath(page, '/psd-to-png');
+	await expect(page).toHaveTitle(/PSD to PNG/);
+	await upload(page, fx('photo-640x400.psd'));
+	await expect(outputPill(page, 'PNG')).toHaveAttribute('aria-pressed', 'true');
+	await compress(page);
+	const art = await downloadRow(page);
+	expect(art.name).toBe('photo-640x400.png');
+	const m = await imageMeta(art.bytes);
+	expect(m.format).toBe('png');
+	expect([m.width, m.height]).toEqual([640, 400]);
+	// PNG at q100 is lossless — the pixels must match the source exactly.
+	const { ratio } = await pixelDiff(readFileSync(fx('psd-ref.png')), art.bytes);
+	expect(ratio, 'lossless PSD→PNG must be pixel-exact').toBe(0);
+});

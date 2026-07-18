@@ -8,7 +8,7 @@ import type {
 	SvgCompressionSettings,
 	VideoConversionSettings
 } from '$lib/types';
-import { FONT_FORMATS } from '$lib/types';
+import { FONT_FORMATS, OCR_LANGUAGES } from '$lib/types';
 import { SUBSET_PRESET_IDS } from '$lib/codecs/subset-charsets';
 
 /** Single source of the per-tab defaults (previously inline in +page.svelte). */
@@ -19,7 +19,9 @@ export function defaultSettings(): SettingsMap {
 		targetKb: 500,
 		maxDimension: null,
 		downscaleToTarget: false,
-		keepMetadata: false
+		keepMetadata: false,
+		vectorMode: 'color' as const,
+		vectorDetail: 60
 	};
 	return {
 		// jpg/png/webp default to Auto (smallest of JPG/WebP per image); the GIF
@@ -51,7 +53,9 @@ export function defaultSettings(): SettingsMap {
 			imageDpi: 150,
 			imageFormat: 'jpg',
 			imageQuality: 85,
-			password: ''
+			password: '',
+			rotation: 90 as const,
+			watermarkText: 'CONFIDENTIAL'
 		},
 		video: {
 			container: 'mp4',
@@ -86,12 +90,33 @@ export function defaultSettings(): SettingsMap {
 		},
 		exif: {
 			removeIcc: false
+		},
+		ocr: {
+			op: 'toText' as const,
+			language: 'eng'
+		},
+		subtitle: {
+			to: 'vtt' as const
+		},
+		ebook: {
+			quality: 80,
+			maxDimension: null
+		},
+		model: {
+			compression: 'draco' as const,
+			simplify: null,
+			textureQuality: 80,
+			textureMaxDimension: null
+		},
+		data: {
+			csvDelimiter: ',' as const,
+			jsonIndent: 2 as const
 		}
 	};
 }
 
 const IMAGE_TABS = ['jpg', 'png', 'webp', 'gif', 'heic'] as const;
-const OUTPUT_FORMATS = new Set(['auto', 'jpg', 'png', 'webp', 'gif', 'avif', 'ico']);
+const OUTPUT_FORMATS = new Set(['auto', 'jpg', 'png', 'webp', 'gif', 'avif', 'ico', 'svg', 'jxl']);
 
 function num(v: unknown, min: number, max: number, fallback: number): number {
 	if (typeof v !== 'number' || !Number.isFinite(v)) return fallback;
@@ -120,12 +145,15 @@ function mergeImage(
 		s.maxDimension === null
 			? null
 			: num(s.maxDimension, 1, 65_535, target.maxDimension ?? 0) || null;
+	target.vectorMode = oneOf(s.vectorMode, ['color', 'bw'] as const, target.vectorMode);
+	target.vectorDetail = num(s.vectorDetail, 0, 100, target.vectorDetail);
 	const format = s.outputFormat;
 	if (
 		typeof format === 'string' &&
 		OUTPUT_FORMATS.has(format) &&
 		!(tab === 'heic' && format === 'gif') && // GIF output isn't offered for HEIC
-		!(tab === 'gif' && format === 'auto') // the GIF tab has no Auto pill
+		!(tab === 'gif' && format === 'auto') && // the GIF tab has no Auto pill
+		!(format === 'svg' && tab !== 'jpg' && tab !== 'png') // vectorize: jpg/png only
 	) {
 		target.outputFormat = format as ImageCompressionSettings['outputFormat'];
 	}
@@ -212,9 +240,27 @@ function mergePdf(target: PdfCompressionSettings, s: Record<string, unknown>): v
 	// `password` is deliberately NOT merged — secrets never round-trip storage.
 	target.op = oneOf(
 		s.op,
-		['compress', 'merge', 'pages', 'toImages', 'fromImages', 'unlock', 'protect'] as const,
+		[
+			'compress',
+			'merge',
+			'pages',
+			'toImages',
+			'fromImages',
+			'unlock',
+			'protect',
+			'rotate',
+			'watermark',
+			'pageNumbers',
+			'toText',
+			'grayscale',
+			'toPdfa'
+		] as const,
 		target.op
 	);
+	target.rotation = oneOf(s.rotation, [90, 180, 270] as const, target.rotation);
+	if (typeof s.watermarkText === 'string' && s.watermarkText.length <= 100) {
+		target.watermarkText = s.watermarkText;
+	}
 	target.mode = oneOf(s.mode, ['level', 'target'] as const, target.mode);
 	target.level = oneOf(
 		s.level,
@@ -272,5 +318,46 @@ export function mergeStoredSettings(target: SettingsMap, stored: unknown): void 
 	if (typeof s.exif === 'object' && s.exif !== null) {
 		const e = s.exif as Record<string, unknown>;
 		target.exif.removeIcc = bool(e.removeIcc, target.exif.removeIcc);
+	}
+	if (typeof s.ocr === 'object' && s.ocr !== null) {
+		const o = s.ocr as Record<string, unknown>;
+		target.ocr.op = oneOf(o.op, ['toText', 'toPdf'] as const, target.ocr.op);
+		target.ocr.language = oneOf(
+			o.language,
+			OCR_LANGUAGES.map((l) => l.code),
+			target.ocr.language
+		);
+	}
+	if (typeof s.subtitle === 'object' && s.subtitle !== null) {
+		const o = s.subtitle as Record<string, unknown>;
+		target.subtitle.to = oneOf(o.to, ['vtt', 'srt'] as const, target.subtitle.to);
+	}
+	if (typeof s.ebook === 'object' && s.ebook !== null) {
+		const o = s.ebook as Record<string, unknown>;
+		target.ebook.quality = num(o.quality, 1, 100, target.ebook.quality);
+		if (o.maxDimension === null) target.ebook.maxDimension = null;
+		else if ([1200, 1600, 2048].includes(o.maxDimension as number)) {
+			target.ebook.maxDimension = o.maxDimension as number;
+		}
+	}
+	if (typeof s.model === 'object' && s.model !== null) {
+		const o = s.model as Record<string, unknown>;
+		target.model.compression = oneOf(
+			o.compression,
+			['none', 'draco', 'meshopt'] as const,
+			target.model.compression
+		);
+		if (o.simplify === null) target.model.simplify = null;
+		else if (typeof o.simplify === 'number') target.model.simplify = num(o.simplify, 1, 100, 50);
+		target.model.textureQuality = num(o.textureQuality, 1, 100, target.model.textureQuality);
+		if (o.textureMaxDimension === null) target.model.textureMaxDimension = null;
+		else if ([1024, 2048].includes(o.textureMaxDimension as number)) {
+			target.model.textureMaxDimension = o.textureMaxDimension as number;
+		}
+	}
+	if (typeof s.data === 'object' && s.data !== null) {
+		const o = s.data as Record<string, unknown>;
+		target.data.csvDelimiter = oneOf(o.csvDelimiter, [',', ';', 'tab'] as const, target.data.csvDelimiter);
+		target.data.jsonIndent = oneOf(o.jsonIndent, [2, 0] as const, target.data.jsonIndent);
 	}
 }

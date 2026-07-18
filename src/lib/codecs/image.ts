@@ -1,5 +1,5 @@
 import type { FileFormat, ImageCompressionSettings, ImageFormat } from '$lib/types';
-import type { EncodeResult } from '$lib/workers/protocol';
+import type { EncodeResult, PredecodedPixels } from '$lib/workers/protocol';
 import { callWorker } from '$lib/workers/rpc';
 import { sniffAnimatedInput, WEBP_MAX_DIMENSION } from '$lib/workers/webp-mux';
 import { detectColorSpace, isWasmDecodedSource } from './color-profile';
@@ -26,16 +26,17 @@ export interface ImageResult {
 	resized: boolean;
 	animated: boolean;
 	/** Concrete format of `blob` ('auto' requests resolve in the worker). */
-	format: ImageFormat | 'ico';
+	format: ImageFormat | 'ico' | 'jxl';
 }
 
-const MIME: Record<ImageFormat | 'ico', string> = {
+const MIME: Record<ImageFormat | 'ico' | 'jxl', string> = {
 	jpg: 'image/jpeg',
 	png: 'image/png',
 	webp: 'image/webp',
 	gif: 'image/gif',
 	avif: 'image/avif',
-	ico: 'image/x-icon'
+	ico: 'image/x-icon',
+	jxl: 'image/jxl'
 };
 
 // Target-size search ladder: rung 0 = best quality. Step-5 granularity keeps
@@ -111,7 +112,7 @@ function isAnimatedInput(bytes: ArrayBuffer): boolean {
 
 function animationWarning(
 	inputAnimated: boolean,
-	output: ImageFormat | 'ico',
+	output: ImageFormat | 'ico' | 'jxl',
 	result: EncodeResult
 ): string | null {
 	if (!inputAnimated) return null;
@@ -144,19 +145,26 @@ function joinInfo(...infos: (string | null)[]): string | null {
 export async function encodeOnce(
 	bytes: ArrayBuffer,
 	quality: number,
-	output: ImageFormat | 'auto' | 'ico',
+	output: ImageFormat | 'auto' | 'ico' | 'jxl',
 	maxDimension: number | null,
 	source: 'heic' | undefined,
 	onProgress?: (p: ImageProgress) => void,
-	signal?: AbortSignal
+	signal?: AbortSignal,
+	predecoded?: PredecodedPixels
 ): Promise<EncodeResult> {
 	// Transfer a copy: target-size mode reuses `bytes` across attempts.
 	const copy = bytes.slice(0);
+	const transfer = [copy];
+	// Same rule for predecoded RAW pixels — clone per attempt, transfer the clone.
+	const predecodedCopy = predecoded
+		? { ...predecoded, data: predecoded.data.slice(0) }
+		: undefined;
+	if (predecodedCopy) transfer.push(predecodedCopy.data);
 	return callWorker(
 		'image',
 		'encode',
-		{ bytes: copy, quality, output, maxDimension, source },
-		[copy],
+		{ bytes: copy, quality, output, maxDimension, source, predecoded: predecodedCopy },
+		transfer,
 		(progress) => onProgress?.(progress),
 		{ owner: signal }
 	);
@@ -192,8 +200,15 @@ export async function compressImage(
 	settings: ImageCompressionSettings,
 	onProgress?: (p: ImageProgress) => void,
 	sourceFormat?: FileFormat,
-	signal?: AbortSignal
+	signal?: AbortSignal,
+	/** Pixels decoded outside the worker (camera RAW) — skips byte-level work. */
+	predecoded?: PredecodedPixels
 ): Promise<ImageResult> {
+	// SVG output never reaches this codec — compress.ts dispatches it to the
+	// vectorize codec first; the guard also narrows outputFormat's type here.
+	if (settings.outputFormat === 'svg') {
+		throw new Error('SVG output is handled by the vectorize codec');
+	}
 	// Read the ($state-proxied) settings into plain primitives once.
 	const { quality, outputFormat, mode, targetKb, downscaleToTarget, keepMetadata } = settings;
 	const maxDimension = normalizeMaxDimension(settings.maxDimension);
@@ -206,23 +221,30 @@ export async function compressImage(
 		return compressGifWithGifsicle(file, quality, maxDimension);
 	}
 
-	const bytes = await file.arrayBuffer();
-	const inputAnimated = source ? isHeicSequence(bytes) : isAnimatedInput(bytes);
+	// Predecoded RAW: the original bytes stay outside the pipeline entirely —
+	// no animation sniffing, no color-space detection (LibRaw outputs sRGB),
+	// no EXIF splice source.
+	const bytes = predecoded ? new ArrayBuffer(0) : await file.arrayBuffer();
+	const inputAnimated = predecoded
+		? false
+		: source
+			? isHeicSequence(bytes)
+			: isAnimatedInput(bytes);
 	// Honesty note: browser decoding converts every tagged source to sRGB;
 	// on the WASM paths (HEIC/TIFF) the worker matrix-converts the spaces it
 	// knows — so the note appears only where a conversion really happened.
 	// (The EXIF tab preserves ICC and is unaffected.)
-	const colorInfo = await detectColorSpace(bytes).catch(() => null);
+	const colorInfo = predecoded ? null : await detectColorSpace(bytes).catch(() => null);
 	const converted =
 		colorInfo &&
 		(!isWasmDecodedSource(bytes) || convertibleSpace(colorInfo.space, colorInfo.transfer));
 	const gamutInfo = converted ? `Wide-gamut color (${colorInfo.name}) converted to sRGB` : null;
-	const exifTiff = keepMetadata ? exifPayloadForReencode(bytes) : null;
+	const exifTiff = keepMetadata && !predecoded ? exifPayloadForReencode(bytes) : null;
 
 	if (mode === 'target' && outputFormat !== 'gif' && outputFormat !== 'ico') {
 		// The ladder search needs ONE monotonic codec — 'auto' resolves to webp
 		// (handles alpha and animation, and photos rarely lose to jpg there).
-		const targetFormat: ImageFormat = outputFormat === 'auto' ? 'webp' : outputFormat;
+		const targetFormat: ImageFormat | 'jxl' = outputFormat === 'auto' ? 'webp' : outputFormat;
 		// Reserve the splice bytes up front so "fits under target" stays true
 		// AFTER the EXIF lands. Keeping metadata under a tiny target would eat
 		// most of the budget — drop it instead of shipping mush.
@@ -243,7 +265,8 @@ export async function compressImage(
 			inputAnimated,
 			downscaleToTarget,
 			onProgress,
-			signal
+			signal,
+			predecoded
 		);
 		// A kept original is untouched — its profile was NOT converted.
 		const keptOriginal = result.blob === file;
@@ -258,7 +281,8 @@ export async function compressImage(
 		maxDimension,
 		source,
 		onProgress,
-		signal
+		signal,
+		predecoded
 	);
 	return withKeptMetadata(
 		{
@@ -277,14 +301,15 @@ export async function compressImage(
 async function compressToTarget(
 	file: File,
 	bytes: ArrayBuffer,
-	output: ImageFormat,
+	output: ImageFormat | 'jxl',
 	maxDimension: number | null,
 	targetBytes: number,
 	source: 'heic' | undefined,
 	inputAnimated: boolean,
 	downscale: boolean,
 	onProgress?: (p: ImageProgress) => void,
-	signal?: AbortSignal
+	signal?: AbortSignal,
+	predecoded?: PredecodedPixels
 ): Promise<ImageResult> {
 	const { best, smallest } = await searchTargetSize<EncodeResult>(
 		QUALITY_LADDER.length,
@@ -297,7 +322,8 @@ async function compressToTarget(
 				maxDimension,
 				source,
 				(p) => onProgress?.({ ...state, ...p }),
-				signal
+				signal,
+				predecoded
 			),
 		(out) => out.bytes.byteLength,
 		onProgress,
@@ -360,7 +386,8 @@ async function compressToTarget(
 						rungs[rung],
 						source,
 						(p) => onProgress?.({ ...state, ...p }),
-						signal
+						signal,
+						predecoded
 					),
 				(out) => out.bytes.byteLength,
 				onProgress,

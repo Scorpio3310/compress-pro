@@ -85,7 +85,12 @@
 		audio: emptyTab(),
 		font: emptyTab(),
 		zip: emptyTab(),
-		exif: emptyTab()
+		exif: emptyTab(),
+		ocr: emptyTab(),
+		subtitle: emptyTab(),
+		ebook: emptyTab(),
+		model: emptyTab(),
+		data: emptyTab()
 	});
 
 	// Persisted per-tab settings (localStorage-backed store).
@@ -112,7 +117,11 @@
 					? IMAGE_ACCEPT
 					: activeTab === 'zip' && zipOp === 'create'
 						? ''
-						: undefined)
+						: activeTab === 'ocr'
+							? settings.ocr.op === 'toPdf'
+								? 'application/pdf,.pdf'
+								: 'image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp'
+							: undefined)
 	);
 	let effectiveAccept = $derived(dropzoneAccept ?? TAB_ACCEPT[activeTab]);
 
@@ -326,16 +335,18 @@
 	// Cancels are owner-scoped: every callWorker reachable from these kinds must
 	// pass `opts.owner` (the run's signal), or it becomes unkillable mid-call.
 	const CANCEL_KINDS: Partial<Record<FileFormat, WorkerKind[]>> = {
-		jpg: ['image'],
-		png: ['image'],
+		jpg: ['image', 'vtracer'], // SVG output vectorizes via the vtracer worker
+		png: ['image', 'vtracer'],
 		webp: ['image'],
 		gif: ['image'],
 		heic: ['image'],
 		svg: ['svg', 'image'], // raster (PNG/ICO) output encodes via the image worker
-		pdf: ['gs', 'image'], // fromImages re-encodes pages via the image worker
+		pdf: ['gs', 'qpdf', 'image'], // fromImages re-encodes pages via the image worker
 		font: ['font'], // synchronous brotli — terminate is the only mid-encode cancel
 		zip: ['archive'], // 7zz is synchronous wasm too; fflate fast paths cancel cooperatively
-		exif: ['image'] // metadata strip runs in the image worker (transferred buffers)
+		exif: ['image'], // metadata strip runs in the image worker (transferred buffers)
+		ebook: ['archive', 'image'], // CBR/exotic zips read via 7zz; pages re-encode via the image pool
+		model: ['model'] // synchronous draco/meshopt wasm — terminate is the only mid-encode cancel
 	};
 
 	// The primary worker each tab warms on file-drop (see handleFiles). Only the
@@ -352,17 +363,29 @@
 		audio: 'video',
 		font: 'font',
 		zip: 'archive',
-		exif: 'image'
+		exif: 'image',
+		// The re-encode pool is the critical path (EPUB/CBZ read via fflate,
+		// no wasm); CBR's 7zz fetches lazily on first extract.
+		ebook: 'image',
+		// The model worker warm-fetches its draco/meshopt wasm on construction.
+		model: 'model'
 	};
 
-	// Ghostscript (a 15 MB wasm fetch + compile) backs only compress/unlock/
-	// protect — and merge when its "compress result" toggle is on. pages and
-	// toImages run on pdf-lib/pdf.js, which aren't pooled workers; fromImages'
-	// critical path is the image worker re-encoding the pages.
+	// Ghostscript (a 15 MB wasm fetch + compile) backs only compress — and
+	// merge when its "compress result" toggle is on; unlock/protect run on the
+	// small qpdf worker. pages and toImages run on pdf-lib/pdf.js, which
+	// aren't pooled workers; fromImages' critical path is the image worker
+	// re-encoding the pages.
 	function warmKindFor(format: FileFormat): WorkerKind | null {
+		// jpg/png flip to the vtracer engine when SVG output is selected (the
+		// /png-to-svg and /jpg-to-svg pages preset it).
+		if ((format === 'jpg' || format === 'png') && settings[format].outputFormat === 'svg') {
+			return 'vtracer';
+		}
 		if (format !== 'pdf') return WARM_KIND[format] ?? null;
 		const { op, mergeCompress } = settings.pdf;
-		if (op === 'compress' || op === 'unlock' || op === 'protect') return 'gs';
+		if (op === 'compress' || op === 'grayscale' || op === 'toPdfa') return 'gs';
+		if (op === 'unlock' || op === 'protect') return 'qpdf';
 		if (op === 'merge') return mergeCompress ? 'gs' : null;
 		if (op === 'fromImages') return 'image';
 		return null;
@@ -563,6 +586,7 @@
 			settings.svg.outputFormat = preset.to;
 		} else if (preset.kind === 'video') {
 			settings.video.container = preset.container;
+			if (preset.removeAudio) settings.video.removeAudio = true;
 		} else if (preset.kind === 'audio') {
 			settings.audio.outputFormat = preset.output;
 		} else if (preset.kind === 'font') {
@@ -578,6 +602,12 @@
 			}
 		} else if (preset.kind === 'pdf-op') {
 			handlePdfOpChange(preset.op);
+		} else if (preset.kind === 'ocr') {
+			settings.ocr.op = preset.op;
+		} else if (preset.kind === 'subtitle') {
+			settings.subtitle.to = preset.to;
+		} else if (preset.kind === 'ebook') {
+			if (preset.quality !== undefined) settings.ebook.quality = preset.quality;
 		} else if (preset.kind === 'archive') {
 			handleZipOpChange(preset.op);
 			if (preset.to) settings.zip.outputFormat = preset.to;
@@ -840,6 +870,18 @@
 						: 'any files'
 					: activeTab === 'exif'
 						? 'photos'
+						: activeTab === 'ocr'
+							? settings.ocr.op === 'toPdf'
+								? 'PDFs'
+								: 'images'
+						: activeTab === 'subtitle'
+							? 'subtitle files'
+						: activeTab === 'ebook'
+							? 'EPUB, CBZ or CBR files'
+						: activeTab === 'model'
+							? 'GLB models'
+						: activeTab === 'data'
+							? 'CSV, Excel, JSON or YAML files'
 						: activeTab === 'zip'
 							? zipOp === 'create'
 								? 'files'
@@ -899,6 +941,11 @@
 					activeTab !== 'audio' &&
 					activeTab !== 'font' &&
 					activeTab !== 'zip' &&
+					activeTab !== 'ocr' &&
+					activeTab !== 'subtitle' &&
+					activeTab !== 'ebook' &&
+					activeTab !== 'model' &&
+					activeTab !== 'data' &&
 					(activeTab !== 'pdf' || pdfOp === 'compress')}
 			/>
 

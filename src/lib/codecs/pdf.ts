@@ -297,70 +297,38 @@ async function runGs(
 	return retry;
 }
 
-// --- Unlock / Protect (no downsampling flags — pixel quality is untouched) --
+// --- Unlock / Protect (qpdf: structural crypto, content never re-encoded) --
 
 /**
- * Minimal pdfwrite pass: decrypts with the user's password (`unlock`) or
- * re-saves with password encryption (`protect`). The password stays inside
- * the worker args — it is never persisted or sent anywhere.
- *
- * pdfwrite can WRITE only encryption revisions 2/3 (measured: R4/R6 fail with
- * "Encryption revisions 2 and 3 are only supported") — so protect uses R3
- * (128-bit RC4), the strongest this engine can produce; AESV2/V3 support in
- * the wasm is read-side only.
+ * qpdf rewrites only the encryption layer — pages are never re-interpreted,
+ * unlike the old Ghostscript pdfwrite pass, which re-serialized the whole
+ * document and could write nothing stronger than RC4-128/R3. protect writes
+ * AES-256 (R6); unlock strips whatever revision the file carries. The
+ * password rides in the worker payload per call — never persisted anywhere.
  */
-function buildCryptArgs(op: 'unlock' | 'protect', password: string): string[] {
-	const base = [
-		'-sDEVICE=pdfwrite',
-		'-dCompatibilityLevel=1.7',
-		'-dNOPAUSE',
-		'-dBATCH',
-		'-dSAFER',
-		'-sOutputFile=/out.pdf'
-	];
-	if (op === 'unlock') {
-		return [...base, `-sPDFPassword=${password}`, '-f', '/in.pdf'];
-	}
-	return [
-		...base,
-		`-sOwnerPassword=${password}`,
-		`-sUserPassword=${password}`,
-		'-dEncryptionR=3',
-		'-dKeyLength=128',
-		'-dPermissions=-4',
-		'-f',
-		'/in.pdf'
-	];
-}
-
-export async function unlockPdf(
+async function runQpdfCrypt(
 	file: File,
+	op: 'unlock' | 'protect',
 	password: string,
-	onPage: (page: number, pageCount: number | null) => void,
 	signal?: AbortSignal
 ): Promise<Blob> {
-	const out = await runGsArgs(
-		await file.arrayBuffer(),
-		buildCryptArgs('unlock', password),
-		onPage,
-		signal
-	);
-	return new Blob([out as BlobPart], { type: 'application/pdf' });
+	const pdf = await file.arrayBuffer();
+	const result = await callWorker('qpdf', 'crypt', { pdf, op, password }, [pdf], undefined, {
+		owner: signal
+	});
+	return new Blob([new Uint8Array(result) as BlobPart], { type: 'application/pdf' });
+}
+
+export async function unlockPdf(file: File, password: string, signal?: AbortSignal): Promise<Blob> {
+	return runQpdfCrypt(file, 'unlock', password, signal);
 }
 
 export async function protectPdf(
 	file: File,
 	password: string,
-	onPage: (page: number, pageCount: number | null) => void,
 	signal?: AbortSignal
 ): Promise<Blob> {
-	const out = await runGsArgs(
-		await file.arrayBuffer(),
-		buildCryptArgs('protect', password),
-		onPage,
-		signal
-	);
-	return new Blob([out as BlobPart], { type: 'application/pdf' });
+	return runQpdfCrypt(file, 'protect', password, signal);
 }
 
 async function runPipeline(
@@ -442,4 +410,67 @@ async function compressToTarget(
 		blob: new Blob([smallest as BlobPart], { type: 'application/pdf' }),
 		warning: targetNotReachableWarning(targetBytes, smallest.byteLength)
 	};
+}
+
+// --- Grayscale / PDF-A (pdfwrite variants over the existing gs worker) ------
+
+/** Convert every color to grayscale — a pdfwrite pass with the Gray strategy
+ *  (both symbols confirmed in the wasm; pixel data is not downsampled). */
+export async function grayscalePdf(
+	file: File,
+	onPage: (page: number, pageCount: number | null) => void,
+	signal?: AbortSignal
+): Promise<Blob> {
+	const args = [
+		'-sDEVICE=pdfwrite',
+		'-dCompatibilityLevel=1.7',
+		'-dNOPAUSE',
+		'-dBATCH',
+		'-dSAFER',
+		'-sColorConversionStrategy=Gray',
+		'-dProcessColorModel=/DeviceGray',
+		'-sOutputFile=/out.pdf',
+		'-f',
+		'/in.pdf'
+	];
+	const out = await runGsArgs(await file.arrayBuffer(), args, onPage, signal);
+	return new Blob([out as BlobPart], { type: 'application/pdf' });
+}
+
+/** The OutputIntent definition -dPDFA needs, injected inline via `-c` — the
+ *  sRGB ICC profile ships in the wasm's ROM filesystem, so no extra files
+ *  cross the worker boundary. (This replaces the PDFA_def.ps a desktop
+ *  Ghostscript would read from disk; measured: output declares
+ *  pdfaid:part='2' conformance='B'.) */
+const PDFA_OUTPUT_INTENT = [
+	'[/_objdef {icc_PDFA} /type /stream /OBJ pdfmark',
+	'[{icc_PDFA} <</N 3>> /PUT pdfmark',
+	'[{icc_PDFA} (%rom%iccprofiles/srgb.icc) (r) file /PUT pdfmark',
+	'[/_objdef {OutputIntent_PDFA} /type /dict /OBJ pdfmark',
+	'[{OutputIntent_PDFA} <</Type /OutputIntent /S /GTS_PDFA1 /DestOutputProfile {icc_PDFA} /OutputConditionIdentifier (sRGB)>> /PUT pdfmark',
+	'[{Catalog} <</OutputIntents [ {OutputIntent_PDFA} ]>> /PUT pdfmark'
+].join(' ');
+
+/** Convert to PDF/A-2b (ISO archival). No -dSAFER: the inline OutputIntent
+ *  must read the ROM srgb.icc, which SAFER would block. */
+export async function pdfaPdf(
+	file: File,
+	onPage: (page: number, pageCount: number | null) => void,
+	signal?: AbortSignal
+): Promise<Blob> {
+	const args = [
+		'-sDEVICE=pdfwrite',
+		'-dPDFA=2',
+		'-dPDFACompatibilityPolicy=1',
+		'-sColorConversionStrategy=RGB',
+		'-dNOPAUSE',
+		'-dBATCH',
+		'-sOutputFile=/out.pdf',
+		'-c',
+		PDFA_OUTPUT_INTENT,
+		'-f',
+		'/in.pdf'
+	];
+	const out = await runGsArgs(await file.arrayBuffer(), args, onPage, signal);
+	return new Blob([out as BlobPart], { type: 'application/pdf' });
 }

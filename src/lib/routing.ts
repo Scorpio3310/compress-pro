@@ -14,6 +14,21 @@ const MIME_TO_FORMAT: Record<string, FileFormat> = {
 	'image/bmp': 'jpg',
 	'image/x-ms-bmp': 'jpg',
 	'image/tiff': 'jpg',
+	// JXL rides the jpg tab too — icodec/libjxl decodes it in the worker.
+	'image/jxl': 'jpg',
+	// PSD (flattened composite) — @webtoon/psd decodes it in the worker.
+	'image/vnd.adobe.photoshop': 'jpg',
+	'application/x-photoshop': 'jpg',
+	'image/x-photoshop': 'jpg',
+	// Camera RAW rides the jpg tab too — decoded by LibRaw (codecs/raw.ts).
+	// Pickers usually report a blank MIME for RAW; extensions are load-bearing.
+	'image/x-adobe-dng': 'jpg',
+	'image/x-canon-cr2': 'jpg',
+	'image/x-nikon-nef': 'jpg',
+	'image/x-sony-arw': 'jpg',
+	'image/x-fuji-raf': 'jpg',
+	'image/x-panasonic-rw2': 'jpg',
+	'image/x-olympus-orf': 'jpg',
 	'image/heic': 'heic',
 	'image/heif': 'heic',
 	'image/heic-sequence': 'heic',
@@ -63,7 +78,19 @@ const MIME_TO_FORMAT: Record<string, FileFormat> = {
 	'application/x-cpio': 'zip',
 	'application/x-lzh-compressed': 'zip',
 	'application/x-arj': 'zip',
-	'application/x-compress': 'zip'
+	'application/x-compress': 'zip',
+	'text/vtt': 'subtitle',
+	'application/x-subrip': 'subtitle',
+	'application/epub+zip': 'ebook',
+	'application/vnd.comicbook+zip': 'ebook',
+	'application/vnd.comicbook-rar': 'ebook',
+	'model/gltf-binary': 'model',
+	'text/csv': 'data',
+	'application/json': 'data',
+	'application/x-yaml': 'data',
+	'application/yaml': 'data',
+	'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'data',
+	'application/vnd.ms-excel': 'data'
 };
 
 const EXT_TO_FORMAT: Record<string, FileFormat> = {
@@ -78,6 +105,15 @@ const EXT_TO_FORMAT: Record<string, FileFormat> = {
 	bmp: 'jpg',
 	tif: 'jpg',
 	tiff: 'jpg',
+	jxl: 'jpg',
+	psd: 'jpg',
+	cr2: 'jpg', // RAW family — LibRaw decodes, converts on the jpg tab
+	nef: 'jpg',
+	arw: 'jpg',
+	dng: 'jpg',
+	raf: 'jpg',
+	rw2: 'jpg',
+	orf: 'jpg',
 	heic: 'heic',
 	heif: 'heic',
 	svg: 'svg',
@@ -123,7 +159,30 @@ const EXT_TO_FORMAT: Record<string, FileFormat> = {
 	lzh: 'zip',
 	arj: 'zip',
 	z: 'zip', // .Z (unix compress) — formatFromName lowercases
-	lzma: 'zip'
+	lzma: 'zip',
+	// Subtitles — pickers report blank/odd MIMEs for all three, extensions rule.
+	srt: 'subtitle',
+	vtt: 'subtitle',
+	ass: 'subtitle',
+	ssa: 'subtitle',
+	// E-books & comics — ZIP/RAR magics inside, but the extension IS the intent
+	// (a .cbz dropped on / means "comic", never "extract this zip").
+	epub: 'ebook',
+	cbz: 'ebook',
+	cbr: 'ebook',
+	// 3D models. .gltf is accepted so the codec can explain "export as .glb"
+	// instead of a silent unsupported-file drop; a lone .bin stays unroutable.
+	glb: 'model',
+	gltf: 'model',
+	// Data converters — the target is implied per input (csv→xlsx, xlsx→csv,
+	// json→yaml, yaml→json).
+	csv: 'data',
+	tsv: 'data',
+	xlsx: 'data',
+	xls: 'data',
+	json: 'data',
+	yaml: 'data',
+	yml: 'data'
 };
 
 /** Extension-only tab lookup — for names without a MIME (ZIP entries). */
@@ -139,7 +198,20 @@ export function routeFileToFormat(file: File): FileFormat | null {
 	return MIME_TO_FORMAT[file.type.toLowerCase()] ?? formatFromName(file.name);
 }
 
-export type FormatFamily = 'image' | 'svg' | 'pdf' | 'video' | 'audio' | 'font' | 'zip' | 'exif';
+export type FormatFamily =
+	| 'image'
+	| 'svg'
+	| 'pdf'
+	| 'video'
+	| 'audio'
+	| 'font'
+	| 'zip'
+	| 'exif'
+	| 'ocr'
+	| 'subtitle'
+	| 'ebook'
+	| 'model'
+	| 'data';
 
 /**
  * Pipeline family of a tab. Same-family drops on a dropzone park there (a PNG
@@ -169,10 +241,23 @@ export function matchesAccept(accept: string, name: string, type: string): boole
 }
 
 /** Dropzone/file-picker accept per tab (FileUpload renders these). */
+/** RAW camera extensions LibRaw decodes for us (they ride the jpg tab). */
+export const RAW_EXTENSIONS = new Set(['cr2', 'nef', 'arw', 'dng', 'raf', 'rw2', 'orf']);
+
+/** RAW must be detected UP FRONT, never sniffed: CR2/NEF/ARW/DNG carry TIFF
+ *  magic bytes, so byte-sniffing would misroute them to the TIFF decoder. */
+export function isRawFile(name: string, mime: string): boolean {
+	if (/^image\/x-(adobe-dng|canon-cr2|nikon-nef|sony-arw|fuji-raf|panasonic-rw2|olympus-orf)$/.test(mime)) {
+		return true;
+	}
+	const dot = name.lastIndexOf('.');
+	return dot >= 0 && RAW_EXTENSIONS.has(name.slice(dot + 1).toLowerCase());
+}
+
 export const TAB_ACCEPT: Record<FileFormat, string> = {
-	// AVIF/BMP/TIFF ride on the jpg tab (no tabs of their own; convert to JPG).
-	// .jpe: legacy JPEG extension pickers report with a blank MIME.
-	jpg: 'image/jpeg,image/avif,image/bmp,image/tiff,.jpe,.avif,.bmp,.tif,.tiff',
+	// AVIF/BMP/TIFF/RAW ride on the jpg tab (no tabs of their own; convert to
+	// JPG). .jpe: legacy JPEG extension pickers report with a blank MIME.
+	jpg: 'image/jpeg,image/avif,image/bmp,image/tiff,image/jxl,image/vnd.adobe.photoshop,.jpe,.avif,.bmp,.tif,.tiff,.jxl,.psd,.cr2,.nef,.arw,.dng,.raf,.rw2,.orf',
 	png: 'image/png',
 	webp: 'image/webp',
 	gif: 'image/gif',
@@ -191,5 +276,16 @@ export const TAB_ACCEPT: Record<FileFormat, string> = {
 	// Extract/convert default; the create op overrides accept to '' (anything)
 	// in-page. Extensions load-bearing (blank MIMEs for most archive types).
 	zip: 'application/zip,application/x-zip-compressed,application/x-7z-compressed,application/vnd.rar,application/x-tar,application/gzip,.zip,.7z,.rar,.tar,.gz,.tgz,.bz2,.tbz2,.txz,.xz,.iso,.cab,.deb,.rpm,.cpio,.lha,.lzh,.arj,.z,.lzma',
-	exif: 'image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp'
+	exif: 'image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp',
+	// Chosen destination like exif — nothing ROUTES here; the per-op accept
+	// (images for toText, PDF for toPdf) narrows further in-page.
+	ocr: 'image/jpeg,image/png,image/webp,application/pdf,.jpg,.jpeg,.png,.webp,.pdf',
+	// Extensions load-bearing: pickers report blank MIMEs for .srt/.ass.
+	subtitle: 'text/vtt,application/x-subrip,.srt,.vtt,.ass,.ssa',
+	// Extensions load-bearing again — most pickers blank the MIME for .cbz/.cbr.
+	ebook: 'application/epub+zip,.epub,.cbz,.cbr',
+	// .gltf accepted for the helpful export-as-glb error, not for conversion.
+	model: 'model/gltf-binary,.glb,.gltf',
+	// Extensions load-bearing (blank MIMEs for .yaml/.tsv are common).
+	data: 'text/csv,application/json,.csv,.tsv,.xlsx,.xls,.json,.yaml,.yml'
 };

@@ -32,7 +32,11 @@ const NEVER = new Set(['/robots.txt', '/sitemap.xml']);
 // install into a ~25 MB background download. Runtime cache-first picks each
 // file up on first real use. (Site webfonts are .woff2 — deliberately kept.)
 const isHeavyAsset = (path: string) =>
-	/\.(wasm|mp3|mp4|gif|jpe?g|png|webp|avif|ttf|otf)$/.test(path);
+	// /tesseract + /tessdata: the OCR engine (~12 MB of .wasm.js cores) and its
+	// language models — fetched on first OCR use only, never at install.
+	/\.(wasm|mp3|mp4|gif|jpe?g|png|webp|avif|ttf|otf|traineddata|gz)$/.test(path) ||
+	path.startsWith('/tesseract/') ||
+	path.startsWith('/tessdata/');
 // Compute-only JS loaded on demand: the codec worker entries + their chunks
 // (mediabunny/video/svg alone are ~2 MB) and the pdf.js worker (~1.2 MB). Like
 // the wasm they sit beside, they cache-first on first real use — precaching
@@ -53,7 +57,7 @@ const PRECACHE = [
 	...prerendered.filter((path) => path === '/'),
 	// static/og/* (~5 MB of social previews) is fetched only by scrapers,
 	// which never run this service worker — precaching it is pure waste.
-	...files.filter((path) => !path.startsWith('/og/'))
+	...files.filter((path) => !path.startsWith('/og/') && !isHeavyAsset(path))
 ];
 
 self.addEventListener('install', (event) => {

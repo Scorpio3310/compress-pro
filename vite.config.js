@@ -46,6 +46,7 @@ export default defineConfig({
 			// the needed modules — its exports map offers no public subpaths.
 			'icodec-png': fileURLToPath(new URL('./node_modules/icodec/lib/png.js', import.meta.url)),
 			'icodec-heic': fileURLToPath(new URL('./node_modules/icodec/lib/heic.js', import.meta.url)),
+			'icodec-jxl': fileURLToPath(new URL('./node_modules/icodec/lib/jxl.js', import.meta.url)),
 			'icodec-common': fileURLToPath(
 				new URL('./node_modules/icodec/lib/common.js', import.meta.url)
 			)
@@ -62,6 +63,10 @@ export default defineConfig({
 			'@jsquash/avif',
 			'@jsquash/resize',
 			'icodec',
+			'vtracer-wasm',
+			// ESM with its own `new Worker(new URL(...))` chain (worker + pthreads
+			// + wasm) — Vite's worker plugin must see the original module graph.
+			'libraw-wasm',
 			'@okathira/ghostpdl-wasm',
 			'gifsicle-wasm-browser',
 			// Emscripten ESM whose .wasm we pass explicitly (fetch + wasmBinary);
@@ -88,7 +93,25 @@ export default defineConfig({
 			// CJS — needs the esbuild CJS→ESM prebundle to load in a module worker.
 			// The subpath exists via patches/fonteditor-core@2.6.3.patch (upstream
 			// ships the woff2 module but forgot it in the exports map).
-			'fonteditor-core/woff2'
+			'fonteditor-core/woff2',
+			// UMD/CJS emscripten glue (qpdf); its .wasm rides separately via ?url
+			// into locateFile, so prebundling the JS is safe and required.
+			'@neslinesli93/qpdf-wasm',
+			// Single-file ESM with its wasm inlined (base64) — prebundling is
+			// safe and avoids the mid-session discovery reload in dev.
+			'@webtoon/psd',
+			// Pure ESM, lazily discovered from the model worker.
+			'@gltf-transform/core',
+			'@gltf-transform/functions',
+			'@gltf-transform/extensions',
+			// ESM with base64-inlined wasm — no assets, prebundle is safe.
+			'meshoptimizer',
+			// CJS emscripten glue; its .wasm rides separately via ?url into
+			// wasmBinary, and the fs/path requires are dead Node branches.
+			'draco3d',
+			// Data converters — lazily discovered from codecs/data.ts.
+			'xlsx',
+			'yaml'
 		]
 	},
 	test: {

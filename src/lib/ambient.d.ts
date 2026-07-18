@@ -11,6 +11,25 @@ declare module 'icodec-heic' {
 	export function decode(input: BufferSource): ImageData & { depth?: number };
 }
 
+declare module 'icodec-jxl' {
+	export interface JxlEncodeOptions {
+		/** libjpeg-style 0–100 (default 75) — mapped to libjxl distance internally. */
+		quality?: number;
+		/** 1–9, default 7. */
+		effort?: number;
+		lossless?: boolean;
+		alphaQuality?: number;
+	}
+	export function loadDecoder(moduleOrPath?: string | WebAssembly.Module): Promise<unknown>;
+	export function loadEncoder(moduleOrPath?: string | WebAssembly.Module): Promise<unknown>;
+	/** Returns ImageData for 8-bit sources; ImageData-like with higher depth otherwise. */
+	export function decode(input: BufferSource): ImageData & { depth?: number };
+	export function encode(
+		image: { data: Uint8ClampedArray | Uint8Array; width: number; height: number },
+		options?: JxlEncodeOptions
+	): Uint8Array;
+}
+
 declare module 'icodec-common' {
 	export function toBitDepth(
 		image: { data: Uint8ClampedArray | Uint8Array; width: number; height: number; depth?: number },
@@ -30,6 +49,17 @@ declare module 'icodec-png' {
 		image: { data: Uint8ClampedArray | Uint8Array; width: number; height: number; depth: 8 | 16 },
 		options?: QuantizeOptions
 	): Uint8Array;
+}
+
+declare module 'draco3d' {
+	/** Emscripten factory pair; wasmBinary skips the glue's own file loading
+	 *  (its fs/path requires live in dead Node branches). Module type is
+	 *  opaque — gltf-transform's registerDependencies is the only consumer. */
+	const draco3d: {
+		createEncoderModule(config?: { wasmBinary?: ArrayBuffer }): Promise<object>;
+		createDecoderModule(config?: { wasmBinary?: ArrayBuffer }): Promise<object>;
+	};
+	export default draco3d;
 }
 
 declare module 'gifsicle-wasm-browser' {

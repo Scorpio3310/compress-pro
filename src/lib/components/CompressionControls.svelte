@@ -8,7 +8,12 @@
 		AudioConversionSettings,
 		FontConversionSettings,
 		ZipSettings,
-		ExifSettings
+		ExifSettings,
+		OcrSettings,
+		SubtitleSettings,
+		EbookSettings,
+		ModelSettings,
+		DataSettings
 	} from '$lib/types';
 	import { isImageFormat } from '$lib/types';
 	import type { FontAxisInfo } from '$lib/workers/protocol';
@@ -21,6 +26,11 @@
 	import FontControls from './controls/FontControls.svelte';
 	import ArchiveControls from './controls/ArchiveControls.svelte';
 	import ExifControls from './controls/ExifControls.svelte';
+	import OcrControls from './controls/OcrControls.svelte';
+	import SubtitleControls from './controls/SubtitleControls.svelte';
+	import EbookControls from './controls/EbookControls.svelte';
+	import ModelControls from './controls/ModelControls.svelte';
+	import DataControls from './controls/DataControls.svelte';
 	import AdvancedDisclosure from './controls/AdvancedDisclosure.svelte';
 	import ImageAdvanced from './controls/ImageAdvanced.svelte';
 	import VideoAdvanced from './controls/VideoAdvanced.svelte';
@@ -36,7 +46,12 @@
 			| AudioConversionSettings
 			| FontConversionSettings
 			| ZipSettings
-			| ExifSettings;
+			| ExifSettings
+			| OcrSettings
+			| SubtitleSettings
+			| EbookSettings
+			| ModelSettings
+			| DataSettings;
 		isCompressing: boolean;
 		totalOriginalSize: number;
 		/** Predicted output size for the video/audio tabs (page-computed — it
@@ -71,6 +86,11 @@
 	let fontSettings = $derived(settings as FontConversionSettings);
 	let zipSettings = $derived(settings as ZipSettings);
 	let exifSettings = $derived(settings as ExifSettings);
+	let ocrSettings = $derived(settings as OcrSettings);
+	let subtitleSettings = $derived(settings as SubtitleSettings);
+	let ebookSettings = $derived(settings as EbookSettings);
+	let modelSettings = $derived(settings as ModelSettings);
+	let dataSettings = $derived(settings as DataSettings);
 
 	// Tabs whose secondary controls live behind the Advanced disclosure. The
 	// SVGO switches apply only to SVG output — raster (PNG/ICO) renders the
@@ -112,6 +132,16 @@
 				<ArchiveControls bind:settings={zipSettings} />
 			{:else if format === 'exif'}
 				<ExifControls bind:settings={exifSettings} />
+			{:else if format === 'ocr'}
+				<OcrControls bind:settings={ocrSettings} />
+			{:else if format === 'subtitle'}
+				<SubtitleControls bind:settings={subtitleSettings} />
+			{:else if format === 'ebook'}
+				<EbookControls bind:settings={ebookSettings} />
+			{:else if format === 'model'}
+				<ModelControls bind:settings={modelSettings} />
+			{:else if format === 'data'}
+				<DataControls bind:settings={dataSettings} />
 			{/if}
 		</div>
 		{#if hasAdvanced}

@@ -413,6 +413,92 @@ async function generateImages() {
 		assertEq('photo-800x600.avif', 'format is heif(av1)', m.format, 'heif');
 		manifest['photo-800x600.avif'] = { width: 800, height: 600 };
 	}
+
+	// 20. photo-640x400.psd + psd-ref.png — hand-rolled flattened RGB PSD.
+	// Image data MUST be RLE (PackBits): @webtoon/psd's RawData path reads all
+	// planes from one offset (upstream bug), and real Photoshop writes RLE
+	// anyway. The PNG twin carries the same pixels for pixelDiff.
+	{
+		const w = 640,
+			h = 400;
+		const src = await photoScene(w, h, { seed: 77 });
+		const { data } = await sharp(src).removeAlpha().raw().toBuffer({ resolveWithObject: true });
+		const packBits = (row) => {
+			const out = [];
+			for (let i = 0; i < row.length; i += 128) {
+				const chunk = row.subarray(i, i + 128);
+				out.push(chunk.length - 1, ...chunk);
+			}
+			return out;
+		};
+		const header = new DataView(new ArrayBuffer(26));
+		header.setUint32(0, 0x38425053); // '8BPS'
+		header.setUint16(4, 1); // version
+		header.setUint16(12, 3); // channels (RGB)
+		header.setUint32(14, h);
+		header.setUint32(18, w);
+		header.setUint16(22, 8); // depth
+		header.setUint16(24, 3); // color mode RGB
+		// color mode data len=0 + image resources len=0 + layer&mask section:
+		// the parser always reads [layer info len][layer count], so len=0 is
+		// rejected — minimal 12-byte body with count 0.
+		const sections = new Uint8Array(24);
+		const sv = new DataView(sections.buffer);
+		sv.setUint32(8, 12); // layer&mask outer length
+		sv.setUint32(12, 8); // layer info length
+		// RLE: u16 compression=1, per-row byte-count table (all channels,
+		// channel-major), then the PackBits streams in the same order.
+		const rows = [];
+		for (let c = 0; c < 3; c++)
+			for (let y = 0; y < h; y++) {
+				const row = new Uint8Array(w);
+				for (let x = 0; x < w; x++) row[x] = data[(y * w + x) * 3 + c];
+				rows.push(packBits(row));
+			}
+		const table = new DataView(new ArrayBuffer(2 * rows.length));
+		let streamLen = 0;
+		rows.forEach((r, i) => {
+			table.setUint16(i * 2, r.length);
+			streamLen += r.length;
+		});
+		const img = new Uint8Array(2 + table.byteLength + streamLen);
+		new DataView(img.buffer).setUint16(0, 1); // RleCompressed
+		img.set(new Uint8Array(table.buffer), 2);
+		let off = 2 + table.byteLength;
+		for (const r of rows) {
+			img.set(r, off);
+			off += r.length;
+		}
+		const psd = new Uint8Array(26 + sections.length + img.length);
+		psd.set(new Uint8Array(header.buffer), 0);
+		psd.set(sections, 26);
+		psd.set(img, 26 + sections.length);
+		await write('photo-640x400.psd', Buffer.from(psd));
+		await write('psd-ref.png', await sharp(src).png().toBuffer());
+		manifest['photo-640x400.psd'] = { width: w, height: h };
+		manifest['psd-ref.png'] = { width: w, height: h };
+	}
+
+	// 21. photo-720x480.jxl — sharp has no libjxl, so the JXL rides icodec's
+	// node build (the same decoder e2e/verify.ts uses to read it back).
+	{
+		const { jxl } = await import('icodec/node');
+		await jxl.loadEncoder();
+		const src = await photoScene(720, 480, { seed: 61 });
+		const { data, info } = await sharp(src)
+			.ensureAlpha()
+			.raw()
+			.toBuffer({ resolveWithObject: true });
+		// Lossless: the .jxl carries the scene's exact pixels, so converter
+		// diffs measure a single JPG generation (CV-19's tiff shape) — and
+		// compress-jxl gets a genuinely compressible input.
+		const encoded = jxl.encode(
+			{ data: new Uint8Array(data.buffer, data.byteOffset, data.byteLength), width: info.width, height: info.height },
+			{ lossless: true, effort: 5 }
+		);
+		await write('photo-720x480.jxl', Buffer.from(encoded.buffer, encoded.byteOffset, encoded.byteLength));
+		manifest['photo-720x480.jxl'] = { width: 720, height: 480 };
+	}
 }
 
 // --------------------------------------------------------------- animations
@@ -775,6 +861,97 @@ async function generateBmpTiff() {
 		assertEq('photo.tiff', 'width', m.width, 800);
 		manifest['photo.tiff'] = { width: 800, height: 600 };
 	}
+}
+
+/** Hand-written minimal LinearRaw DNG (a TIFF container with DNG tags —
+ *  neither sharp nor utif2 can author one). 8-bit RGB, uncompressed. */
+function buildLinearDng(width, height, rgb) {
+	const model = 'CompressPro Fixture\0';
+	const entries = [];
+	const push = (tag, type, count, value) => entries.push({ tag, type, count, value });
+	push(254, 4, 1, 0); // NewSubfileType: primary image
+	push(256, 4, 1, width);
+	push(257, 4, 1, height);
+	push(258, 3, 3, { extra: Buffer.from(new Uint16Array([8, 8, 8]).buffer) }); // BitsPerSample
+	push(259, 3, 1, 1); // Compression: none
+	push(262, 3, 1, 34892); // PhotometricInterpretation: LinearRaw
+	push(273, 4, 1, { strip: true }); // StripOffsets
+	push(277, 3, 1, 3); // SamplesPerPixel
+	push(278, 4, 1, height); // RowsPerStrip
+	push(279, 4, 1, rgb.length); // StripByteCounts
+	push(284, 3, 1, 1); // PlanarConfiguration: chunky
+	push(50706, 1, 4, null); // DNGVersion 1.4.0.0 (inline bytes below)
+	push(50708, 2, model.length, { extra: Buffer.from(model, 'ascii') }); // UniqueCameraModel
+	entries.sort((a, b) => a.tag - b.tag);
+	const ifdSize = 2 + entries.length * 12 + 4;
+	let extraOffset = 8 + ifdSize;
+	for (const e of entries) {
+		if (e.value?.extra) {
+			e.offset = extraOffset;
+			extraOffset += e.value.extra.length + (e.value.extra.length % 2);
+		}
+	}
+	const stripOffset = extraOffset;
+	const buf = Buffer.alloc(stripOffset + rgb.length);
+	buf.write('II', 0, 'ascii');
+	buf.writeUInt16LE(42, 2);
+	buf.writeUInt32LE(8, 4);
+	let o = 8;
+	buf.writeUInt16LE(entries.length, o);
+	o += 2;
+	for (const e of entries) {
+		buf.writeUInt16LE(e.tag, o);
+		buf.writeUInt16LE(e.type, o + 2);
+		buf.writeUInt32LE(e.count, o + 4);
+		if (e.value?.strip) buf.writeUInt32LE(stripOffset, o + 8);
+		else if (e.value?.extra) buf.writeUInt32LE(e.offset, o + 8);
+		else if (e.tag === 50706) {
+			buf[o + 8] = 1; // DNGVersion bytes 1.4.0.0
+			buf[o + 9] = 4;
+		} else if (e.type === 3) buf.writeUInt16LE(e.value, o + 8);
+		else buf.writeUInt32LE(e.value, o + 8);
+		o += 12;
+	}
+	buf.writeUInt32LE(0, o); // no next IFD
+	for (const e of entries) if (e.value?.extra) e.value.extra.copy(buf, e.offset);
+	rgb.copy(buf, stripOffset);
+	return buf;
+}
+
+async function generateRaw() {
+	// 29b. photo.dng + raw-dng-ref.png — LibRaw applies its develop pipeline
+	// (gamma on the linear data, white balance) so the source pixels are NOT
+	// the expected output; the pixel-diff twin is generated FROM the bundled
+	// decoder itself. The browser pipeline runs the same wasm, so the e2e
+	// diff proves the whole predecoded path end to end.
+	const W = 320;
+	const H = 240;
+	const rgb = await sharp(await photoScene(W, H, { seed: 91, noise: 40 }))
+		.removeAlpha()
+		.raw()
+		.toBuffer();
+	const dng = buildLinearDng(W, H, rgb);
+	await write('photo.dng', dng);
+
+	const { createRequire } = await import('node:module');
+	const require = createRequire(import.meta.url);
+	const factory = (await import('libraw-wasm/dist/libraw.js')).default;
+	const mod = await factory({ wasmBinary: readFileSync(require.resolve('libraw-wasm/dist/libraw.wasm')) });
+	const lr = new mod.LibRaw();
+	lr.open(new Uint8Array(dng), {});
+	const img = lr.imageData();
+	assertEq('photo.dng', 'width', img.width, W);
+	assertEq('photo.dng', 'height', img.height, H);
+	assertEq('photo.dng', 'colors', img.colors, 3);
+	await write(
+		'raw-dng-ref.png',
+		await sharp(Buffer.from(img.data.buffer, img.data.byteOffset, img.data.byteLength), {
+			raw: { width: img.width, height: img.height, channels: 3 }
+		})
+			.png()
+			.toBuffer()
+	);
+	manifest['photo.dng'] = { width: W, height: H, ref: 'raw-dng-ref.png' };
 }
 
 // ------------------------------------------- wide gamut + decode-time resize
@@ -1964,6 +2141,298 @@ function generateErrorFiles() {
 	manifest['notes.txt'] = {};
 }
 
+async function generateEbooks() {
+	// Structurally honest minimal EPUB 3 + CBZ fixtures. Images ride STORED
+	// (tuple form, level 0) like the app writes them; XML deflates at 6.
+	const jpg1 = await sharp(await photoScene(1200, 800, { seed: 96 })).jpeg({ quality: 90 }).toBuffer();
+	const jpg2 = await sharp(await photoScene(900, 1200, { seed: 97, noise: 60 })).jpeg({ quality: 88 }).toBuffer();
+	const png1 = await sharp(Buffer.from(alphaGraphicSvg(600, 400))).png().toBuffer();
+	const enc = (s) => new TextEncoder().encode(s);
+
+	const containerXml =
+		'<?xml version="1.0" encoding="UTF-8"?><container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles></container>';
+	const contentOpf =
+		'<?xml version="1.0" encoding="UTF-8"?><package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="uid"><metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:identifier id="uid">urn:uuid:5f3a2e10-9d7c-4b56-8f21-compresspro1</dc:identifier><dc:title>Fixture Book</dc:title><dc:language>en</dc:language><meta property="dcterms:modified">2026-01-01T00:00:00Z</meta></metadata><manifest><item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/><item id="ch1" href="chapter1.xhtml" media-type="application/xhtml+xml"/><item id="img1" href="images/photo1.jpg" media-type="image/jpeg"/><item id="img2" href="images/photo2.jpg" media-type="image/jpeg"/><item id="img3" href="images/diagram.png" media-type="image/png"/></manifest><spine><itemref idref="ch1"/></spine></package>';
+	const navXhtml =
+		'<?xml version="1.0" encoding="UTF-8"?><html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops"><head><title>Nav</title></head><body><nav epub:type="toc"><ol><li><a href="chapter1.xhtml">Chapter 1</a></li></ol></nav></body></html>';
+	const chapterXhtml =
+		'<?xml version="1.0" encoding="UTF-8"?><html xmlns="http://www.w3.org/1999/xhtml"><head><title>Chapter 1</title></head><body><h1>Chapter 1</h1><p>The quick brown fox jumps over the lazy dog, verifying ebook recompression.</p><img src="images/photo1.jpg" alt="photo one"/><img src="images/photo2.jpg" alt="photo two"/><img src="images/diagram.png" alt="diagram"/></body></html>';
+
+	const epubEntries = {
+		mimetype: [enc('application/epub+zip'), { level: 0 }],
+		'META-INF/container.xml': [enc(containerXml), { level: 6 }],
+		'OEBPS/content.opf': [enc(contentOpf), { level: 6 }],
+		'OEBPS/nav.xhtml': [enc(navXhtml), { level: 6 }],
+		'OEBPS/chapter1.xhtml': [enc(chapterXhtml), { level: 6 }],
+		'OEBPS/images/photo1.jpg': [new Uint8Array(jpg1), { level: 0 }],
+		'OEBPS/images/photo2.jpg': [new Uint8Array(jpg2), { level: 0 }],
+		'OEBPS/images/diagram.png': [new Uint8Array(png1), { level: 0 }]
+	};
+	const epub = zipSync(epubEntries);
+	// gen-verify the OCF rule the e2e later asserts on the OUTPUT
+	if ((epub[8] | (epub[9] << 8)) !== 0 || Buffer.from(epub.slice(30, 38)).toString() !== 'mimetype') {
+		throw new Error('sample.epub: mimetype-first/stored rule broken in generator');
+	}
+	await write('sample.epub', Buffer.from(epub));
+	manifest['sample.epub'] = {
+		entries: Object.keys(epubEntries).length,
+		imageSizes: { 'OEBPS/images/photo1.jpg': jpg1.length, 'OEBPS/images/photo2.jpg': jpg2.length, 'OEBPS/images/diagram.png': png1.length }
+	};
+
+	// DRM variant — real encryption algorithm, must be refused by the app.
+	const encryptionXml =
+		'<?xml version="1.0" encoding="UTF-8"?><encryption xmlns="urn:oasis:names:tc:opendocument:xmlns:container" xmlns:enc="http://www.w3.org/2001/04/xmlenc#"><enc:EncryptedData><enc:EncryptionMethod Algorithm="http://www.w3.org/2001/04/xmlenc#aes128-cbc"/><enc:CipherData><enc:CipherReference URI="OEBPS/images/photo1.jpg"/></enc:CipherData></enc:EncryptedData></encryption>';
+	const drmEntries = { ...epubEntries };
+	drmEntries['META-INF/encryption.xml'] = [enc(encryptionXml), { level: 6 }];
+	await write('sample-drm.epub', Buffer.from(zipSync(drmEntries)));
+	manifest['sample-drm.epub'] = {};
+
+	// CBZ — ComicInfo.xml deliberately LAST (alphabetical rebuild would move it
+	// first, giving the e2e order assertion teeth).
+	// page01 is an oversized scan (1400×2000) so the 1200 px cap has real work;
+	// the rest sit under every cap and must pass through un-resized.
+	const pages = [
+		await sharp(await photoScene(1400, 2000, { seed: 98 })).jpeg({ quality: 90 }).toBuffer()
+	];
+	for (let i = 1; i < 4; i++) {
+		pages.push(
+			await sharp(await photoScene(700, 1000, { seed: 98 + i })).jpeg({ quality: 90 }).toBuffer()
+		);
+	}
+	const pageWebp = await sharp(await photoScene(700, 1000, { seed: 102 })).webp({ quality: 90 }).toBuffer();
+	const pageGif = await sharp(await photoScene(320, 460, { seed: 103 })).gif().toBuffer();
+	const comicInfo =
+		'<?xml version="1.0" encoding="utf-8"?><ComicInfo xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><Title>Fixture Comic</Title><Series>Compress Pro Fixtures</Series><PageCount>6</PageCount></ComicInfo>';
+	const cbzOrder = ['page01.jpg', 'page02.jpg', 'page03.jpg', 'page04.jpg', 'page05.webp', 'page06.gif', 'ComicInfo.xml'];
+	const cbzBytes = [
+		...pages.map((p) => new Uint8Array(p)),
+		new Uint8Array(pageWebp),
+		new Uint8Array(pageGif),
+		enc(comicInfo)
+	];
+	const cbzEntries = {};
+	cbzOrder.forEach((name, i) => {
+		cbzEntries[name] = [cbzBytes[i], { level: name.endsWith('.xml') ? 6 : 0 }];
+	});
+	await write('sample.cbz', Buffer.from(zipSync(cbzEntries)));
+	manifest['sample.cbz'] = { order: cbzOrder, page01: { width: 1400, height: 2000 } };
+
+	// Deflated variant: q100 keeps every image (per-entry guard), but the app
+	// rebuilds them STORED → output strictly bigger → deterministic whole-file
+	// keep-original (phase-0 measured: deflate saves ~2 KB per 83 KB jpg).
+	const cbzDeflated = {};
+	cbzOrder.forEach((name, i) => {
+		cbzDeflated[name] = [cbzBytes[i], { level: 6 }];
+	});
+	await write('sample-deflated.cbz', Buffer.from(zipSync(cbzDeflated)));
+	manifest['sample-deflated.cbz'] = {};
+
+	// CBR cannot be generated (no RAR writer exists) — reuse the committed
+	// libarchive-corpus RAR under comic names. Entries are text files: proves
+	// RAR-read + zip-rebuild + rename with 0 images (limitation documented).
+	const rar = readFileSync(join(ROOT, 'tests', 'fixtures', 'archives', 'sample-v5-multi.rar'));
+	await write('sample.cbr', rar);
+	await write('sample-rar.cbz', rar); // mislabeled: fflate fails → 7zz fallback
+	manifest['sample.cbr'] = {};
+	manifest['sample-rar.cbz'] = {};
+}
+
+async function generateData() {
+	const XLSX = await import('xlsx');
+	// BOM on the INPUT csv too — the parser must strip it before the header.
+	const csv =
+		'\uFEFF' +
+		'Name,Qty,Price,Note\n' +
+		'Žižek čaj,3,4.5,"has, comma"\n' +
+		'Šipek,12,0.8,"two\nlines"\n' +
+		'Ćevapčići,5,7.25,plain\n';
+	const semicolon = 'Artikel;Menge;Preis\nČaj;3;4,50\nŠipek;12;0,80\n';
+	const json = JSON.stringify(
+		{
+			name: 'Compress Pro',
+			version: 2,
+			active: true,
+			notes: null,
+			tags: ['čšž', 'data'],
+			nested: { depth: { value: 3.14 } }
+		},
+		null,
+		2
+	);
+	// anchor + alias + block scalar + comment (comment must vanish in JSON);
+	// no merge keys — YAML 1.2.
+	const yaml =
+		'# top comment — must vanish in JSON\n' +
+		'defaults: &base\n  retries: 3\n  timeout: 30\n' +
+		'prod_config: *base\n' +
+		'description: |\n  multi-line\n  block čšž\n' +
+		'items:\n  - one\n  - two\n';
+	const ws = XLSX.utils.aoa_to_sheet([
+		['Name', 'Qty', 'Price', 'Date', 'Total'],
+		['Žižek čaj', 3, 4.5, null, null],
+		['Šipek', 12, 0.8, null, null]
+	]);
+	ws['D2'] = { t: 'd', v: new Date(Date.UTC(2026, 0, 15)), z: 'yyyy-mm-dd' };
+	ws['E2'] = { t: 'n', f: 'B2*C2', v: 13.5 };
+	ws['!ref'] = 'A1:E3';
+	const wb = XLSX.utils.book_new();
+	XLSX.utils.book_append_sheet(wb, ws, 'Data');
+	XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['SECOND-SHEET-MARKER']]), 'Extra');
+	writeFileSync(
+		join(OUT, 'sample.xlsx'),
+		XLSX.write(wb, { type: 'buffer', bookType: 'xlsx', compression: true })
+	);
+	writeFileSync(join(OUT, 'sample.csv'), csv);
+	writeFileSync(join(OUT, 'sample-semicolon.csv'), semicolon);
+	writeFileSync(join(OUT, 'sample.json'), json);
+	writeFileSync(join(OUT, 'sample.yaml'), yaml);
+	writeFileSync(join(OUT, 'corrupt.data.json'), '{"unterminated": ');
+	manifest['sample.csv'] = { rows: 4, cols: 4 };
+	manifest['sample-semicolon.csv'] = { rows: 3, cols: 3 };
+	manifest['sample.xlsx'] = { sheets: 2, rows: 3, cols: 5 };
+	manifest['sample.json'] = {};
+	manifest['sample.yaml'] = {};
+	manifest['corrupt.data.json'] = {};
+}
+
+async function generateModels() {
+	// UV sphere with pole-clean triangles: exact counts survive draco/weld
+	// round-trips, so e2e can assert them precisely. weld() merges the two
+	// bitwise-identical pole seams → 12,511 verts post-optimize (measured).
+	const { Document, NodeIO } = await import('@gltf-transform/core');
+	const { ALL_EXTENSIONS } = await import('@gltf-transform/extensions');
+	const { draco } = await import('@gltf-transform/functions');
+	const draco3d = (await import('draco3d')).default;
+
+	function buildSphere(doc, { withTexture }) {
+		const segments = 128,
+			rings = 96;
+		const positions = [],
+			normals = [],
+			uvs = [],
+			indices = [];
+		for (let r = 0; r <= rings; r++) {
+			const phi = (r / rings) * Math.PI;
+			for (let s = 0; s <= segments; s++) {
+				const theta = (s / segments) * 2 * Math.PI;
+				const x = Math.sin(phi) * Math.cos(theta);
+				const y = Math.cos(phi);
+				const z = Math.sin(phi) * Math.sin(theta);
+				positions.push(x, y, z);
+				normals.push(x, y, z);
+				uvs.push(s / segments, r / rings);
+			}
+		}
+		const stride = segments + 1;
+		for (let r = 0; r < rings; r++)
+			for (let s = 0; s < segments; s++) {
+				const a = r * stride + s;
+				const b = a + stride;
+				if (r > 0) indices.push(a, b, a + 1);
+				if (r < rings - 1) indices.push(a + 1, b, b + 1);
+			}
+		const buffer = doc.createBuffer();
+		const prim = doc
+			.createPrimitive()
+			.setIndices(doc.createAccessor().setType('SCALAR').setArray(new Uint16Array(indices)).setBuffer(buffer))
+			.setAttribute('POSITION', doc.createAccessor().setType('VEC3').setArray(new Float32Array(positions)).setBuffer(buffer))
+			.setAttribute('NORMAL', doc.createAccessor().setType('VEC3').setArray(new Float32Array(normals)).setBuffer(buffer))
+			.setAttribute('TEXCOORD_0', doc.createAccessor().setType('VEC2').setArray(new Float32Array(uvs)).setBuffer(buffer));
+		if (withTexture) {
+			const texture = doc.createTexture('photo').setImage(withTexture).setMimeType('image/jpeg');
+			prim.setMaterial(doc.createMaterial('mat').setBaseColorTexture(texture));
+		}
+		const node = doc.createNode('sphere').setMesh(doc.createMesh('sphere').addPrimitive(prim));
+		doc.getRoot().setDefaultScene(doc.createScene().addChild(node));
+		// 3-keyframe rotation — animation survival is an e2e assertion, not hope.
+		const input = doc.createAccessor().setType('SCALAR').setArray(new Float32Array([0, 1, 2])).setBuffer(buffer);
+		const output = doc
+			.createAccessor()
+			.setType('VEC4')
+			.setArray(new Float32Array([0, 0, 0, 1, 0, Math.SQRT1_2, 0, Math.SQRT1_2, 0, 1, 0, 0]))
+			.setBuffer(buffer);
+		const sampler = doc.createAnimationSampler().setInput(input).setOutput(output).setInterpolation('LINEAR');
+		doc
+			.createAnimation('spin')
+			.addSampler(sampler)
+			.addChannel(doc.createAnimationChannel().setTargetNode(node).setTargetPath('rotation').setSampler(sampler));
+		return { triangles: indices.length / 3, vertices: positions.length / 3 };
+	}
+
+	const textureJpeg = new Uint8Array(
+		await sharp(await photoScene(2048, 1024, { seed: 110 })).jpeg({ quality: 92 }).toBuffer()
+	);
+	const io = new NodeIO().registerExtensions(ALL_EXTENSIONS).registerDependencies({
+		'draco3d.encoder': await draco3d.createEncoderModule({}),
+		'draco3d.decoder': await draco3d.createDecoderModule({})
+	});
+
+	const plain = new Document();
+	const counts = buildSphere(plain, { withTexture: textureJpeg });
+	await write('sample.glb', Buffer.from(await io.writeBinary(plain)));
+	manifest['sample.glb'] = {
+		triangles: counts.triangles,
+		vertices: counts.vertices,
+		texture: { width: 2048, height: 1024, bytes: textureJpeg.length },
+		animations: 1
+	};
+
+	// Already-draco input (MD-09): same sphere, compressed at generation time.
+	const compressed = new Document();
+	buildSphere(compressed, { withTexture: textureJpeg });
+	await compressed.transform(draco());
+	await write('sample-draco.glb', Buffer.from(await io.writeBinary(compressed)));
+	manifest['sample-draco.glb'] = { triangles: counts.triangles };
+
+	// Texture-less draco sphere (MD-06): with compression None the decoded,
+	// merely-quantized geometry is deterministically BIGGER than its draco
+	// source and no texture win can mask it → whole-file keep-original fires.
+	const notex = new Document();
+	buildSphere(notex, { withTexture: null });
+	await notex.transform(draco());
+	await write('sample-draco-notex.glb', Buffer.from(await io.writeBinary(notex)));
+	manifest['sample-draco-notex.glb'] = {};
+
+	// External-reference .gltf (MD-07): scene.bin deliberately does not exist.
+	const externalGltf = JSON.stringify({
+		asset: { version: '2.0' },
+		scenes: [{ nodes: [0] }],
+		nodes: [{ mesh: 0 }],
+		meshes: [{ primitives: [{ attributes: { POSITION: 0 } }] }],
+		accessors: [{ bufferView: 0, componentType: 5126, count: 3, type: 'VEC3' }],
+		bufferViews: [{ buffer: 0, byteLength: 36 }],
+		buffers: [{ uri: 'scene.bin', byteLength: 36 }]
+	});
+	writeFileSync(join(OUT, 'sample-external.gltf'), externalGltf);
+	manifest['sample-external.gltf'] = {};
+}
+
+function generateSubtitles() {
+	// CRLF + BOM on the SRT: the messy real-world shape parsers must survive.
+	const srt =
+		'﻿1\r\n00:00:01,000 --> 00:00:03,500\r\nThe quick brown fox\r\n\r\n' +
+		'2\r\n00:00:04,000 --> 00:00:06,200\r\njumps over\r\nthe lazy dog\r\n\r\n' +
+		'3\r\n00:01:02,750 --> 00:01:05,000\r\n<i>Emphasis survives</i>\r\n';
+	const vtt =
+		'WEBVTT - sample track\n\n' +
+		'NOTE\nThis block must vanish on conversion.\n\n' +
+		'STYLE\n::cue { color: gold }\n\n' +
+		'intro\n00:01.000 --> 00:03.500 position:10% align:left\nThe quick <c.gold>brown</c> fox\n\n' +
+		'00:00:04.000 --> 00:00:06.200\n<v Narrator>jumps over the lazy dog</v>\n';
+	const ass =
+		'[Script Info]\nTitle: Sample\nScriptType: v4.00+\n\n' +
+		'[V4+ Styles]\nFormat: Name, Fontname, Fontsize\nStyle: Default,Arial,20\n\n' +
+		'[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n' +
+		'Dialogue: 0,0:00:01.00,0:00:03.50,Default,,0,0,0,,{\\i1}The quick{\\i0} brown fox\n' +
+		'Dialogue: 0,0:00:04.00,0:00:06.20,Default,,0,0,0,,jumps over\\Nthe lazy dog, twice\n';
+	writeFileSync(join(OUT, 'sample.srt'), srt);
+	writeFileSync(join(OUT, 'sample.vtt'), vtt);
+	writeFileSync(join(OUT, 'sample.ass'), ass);
+	manifest['sample.srt'] = { cues: 3 };
+	manifest['sample.vtt'] = { cues: 2 };
+	manifest['sample.ass'] = { cues: 2 };
+}
+
 // --------------------------------------------------------------------- main
 
 const t0 = Date.now();
@@ -1978,9 +2447,25 @@ generateSvgs();
 console.log('  svgs ✓');
 await generatePdfs();
 
+// scan-text.pdf — an image-only PDF (rasterized page, NO text layer): the
+// OCR e2e must prove recognition ADDS text, so the input can't carry any.
+{
+	const png = readFileSync(join(OUT, 'graphic-bmp-ref.png'));
+	const doc = await PDFDocument.create();
+	const img = await doc.embedPng(png);
+	const w = img.width * 0.6;
+	const h = img.height * 0.6;
+	const page = doc.addPage([w, h]);
+	page.drawImage(img, { x: 0, y: 0, width: w, height: h });
+	await write('scan-text.pdf', Buffer.from(await doc.save()));
+	manifest['scan-text.pdf'] = { pages: 1 };
+}
+
 await generateAudio();
 
 await generateBmpTiff();
+
+await generateRaw();
 
 await generateColorAndGiants();
 console.log('  color + giants ✓');
@@ -1995,6 +2480,14 @@ const fontWoff2Available = await generateFonts();
 console.log('  fonts ✓');
 generateErrorFiles();
 console.log('  error files ✓');
+generateSubtitles();
+console.log('  subtitles ✓');
+await generateEbooks();
+console.log('  ebooks ✓');
+await generateModels();
+console.log('  models ✓');
+await generateData();
+console.log('  data ✓');
 
 writeFileSync(
 	MANIFEST,

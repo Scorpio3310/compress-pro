@@ -7,6 +7,8 @@
 		FileProgress
 	} from '$lib/types';
 	import { formatBytes, formatSignedPercent } from '$lib/utils';
+	import { isImageFormat } from '$lib/types';
+	import { displayableImageMime } from '$lib/file-visual';
 	import { canCopyToClipboard, copyResultToClipboard } from '$lib/clipboard';
 	import { createFlash } from '$lib/flash.svelte';
 	import { flip } from 'svelte/animate';
@@ -204,7 +206,10 @@
 							</div>
 						{/if}
 						{#if result}
-							{#if compareEnabled && format !== 'heic'}
+							<!-- Image rows compare via <img>, so BOTH sides must be browser-
+							     renderable — hides Compare for HEIC/TIFF/RAW/JXL/PSD originals
+							     and JXL results. Non-image tabs (PDF) gate at the page level. -->
+							{#if compareEnabled && (!isImageFormat(format) || (displayableImageMime(file.name) !== null && displayableImageMime(result.name) !== null))}
 								<button
 									onclick={() => oncompare(file.id)}
 									class="rounded-full px-3 py-1.5 text-xs font-medium whitespace-nowrap text-muted transition-colors hover:bg-card-2 hover:text-ink max-sm:py-2"

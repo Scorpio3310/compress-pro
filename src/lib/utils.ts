@@ -27,6 +27,8 @@ export function estimateCompressedSize(
 			return Math.round(originalSize * (0.05 + 0.55 * q));
 		case 'avif':
 			return Math.round(originalSize * (0.04 + 0.38 * q));
+		case 'jxl':
+			return Math.round(originalSize * (0.04 + 0.36 * q));
 		default:
 			return originalSize;
 	}

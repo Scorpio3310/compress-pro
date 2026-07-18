@@ -165,3 +165,108 @@ export async function imagesToPdf(
 	const bytes = await out.save();
 	return new Blob([bytes as BlobPart], { type: 'application/pdf' });
 }
+
+/** Rotate every page clockwise by `angle` — structural, content untouched. */
+export async function rotatePdf(file: File, angle: 90 | 180 | 270): Promise<Blob> {
+	const { degrees } = await import('pdf-lib');
+	const doc = await loadPdf(file);
+	for (const page of doc.getPages()) {
+		page.setRotation(degrees((page.getRotation().angle + angle) % 360));
+	}
+	const bytes = await doc.save();
+	return new Blob([bytes as BlobPart], { type: 'application/pdf' });
+}
+
+/** WinAnsi-safe drawText: retry without combining marks, else skip (ocr.ts pattern). */
+function drawTextSafe(
+	page: import('pdf-lib').PDFPage,
+	text: string,
+	options: import('pdf-lib').PDFPageDrawTextOptions
+): void {
+	try {
+		page.drawText(text, options);
+	} catch {
+		const ascii = text.normalize('NFD').replace(/[̀-ͯ]/g, '');
+		try {
+			page.drawText(ascii, options);
+		} catch {
+			// Unencodable even stripped — leave this page's stamp out.
+		}
+	}
+}
+
+/** Stamp `text` diagonally across the middle of every page. */
+export async function watermarkPdf(file: File, text: string): Promise<Blob> {
+	const { StandardFonts, degrees, rgb } = await import('pdf-lib');
+	const doc = await loadPdf(file);
+	const font = await doc.embedFont(StandardFonts.HelveticaBold);
+	for (const page of doc.getPages()) {
+		const { width, height } = page.getSize();
+		// Size the stamp to span most of the diagonal, capped for short texts.
+		const size = Math.min(
+			(Math.hypot(width, height) * 0.7) / Math.max(1, font.widthOfTextAtSize(text, 1)),
+			Math.min(width, height) / 4
+		);
+		const textWidth = font.widthOfTextAtSize(text, size);
+		const angle = Math.atan2(height, width);
+		drawTextSafe(page, text, {
+			x: width / 2 - (textWidth / 2) * Math.cos(angle),
+			y: height / 2 - (textWidth / 2) * Math.sin(angle),
+			size,
+			font,
+			color: rgb(0.5, 0.5, 0.5),
+			opacity: 0.18,
+			rotate: degrees((angle * 180) / Math.PI)
+		});
+	}
+	const bytes = await doc.save();
+	return new Blob([bytes as BlobPart], { type: 'application/pdf' });
+}
+
+/** Add "page / total" at the bottom center of every page. */
+export async function pageNumbersPdf(file: File): Promise<Blob> {
+	const { StandardFonts, rgb } = await import('pdf-lib');
+	const doc = await loadPdf(file);
+	const font = await doc.embedFont(StandardFonts.Helvetica);
+	const pages = doc.getPages();
+	for (let i = 0; i < pages.length; i++) {
+		const page = pages[i];
+		const label = `${i + 1} / ${pages.length}`;
+		const size = 10;
+		drawTextSafe(page, label, {
+			x: page.getWidth() / 2 - font.widthOfTextAtSize(label, size) / 2,
+			y: 24,
+			size,
+			font,
+			color: rgb(0.25, 0.25, 0.25)
+		});
+	}
+	const bytes = await doc.save();
+	return new Blob([bytes as BlobPart], { type: 'application/pdf' });
+}
+
+/** Extract the digital text layer into plain text (scans have none — that's OCR's job). */
+export async function pdfToText(file: File, onProgress?: ToolProgress): Promise<Blob> {
+	const pdfjs = await getPdfjs();
+	const task = pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()) });
+	const doc = await task.promise;
+	try {
+		const parts: string[] = [];
+		for (let p = 1; p <= doc.numPages; p++) {
+			onProgress?.(p - 1, doc.numPages, `page ${p}/${doc.numPages}`);
+			const page = await doc.getPage(p);
+			const content = await page.getTextContent();
+			parts.push(content.items.map((item) => ('str' in item ? item.str : '')).join(' '));
+			page.cleanup();
+		}
+		const text = parts.join('\n\n').trim();
+		if (!text) {
+			throw new Error(
+				`${file.name}: no digital text layer found — this looks like a scan; use the OCR PDF tool instead`
+			);
+		}
+		return new Blob([text], { type: 'text/plain' });
+	} finally {
+		await task.destroy();
+	}
+}

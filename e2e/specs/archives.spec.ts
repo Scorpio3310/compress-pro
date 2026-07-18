@@ -310,6 +310,20 @@ for (const { path, op, h1, pill, file } of [
 		pill: 'TAR.GZ',
 		file: fx('notes.txt')
 	},
+	{
+		path: '/create-tar-bz2',
+		op: 'Create',
+		h1: 'Create TAR.BZ2 tarballs.',
+		pill: 'TAR.BZ2',
+		file: fx('notes.txt')
+	},
+	{
+		path: '/create-tar-xz',
+		op: 'Create',
+		h1: 'Create TAR.XZ tarballs.',
+		pill: 'TAR.XZ',
+		file: fx('notes.txt')
+	},
 	{ path: '/gzip-files', op: 'Create', h1: 'Gzip files.', pill: 'GZ', file: fx('notes.txt') },
 	{ path: '/bzip2-files', op: 'Create', h1: 'Bzip2 files.', pill: 'BZ2', file: fx('notes.txt') },
 	{ path: '/xz-files', op: 'Create', h1: 'XZ-compress files.', pill: 'XZ', file: fx('notes.txt') }
@@ -350,6 +364,7 @@ for (const { path, h1 } of [
 	{ path: '/extract-7z', h1: 'Extract 7Z archives.' },
 	{ path: '/extract-tar-gz', h1: 'Extract TAR.GZ tarballs.' },
 	{ path: '/extract-gz', h1: 'Extract GZ files.' },
+	{ path: '/extract-z', h1: 'Extract .Z files.' },
 	{ path: '/extract-iso', h1: 'Extract ISO images.' },
 	{ path: '/extract-cab', h1: 'Extract CAB archives.' },
 	{ path: '/extract-deb', h1: 'Extract DEB packages.' },

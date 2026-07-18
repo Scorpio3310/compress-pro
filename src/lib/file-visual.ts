@@ -67,8 +67,19 @@ export function fileVisual(name: string): FileVisual {
 	if (format === 'zip') return { kind: 'icon', icon: 'archive', tint: 'text-file-archive' };
 	if (format === 'pdf') return { kind: 'icon', icon: 'document', tint: 'text-file-pdf' };
 	if (format === 'font') return { kind: 'icon', icon: 'font', tint: 'text-file-font' };
-	// The known formats left are exactly the non-displayable images (heic/heif/tif/tiff).
-	if (format !== null) return { kind: 'icon', icon: 'image', tint: 'text-accent' };
+	// The known formats left are the non-displayable images (heic/heif/
+	// tif/tiff/jxl/psd, camera RAW) — except subtitles, ebooks, models and
+	// data files, which read best as their extension tile (SRT, EPUB, GLB,
+	// CSV/JSON…).
+	if (
+		format !== null &&
+		format !== 'subtitle' &&
+		format !== 'ebook' &&
+		format !== 'model' &&
+		format !== 'data'
+	) {
+		return { kind: 'icon', icon: 'image', tint: 'text-accent' };
+	}
 	if (!ext) return { kind: 'icon', icon: 'document', tint: 'text-muted' };
 	return {
 		kind: 'ext',

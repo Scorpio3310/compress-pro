@@ -4,6 +4,7 @@
 	import SegmentedControl from './SegmentedControl.svelte';
 	import Pill from './Pill.svelte';
 	import Slider from '../Slider.svelte';
+	import Icon from '../Icon.svelte';
 
 	interface Props {
 		settings: PdfCompressionSettings;
@@ -28,9 +29,22 @@
 		{ id: '150', label: '150 DPI' },
 		{ id: '300', label: '300 DPI' }
 	];
+	const rotationOptions = [
+		{ id: '90', label: '90° right' },
+		{ id: '180', label: '180°' },
+		{ id: '270', label: '90° left' }
+	];
 
 	let pageRangeError = $derived(
 		settings.op === 'pages' ? validatePageRangeSyntax(settings.pageRange) : null
+	);
+
+	let showPassword = $state(false);
+	// Non-ASCII protect passwords are an interop trap: Apple's PDF stack hashes
+	// the NFD form of what the user types, everyone else the (spec) NFC form —
+	// so a č/š/ž password locks Preview users out no matter what we store.
+	let passwordInteropWarning = $derived(
+		settings.op === 'protect' && /[^\x20-\x7E]/.test(settings.password)
 	);
 </script>
 
@@ -177,18 +191,37 @@
 			<label for="pdf-password" class="microlabel mb-2.5 block text-muted">
 				{settings.op === 'unlock' ? 'PDF password' : 'Set a password'}
 			</label>
-			<input
-				id="pdf-password"
-				type="password"
-				autocomplete="off"
-				placeholder={settings.op === 'unlock'
-					? 'The password that opens the file'
-					: 'Choose a password'}
-				bind:value={settings.password}
-				class="h-11 w-full rounded-field border border-line-strong bg-card px-4 text-base text-ink transition-colors placeholder:text-faint focus-visible:border-accent sm:text-sm"
-			/>
-			<p class="mt-1.5 hint text-faint">
-				The password never leaves your device — everything runs locally.
+			<div class="relative">
+				<!-- value/oninput instead of bind:value — Svelte disallows two-way
+				     binding on an input whose type flips password↔text. -->
+				<input
+					id="pdf-password"
+					type={showPassword ? 'text' : 'password'}
+					autocomplete="off"
+					placeholder={settings.op === 'unlock'
+						? 'The password that opens the file'
+						: 'Choose a password'}
+					value={settings.password}
+					oninput={(e) => (settings.password = e.currentTarget.value)}
+					class="h-11 w-full rounded-field border border-line-strong bg-card pr-12 pl-4 text-base text-ink transition-colors placeholder:text-faint focus-visible:border-accent sm:text-sm"
+				/>
+				<button
+					type="button"
+					onclick={() => (showPassword = !showPassword)}
+					class="absolute top-1/2 right-2 grid size-8 -translate-y-1/2 place-items-center rounded-full text-faint transition-colors hover:bg-card-2 hover:text-ink"
+					aria-label={showPassword ? 'Hide password' : 'Show password'}
+					aria-pressed={showPassword}
+				>
+					<Icon name={showPassword ? 'eye-off' : 'eye'} class="size-4" />
+				</button>
+			</div>
+			<p class="mt-1.5 hint {passwordInteropWarning ? 'text-warn' : 'text-faint'}">
+				{#if passwordInteropWarning}
+					Accented characters (č, š, ž…) won't open in Apple Preview — for a password that works
+					everywhere, stick to plain letters, numbers and symbols.
+				{:else}
+					The password never leaves your device — everything runs locally.
+				{/if}
 			</p>
 		</div>
 		{#if settings.op === 'unlock'}
@@ -196,10 +229,50 @@
 				Removes the password so the PDF opens freely. Page content is untouched.
 			</p>
 		{:else}
-			<p class="hint text-faint">
-				Standard 128-bit PDF encryption — the same password opens and owns the file.
-			</p>
+			<p class="hint text-faint">AES-256 encryption — the same password opens and owns the file.</p>
 		{/if}
+	{:else if settings.op === 'rotate'}
+		<SegmentedControl
+			items={rotationOptions}
+			selected={String(settings.rotation)}
+			onselect={(id) => (settings.rotation = Number(id) as PdfCompressionSettings['rotation'])}
+		/>
+		<p class="hint text-faint">
+			Every page turns by the chosen angle — structurally, without re-encoding the content.
+		</p>
+	{:else if settings.op === 'watermark'}
+		<div>
+			<label for="watermark-text" class="microlabel mb-2.5 block text-muted">Watermark text</label>
+			<input
+				id="watermark-text"
+				type="text"
+				maxlength="100"
+				placeholder="e.g. CONFIDENTIAL"
+				bind:value={settings.watermarkText}
+				class="h-11 w-full rounded-field border border-line-strong bg-card px-4 text-base text-ink transition-colors placeholder:text-faint focus-visible:border-accent sm:text-sm"
+			/>
+			<p class="mt-1.5 hint text-faint">
+				Stamped diagonally across every page — visible, semi-transparent, part of the document.
+			</p>
+		</div>
+	{:else if settings.op === 'pageNumbers'}
+		<p class="hint text-faint">
+			Adds “page / total” at the bottom center of every page — nothing else changes.
+		</p>
+	{:else if settings.op === 'toText'}
+		<p class="hint text-faint">
+			Extracts the digital text layer into a .txt file. Scanned PDFs have no text layer — use the
+			OCR PDF tool for those.
+		</p>
+	{:else if settings.op === 'grayscale'}
+		<p class="hint text-faint">
+			Converts every color to grayscale — smaller files, print-ready, ink-friendly.
+		</p>
+	{:else if settings.op === 'toPdfa'}
+		<p class="hint text-faint">
+			Converts to PDF/A-2b, the ISO archival standard — self-contained and accepted by courts,
+			registries and archives.
+		</p>
 	{:else}
 		{@render jpgQualitySlider()}
 		<p class="hint text-faint">

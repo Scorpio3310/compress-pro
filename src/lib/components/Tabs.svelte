@@ -28,7 +28,13 @@
 		{ id: 'toImages', label: 'To images' },
 		{ id: 'fromImages', label: 'From images' },
 		{ id: 'unlock', label: 'Unlock' },
-		{ id: 'protect', label: 'Protect' }
+		{ id: 'protect', label: 'Protect' },
+		{ id: 'rotate', label: 'Rotate' },
+		{ id: 'watermark', label: 'Watermark' },
+		{ id: 'pageNumbers', label: 'Numbers' },
+		{ id: 'toText', label: 'To text' },
+		{ id: 'grayscale', label: 'Grayscale' },
+		{ id: 'toPdfa', label: 'PDF/A' }
 	];
 	const ZIP_OPS: { id: ZipSettings['op']; label: string }[] = [
 		{ id: 'create', label: 'Create' },
@@ -103,7 +109,12 @@
 		audio: 'audio',
 		font: 'font',
 		zip: 'archive',
-		exif: 'tag'
+		exif: 'tag',
+		ocr: 'scan',
+		subtitle: 'captions',
+		ebook: 'book',
+		model: 'cube',
+		data: 'table'
 	};
 
 	const imagesActive = $derived(isImageTab(activeTab));

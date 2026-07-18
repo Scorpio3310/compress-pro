@@ -1,4 +1,10 @@
-import type { EncodePayload, EncodeProgress, EncodeResult, WorkerContracts } from './protocol';
+import type {
+	EncodePayload,
+	EncodeProgress,
+	EncodeResult,
+	PredecodedPixels,
+	WorkerContracts
+} from './protocol';
 import { expose } from './host';
 import { sniffAnimatedInput, WEBP_MAX_DIMENSION } from './webp-mux';
 import { containScale, frameDelayMs } from '$lib/codecs/video-math';
@@ -8,6 +14,8 @@ import { probeDimensions } from '$lib/codecs/image-probe';
 import { stripImageMetadataBytes } from '$lib/codecs/exif';
 import pngQuantWasmUrl from 'icodec/png-enc.wasm?url';
 import heicDecWasmUrl from 'icodec/heic-dec.wasm?url';
+import jxlDecWasmUrl from 'icodec/jxl-dec.wasm?url';
+import jxlEncWasmUrl from 'icodec/jxl-enc.wasm?url';
 
 /** Decode-time downscale engages only for genuine giants — comfortably above
  *  the largest calibrated e2e fixture (15.87 MP) so the locked thresholds
@@ -94,20 +102,38 @@ async function decodeTiff(bytes: ArrayBuffer): Promise<ImageData> {
 	return new ImageData(new Uint8ClampedArray(rgba), width, height);
 }
 
-// --- HEIC (icodec / libheif) ---
+/** RAW pixels arrive pre-decoded (LibRaw runs outside this worker) — RGB rows
+ *  are expanded to the RGBA layout ImageData requires, alpha fully opaque. */
+function imageDataFromPredecoded(p: PredecodedPixels): ImageData {
+	const src = new Uint8ClampedArray(p.data);
+	if (p.channels === 4) return new ImageData(src, p.width, p.height);
+	const out = new Uint8ClampedArray(p.width * p.height * 4);
+	for (let i = 0, o = 0; i < src.length; i += 3, o += 4) {
+		out[o] = src[i];
+		out[o + 1] = src[i + 1];
+		out[o + 2] = src[i + 2];
+		out[o + 3] = 255;
+	}
+	return new ImageData(out, p.width, p.height);
+}
 
-let heicReady: Promise<unknown> | null = null;
+// --- HEIC / JXL (icodec) ---
 
-async function decodeHeic(bytes: ArrayBuffer): Promise<ImageData> {
-	// icodec's wasm glue returns pixels through this global, normally
-	// registered by its barrel index.js — which the deep alias bypasses.
+/** icodec's wasm glue returns pixels through this global, normally
+ *  registered by its barrel index.js — which the deep aliases bypass. */
+function installIcodecImageDataShim(): void {
 	(globalThis as Record<string, unknown>)._icodec_ImageData ??= (
 		data: Uint8ClampedArray<ArrayBuffer>,
 		width: number,
 		height: number,
 		depth: number
 	) => (depth === 8 ? new ImageData(data, width, height) : { data, width, height, depth });
+}
 
+let heicReady: Promise<unknown> | null = null;
+
+async function decodeHeic(bytes: ArrayBuffer): Promise<ImageData> {
+	installIcodecImageDataShim();
 	const heic = await import('icodec-heic');
 	heicReady ??= heic.loadDecoder(heicDecWasmUrl);
 	await heicReady;
@@ -120,6 +146,74 @@ async function decodeHeic(bytes: ArrayBuffer): Promise<ImageData> {
 		return new ImageData(converted.data, converted.width, converted.height);
 	}
 	return image;
+}
+
+// --- JXL (icodec / libjxl — browsers can't createImageBitmap it) ---
+
+function isJxl(bytes: ArrayBuffer): boolean {
+	const b = new Uint8Array(bytes, 0, Math.min(12, bytes.byteLength));
+	if (b.length >= 2 && b[0] === 0xff && b[1] === 0x0a) return true; // bare codestream
+	return (
+		// ISO BMFF container: 00 00 00 0C 'JXL ' 0D 0A 87 0A
+		b.length >= 12 &&
+		b[0] === 0 &&
+		b[1] === 0 &&
+		b[2] === 0 &&
+		b[3] === 0x0c &&
+		b[4] === 0x4a &&
+		b[5] === 0x58 &&
+		b[6] === 0x4c &&
+		b[7] === 0x20 &&
+		b[8] === 0x0d &&
+		b[9] === 0x0a &&
+		b[10] === 0x87 &&
+		b[11] === 0x0a
+	);
+}
+
+let jxlDecReady: Promise<unknown> | null = null;
+let jxlEncReady: Promise<unknown> | null = null;
+
+async function decodeJxl(bytes: ArrayBuffer): Promise<ImageData> {
+	installIcodecImageDataShim();
+	const jxl = await import('icodec-jxl');
+	jxlDecReady ??= jxl.loadDecoder(jxlDecWasmUrl);
+	await jxlDecReady;
+	const image = jxl.decode(new Uint8Array(bytes));
+	if (image.depth !== undefined && image.depth !== 8) {
+		const { toBitDepth } = await import('icodec-common');
+		const converted = toBitDepth(image, 8);
+		return new ImageData(converted.data, converted.width, converted.height);
+	}
+	return image;
+}
+
+// --- PSD (@webtoon/psd — pure JS, wasm inlined) ---
+
+function isPsd(bytes: ArrayBuffer): boolean {
+	const b = new Uint8Array(bytes, 0, Math.min(4, bytes.byteLength));
+	return b.length >= 4 && b[0] === 0x38 && b[1] === 0x42 && b[2] === 0x50 && b[3] === 0x53; // '8BPS'
+}
+
+async function decodePsd(bytes: ArrayBuffer): Promise<ImageData> {
+	const { default: Psd } = await import('@webtoon/psd');
+	const psd = Psd.parse(bytes);
+	// composite() would happily misread anything else: CMYK channels land as
+	// RGBA and 16-bit throws deep inside — fail up front with an honest line.
+	if (psd.depth !== 8 || (psd.colorMode !== 3 && psd.colorMode !== 1)) {
+		throw new Error('Only 8-bit RGB or grayscale PSD files are supported — CMYK and 16/32-bit need a re-save');
+	}
+	// Upstream reads RAW-compression planes from one offset (all channels come
+	// back as the red plane) — real Photoshop always writes RLE, so refusing
+	// the raw layout beats silently producing wrong colors.
+	const red = (psd as unknown as { imageData?: { red?: { compression?: number } } }).imageData?.red;
+	if (psd.colorMode === 3 && red?.compression === 0) {
+		throw new Error('This PSD stores uncompressed image data — re-save it in Photoshop and try again');
+	}
+	const rgba = await psd.composite();
+	if (!psd.width || !psd.height || !rgba.length) throw new Error('Could not decode this PSD file');
+	// Fresh copy — ImageData rejects views over foreign buffers (decodeTiff precedent).
+	return new ImageData(new Uint8ClampedArray(rgba), psd.width, psd.height);
 }
 
 // --- Wide gamut (WASM-decoded paths only) ---
@@ -424,11 +518,12 @@ async function encodeImage(
 	payload: EncodePayload,
 	progress: (p: EncodeProgress) => void
 ): Promise<EncodeResult> {
-	const { bytes, quality, output, maxDimension, source } = payload;
+	const { bytes, quality, output, maxDimension, source, predecoded } = payload;
 
 	// Animated sources keep their animation for webp output — and for 'auto',
 	// where animated-webp is the only animation-preserving candidate.
-	if ((output === 'webp' || output === 'auto') && source !== 'heic') {
+	// (Predecoded RAW frames are always still images — nothing to sniff.)
+	if (!predecoded && (output === 'webp' || output === 'auto') && source !== 'heic') {
 		const type = sniffAnimatedInput(bytes);
 		if (type) {
 			// Residual animated-path failures (mux geometry, exotic frames) degrade
@@ -444,13 +539,21 @@ async function encodeImage(
 		}
 	}
 
-	const wasmDecoded = source === 'heic' || isTiff(bytes);
-	const decoded =
-		source === 'heic'
+	// Predecoded (RAW) frames skip decode AND the sRGB pass — LibRaw already
+	// writes sRGB. Everything downstream (resize, encode) is identical.
+	const wasmDecoded =
+		!predecoded && (source === 'heic' || isJxl(bytes) || isPsd(bytes) || isTiff(bytes));
+	const decoded = predecoded
+		? { imageData: imageDataFromPredecoded(predecoded), preResized: false }
+		: source === 'heic'
 			? { imageData: await decodeHeic(bytes), preResized: false }
-			: isTiff(bytes)
-				? { imageData: await decodeTiff(bytes), preResized: false }
-				: await decodeToImageData(bytes, maxDimension);
+			: isJxl(bytes)
+				? { imageData: await decodeJxl(bytes), preResized: false }
+				: isPsd(bytes)
+					? { imageData: await decodePsd(bytes), preResized: false }
+					: isTiff(bytes)
+						? { imageData: await decodeTiff(bytes), preResized: false }
+						: await decodeToImageData(bytes, maxDimension);
 	// After a decode-time downscale containScale returns 1, so maybeResize
 	// naturally skips — but `resized` must still report true downstream
 	// (keep-original guard + UI state depend on it).
@@ -507,6 +610,25 @@ async function encodeImage(
 				resized,
 				...dims,
 				chosenFormat: 'avif'
+			};
+		}
+		case 'jxl': {
+			const jxl = await import('icodec-jxl');
+			jxlEncReady ??= jxl.loadEncoder(jxlEncWasmUrl);
+			await jxlEncReady;
+			// q100 on a lossless source → true lossless JXL (same rule as WebP);
+			// lossy sources stay lossy — re-encoding artifacts losslessly costs
+			// multiples of the bytes for zero visible gain.
+			const options =
+				quality === 100 && source !== 'heic' && isLosslessSource(bytes)
+					? { lossless: true }
+					: { quality, effort: 7 };
+			const out = jxl.encode(imageData, options);
+			return {
+				bytes: out.buffer.slice(out.byteOffset, out.byteOffset + out.byteLength) as ArrayBuffer,
+				resized,
+				...dims,
+				chosenFormat: 'jxl'
 			};
 		}
 		case 'png': {

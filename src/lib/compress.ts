@@ -11,6 +11,11 @@ import type {
 	FontConversionSettings,
 	ZipSettings,
 	ExifSettings,
+	OcrSettings,
+	SubtitleSettings,
+	EbookSettings,
+	ModelSettings,
+	DataSettings,
 	ProgressInfo
 } from '$lib/types';
 import { isBundlingArchiveFormat, isImageFormat } from '$lib/types';
@@ -18,13 +23,22 @@ import { ARCHIVE_OUTPUT_EXT, sanitizeEntryName } from '$lib/codecs/sevenzip-args
 import { runWithConcurrency } from '$lib/concurrency';
 import { compressImage, type ImageProgress } from '$lib/codecs/image';
 import { compressSvg } from '$lib/codecs/svg';
-import { compressPdf, protectPdf, unlockPdf, type PdfProgress } from '$lib/codecs/pdf';
+import {
+	compressPdf,
+	grayscalePdf,
+	pdfaPdf,
+	protectPdf,
+	unlockPdf,
+	type PdfProgress
+} from '$lib/codecs/pdf';
 import { convertVideo } from '$lib/codecs/video';
 import { convertAudio } from '$lib/codecs/audio';
 import { convertFont, subsetFont } from '$lib/codecs/font';
 import { callWorker, imageLaneCap } from '$lib/workers/rpc';
 import { formatBytes } from '$lib/utils';
 import { displayableImageMime } from '$lib/file-visual';
+import { isRawFile } from '$lib/routing';
+import type { PredecodedPixels } from '$lib/workers/protocol';
 
 const extMap: Record<string, string> = {
 	jpg: '.jpg',
@@ -33,6 +47,8 @@ const extMap: Record<string, string> = {
 	gif: '.gif',
 	avif: '.avif',
 	ico: '.ico',
+	svg: '.svg',
+	jxl: '.jxl',
 	mp4: '.mp4',
 	webm: '.webm',
 	mov: '.mov',
@@ -78,7 +94,12 @@ type Settings =
 	| AudioConversionSettings
 	| FontConversionSettings
 	| ZipSettings
-	| ExifSettings;
+	| ExifSettings
+	| OcrSettings
+	| SubtitleSettings
+	| EbookSettings
+	| ModelSettings
+	| DataSettings;
 
 function imageDetail(p: ImageProgress): string | null {
 	const parts: string[] = [];
@@ -576,9 +597,35 @@ export async function runPdfTool(
 				outName = replaceExtension(file.name, '-pages.pdf');
 			} else if (settings.op === 'unlock' || settings.op === 'protect') {
 				const run = settings.op === 'unlock' ? unlockPdf : protectPdf;
+				// qpdf's structural pass is atomic — no per-page progress to relay.
+				blob = await run(file.file, settings.password, signal);
+				outName = replaceExtension(
+					file.name,
+					settings.op === 'unlock' ? '-unlocked.pdf' : '-protected.pdf'
+				);
+			} else if (settings.op === 'rotate') {
+				blob = await tools.rotatePdf(file.file, settings.rotation);
+				outName = replaceExtension(file.name, '-rotated.pdf');
+			} else if (settings.op === 'watermark') {
+				blob = await tools.watermarkPdf(file.file, settings.watermarkText.trim());
+				outName = replaceExtension(file.name, '-watermarked.pdf');
+			} else if (settings.op === 'pageNumbers') {
+				blob = await tools.pageNumbersPdf(file.file);
+				outName = replaceExtension(file.name, '-numbered.pdf');
+			} else if (settings.op === 'toText') {
+				blob = await tools.pdfToText(file.file, (done, total, detail) =>
+					onProgress({
+						...base,
+						fileFraction: total ? Math.min(done / total, 0.98) : 0,
+						detail,
+						stage: 'processing'
+					})
+				);
+				outName = replaceExtension(file.name, '.txt');
+			} else if (settings.op === 'grayscale' || settings.op === 'toPdfa') {
+				const run = settings.op === 'grayscale' ? grayscalePdf : pdfaPdf;
 				blob = await run(
 					file.file,
-					settings.password,
 					(page, pageCount) =>
 						onProgress({
 							...base,
@@ -590,7 +637,7 @@ export async function runPdfTool(
 				);
 				outName = replaceExtension(
 					file.name,
-					settings.op === 'unlock' ? '-unlocked.pdf' : '-protected.pdf'
+					settings.op === 'grayscale' ? '-grayscale.pdf' : '-pdfa.pdf'
 				);
 			} else {
 				const out = await tools.pdfToImages(
@@ -652,6 +699,10 @@ function computeConcurrency(files: UploadedFile[], format: FileFormat, settings:
 	if (format === 'gif' && out === 'gif') cap = Math.min(cap, 2);
 	// Huge inputs: N simultaneous full-res decodes (RGBA ≈ 4 B/px) add up fast.
 	if (files.some((f) => f.size > 25_000_000)) cap = Math.min(cap, 2);
+	// RAW decodes serialize on the LibRaw worker anyway, but each decoded
+	// frame holds ~100-200 MB of RGB until its encode lane drains — keep two
+	// in flight at most (small DNGs would otherwise dodge the >25 MB guard).
+	if (files.some((f) => isRawFile(f.name, f.file.type))) cap = Math.min(cap, 2);
 	return cap;
 }
 
@@ -714,16 +765,41 @@ export async function compressFiles(
 		let resized = false;
 
 		let autoRequested = false;
-		if (isImage) {
+		if (isImage && (settings as ImageCompressionSettings).outputFormat === 'svg') {
+			const imageSettings = settings as ImageCompressionSettings;
+			const { vectorizeImage } = await import('$lib/codecs/vectorize');
+			blob = await vectorizeImage(file.file, imageSettings, signal);
+			// The keep-original guard must never hand back raster bytes for an
+			// SVG request — vectorized photos are legitimately larger.
+			formatChanged = true;
+			outName = replaceExtension(file.name, extMap.svg);
+			if (blob.size >= file.size) {
+				info =
+					'Vector output is larger than the source — vectorization suits logos and flat graphics best';
+			}
+		} else if (isImage) {
 			const imageSettings = settings as ImageCompressionSettings;
 			autoRequested = imageSettings.outputFormat === 'auto';
-			// The file's real format can differ from its tab: AVIF rides on the
-			// jpg tab, so treating it as already-jpg would skip the rename and
-			// let the keep-original guard return AVIF bytes from a JPG run.
-			const sourceFormat =
-				file.file.type === 'image/avif' || file.name.toLowerCase().endsWith('.avif')
+			// The file's real format can differ from its tab: AVIF and camera
+			// RAW both ride the jpg tab — the distinction drives the rename and
+			// the keep-original guard, and RAW additionally decodes outside the
+			// image worker (its TIFF magic would confuse the worker's sniffing).
+			const isRaw = isRawFile(file.name, file.file.type);
+			const sourceFormat = isRaw
+				? 'raw'
+				: file.file.type === 'image/avif' || file.name.toLowerCase().endsWith('.avif')
 					? 'avif'
-					: format;
+					: file.file.type === 'image/jxl' || file.name.toLowerCase().endsWith('.jxl')
+						? 'jxl'
+						: file.name.toLowerCase().endsWith('.psd') ||
+							  /photoshop/.test(file.file.type.toLowerCase())
+							? 'psd'
+							: format;
+			let predecoded: PredecodedPixels | undefined;
+			if (isRaw) {
+				const { decodeRaw } = await import('$lib/codecs/raw');
+				predecoded = await decodeRaw(file.file, signal);
+			}
 			const out = await compressImage(
 				file.file,
 				imageSettings,
@@ -735,7 +811,8 @@ export async function compressFiles(
 						stage: 'processing'
 					}),
 				format,
-				signal
+				signal,
+				predecoded
 			);
 			blob = out.blob;
 			warning = out.warning;
@@ -780,6 +857,106 @@ export async function compressFiles(
 			// formatChanged/resized stay false — when nothing was removed the
 			// bytes are identical and the keep-original guard below returns the
 			// original File naturally (savings 0, info "No metadata found").
+		} else if (format === 'ocr') {
+			const ocrSettings = settings as OcrSettings;
+			const { ocrImage, ocrPdf } = await import('$lib/codecs/ocr');
+			const run = ocrSettings.op === 'toPdf' ? ocrPdf : ocrImage;
+			const out = await run(
+				file.file,
+				ocrSettings,
+				(fraction, detail) =>
+					onProgress({
+						...base,
+						fileFraction: Math.min(fraction, 0.98),
+						detail,
+						stage: 'processing'
+					}),
+				signal
+			);
+			blob = out.blob;
+			info = out.info;
+			// A .txt/searchable-PDF result must never fall back to the source.
+			formatChanged = true;
+			outName = replaceExtension(
+				file.name,
+				ocrSettings.op === 'toPdf' ? '-searchable.pdf' : '.txt'
+			);
+		} else if (format === 'subtitle') {
+			const { to } = settings as SubtitleSettings;
+			const { convertSubtitle } = await import('$lib/codecs/subtitles');
+			const out = convertSubtitle(await file.file.text(), to);
+			blob = new Blob([out.text], {
+				type: to === 'vtt' ? 'text/vtt' : 'application/x-subrip'
+			});
+			info = `${out.from.toUpperCase()} → ${to.toUpperCase()} · ${out.cueCount} cue${out.cueCount !== 1 ? 's' : ''}`;
+			// Converted text must never fall back to the source bytes.
+			formatChanged = true;
+			outName = replaceExtension(file.name, `.${to}`);
+		} else if (format === 'data') {
+			const { convertData } = await import('$lib/codecs/data');
+			const out = await convertData(
+				file,
+				settings as DataSettings,
+				(fraction, detail) =>
+					onProgress({
+						...base,
+						fileFraction: Math.min(fraction, 0.98),
+						detail,
+						stage: 'processing'
+					}),
+				signal
+			);
+			blob = out.blob;
+			info = out.info;
+			warning = out.warning;
+			// A pretty-printed YAML is often LARGER than its minified JSON source
+			// — the keep-original guard must never "un-convert".
+			formatChanged = true;
+			outName = replaceExtension(file.name, out.outExt);
+		} else if (format === 'ebook') {
+			const { compressEbook } = await import('$lib/codecs/ebook');
+			const out = await compressEbook(
+				file,
+				settings as EbookSettings,
+				(fraction, detail) =>
+					onProgress({
+						...base,
+						fileFraction: Math.min(fraction, 0.98),
+						detail,
+						stage: 'processing'
+					}),
+				signal
+			);
+			blob = out.blob;
+			info = out.info;
+			warning = out.warning;
+			// true only for cbr → cbz: a zip bigger than its rar source must
+			// still ship (reverting would silently un-convert the container).
+			formatChanged = out.formatChanged;
+			// A committed maxDimension downscale must survive the guard below.
+			resized = out.transformed;
+			outName = replaceExtension(file.name, out.outExt);
+		} else if (format === 'model') {
+			const { compressModel } = await import('$lib/codecs/model');
+			const out = await compressModel(
+				file,
+				settings as ModelSettings,
+				(fraction, detail) =>
+					onProgress({
+						...base,
+						fileFraction: Math.min(fraction, 0.98),
+						detail,
+						stage: 'processing'
+					}),
+				signal
+			);
+			blob = out.blob;
+			info = out.info;
+			warning = out.warning;
+			// .glb in → .glb out: formatChanged stays false so the whole-file
+			// keep-original guard applies; committed simplify/texture downscale
+			// must not be reverted by it.
+			resized = out.transformed;
 		} else if (format === 'video') {
 			const out = await convertVideo(
 				file.file,
@@ -847,9 +1024,10 @@ export async function compressFiles(
 			blob = file.file;
 			outName = file.name;
 			// Image info lines describe a transformation (sRGB conversion) that
-			// the untouched original did NOT undergo. EXIF keeps its info —
+			// the untouched original did NOT undergo — same for a reverted
+			// ebook's/model's "N of M … recompressed". EXIF keeps its info —
 			// "No metadata found" relies on exactly this branch.
-			if (isImage) info = null;
+			if (isImage || format === 'ebook' || format === 'model') info = null;
 		}
 
 		const result: CompressedFile = {

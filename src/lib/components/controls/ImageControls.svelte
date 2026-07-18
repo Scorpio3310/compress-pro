@@ -27,21 +27,37 @@
 		{ id: 'avif', label: 'AVIF' }
 	];
 	const ICO_OUTPUT = { id: 'ico', label: 'ICO' } as const;
+	const SVG_OUTPUT = { id: 'svg', label: 'SVG' } as const;
+	const JXL_OUTPUT = { id: 'jxl', label: 'JXL' } as const;
+	const vectorModes = [
+		{ id: 'color', label: 'Color' },
+		{ id: 'bw', label: 'Black & white' }
+	];
 
-	// Target mode exists for quality-parametric encoders only (not GIF/ICO).
+	// Target mode exists for quality-parametric encoders only (not GIF/ICO/SVG).
 	let targetAvailable = $derived(
-		settings.outputFormat !== 'gif' && settings.outputFormat !== 'ico'
+		settings.outputFormat !== 'gif' &&
+			settings.outputFormat !== 'ico' &&
+			settings.outputFormat !== 'svg'
 	);
 
 	// HEIC is input-only and photos never want a GIF output; the GIF tab is
-	// gif-centric (animation-preserving), so Auto isn't offered there. ICO is
-	// a deliberate favicon tool, offered only where favicon sources live
-	// (JPG/PNG tabs) — webp/gif/heic keep their photo/animation focus.
+	// gif-centric (animation-preserving), so Auto isn't offered there. ICO
+	// (favicons) and SVG (vtracer vectorization) are deliberate tools, offered
+	// only where their sources live (JPG/PNG tabs) — webp/gif/heic keep their
+	// photo/animation focus.
 	let availableOutputs = $derived.by(() => {
-		if (format === 'heic') return outputFormats.filter((f) => f.id !== 'gif');
-		if (format === 'gif') return outputFormats.filter((f) => f.id !== 'auto');
-		if (format === 'jpg' || format === 'png') return [...outputFormats, ICO_OUTPUT];
-		return outputFormats;
+		// JXL only ever arrives via preset pages (/jpg-to-jxl, /compress-jxl) —
+		// Chrome can't render it, so it's never offered as a general pill; the
+		// active pill still renders so the preset state is visible (and
+		// e2e-assertable). Picking any other pill drops it, like ICO/SVG.
+		const withJxl = (list: typeof outputFormats) =>
+			settings.outputFormat === 'jxl' ? [...list, JXL_OUTPUT] : list;
+		if (format === 'heic') return withJxl(outputFormats.filter((f) => f.id !== 'gif'));
+		if (format === 'gif') return withJxl(outputFormats.filter((f) => f.id !== 'auto'));
+		if (format === 'jpg' || format === 'png')
+			return withJxl([...outputFormats, ICO_OUTPUT, SVG_OUTPUT]);
+		return withJxl(outputFormats);
 	});
 
 	// PNG at quality 100 is lossless and HEIC input is already HEVC-compressed —
@@ -71,6 +87,22 @@
 
 {#if settings.outputFormat === 'ico'}
 	<!-- no slider, no target UI — every ICO size is encoded lossless -->
+{:else if settings.outputFormat === 'svg'}
+	<div class="panel-span">
+		<SegmentedControl
+			items={vectorModes}
+			selected={settings.vectorMode}
+			onselect={(id) => (settings.vectorMode = id as ImageCompressionSettings['vectorMode'])}
+		/>
+	</div>
+	<div>
+		<Slider id="vector-detail" label="Detail" bind:value={settings.vectorDetail} min={0} max={100} />
+		<p class="mt-2 hint text-faint">
+			{settings.vectorMode === 'bw'
+				? 'Black & white stencil — filled outlines, ideal for logos and cut files.'
+				: 'Higher detail keeps more colors and smaller shapes; lower simplifies harder.'}
+		</p>
+	</div>
 {:else if settings.mode === 'quality' || !targetAvailable}
 	<div>
 		<Slider
@@ -157,6 +189,16 @@
 		</p>
 	{:else if settings.outputFormat === 'auto'}
 		<p class="mt-2 hint text-faint">Smallest of JPG/WebP/AVIF per image — animation stays WebP.</p>
+	{:else if settings.outputFormat === 'svg'}
+		<p class="mt-2 hint text-faint">
+			Traced into true vector paths — ideal for logos, icons and flat graphics. Photos come out
+			approximate and often larger than the original.
+		</p>
+	{:else if settings.outputFormat === 'jxl'}
+		<p class="mt-2 hint text-faint">
+			JPEG XL — smaller than JPG at the same quality (100 = lossless for PNG sources). Browser
+			support is still limited, so it shines for storage and archives.
+		</p>
 	{:else if format === 'gif' && settings.outputFormat === 'webp'}
 		<p class="mt-2 hint text-faint">
 			Animation is preserved — animated WebP is typically 50–70% smaller than GIF.
