@@ -19,6 +19,38 @@ function stripBom(s: string): string {
 	return s.charCodeAt(0) === 0xfeff ? s.slice(1) : s;
 }
 
+/** Byte-level decode for subtitle files. Blob.text() decodes UTF-8 only, but
+ *  real-world SRTs are often UTF-16 (Windows Notepad "Unicode", Subtitle
+ *  Workshop) or a legacy single-byte codepage (opensubtitles exports) — sniff
+ *  the BOM, try strict UTF-8, and fall back to windows-1252 (the web's legacy
+ *  default) so accented characters never ship as U+FFFD. */
+export function decodeSubtitleText(bytes: Uint8Array): string {
+	if (bytes.length >= 2 && bytes[0] === 0xff && bytes[1] === 0xfe) {
+		return stripBom(new TextDecoder('utf-16le').decode(bytes));
+	}
+	if (bytes.length >= 2 && bytes[0] === 0xfe && bytes[1] === 0xff) {
+		return stripBom(new TextDecoder('utf-16be').decode(bytes));
+	}
+	// BOM-less UTF-16: subtitle text never contains NUL bytes, UTF-16-coded
+	// ASCII is half NULs — their even/odd position picks the endianness.
+	const scan = bytes.subarray(0, 512);
+	let evenNul = 0;
+	let oddNul = 0;
+	for (let i = 0; i < scan.length; i++) {
+		if (scan[i] !== 0) continue;
+		if (i % 2 === 0) evenNul++;
+		else oddNul++;
+	}
+	if (evenNul + oddNul > scan.length / 8) {
+		return stripBom(new TextDecoder(oddNul > evenNul ? 'utf-16le' : 'utf-16be').decode(bytes));
+	}
+	try {
+		return stripBom(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
+	} catch {
+		return new TextDecoder('windows-1252').decode(bytes);
+	}
+}
+
 export function detectSubtitleFormat(raw: string): 'vtt' | 'ass' | 'srt' {
 	const t = stripBom(raw).trimStart();
 	if (t.startsWith('WEBVTT')) return 'vtt';
@@ -71,7 +103,7 @@ export function parseSrt(raw: string): SubtitleCue[] {
 function stripVttTags(text: string): string {
 	return text
 		.replace(/<\/?(?:c|v|lang|ruby|rt)(?:[.\s][^>]*)?>/gi, '')
-		.replace(/<\d{1,2}:\d{1,2}:\d{1,2}\.\d{1,3}>/g, ''); // karaoke timestamps
+		.replace(/<(?:\d{1,3}:)?\d{1,2}:\d{1,2}\.\d{1,3}>/g, ''); // karaoke timestamps — hours optional (VTT)
 }
 
 export function parseVtt(raw: string): SubtitleCue[] {
@@ -115,7 +147,18 @@ export function parseAss(raw: string): SubtitleCue[] {
 		}
 		const dlg = trimmed.match(/^Dialogue\s*:\s*(.*)$/i);
 		if (!dlg) continue;
-		const cols = fields ?? ['layer', 'start', 'end', 'style', 'name', 'marginl', 'marginr', 'marginv', 'effect', 'text'];
+		const cols = fields ?? [
+			'layer',
+			'start',
+			'end',
+			'style',
+			'name',
+			'marginl',
+			'marginr',
+			'marginv',
+			'effect',
+			'text'
+		];
 		// Text is always the last field — split with a limit so commas survive.
 		const parts = splitWithLimit(dlg[1], ',', cols.length);
 		const start = parseAssTime(parts[cols.indexOf('start')] ?? '');

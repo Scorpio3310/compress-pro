@@ -39,7 +39,10 @@ export function decodeText(bytes: Uint8Array): string {
  *  Preference tab > ';' > ',' — tab/semicolon files almost always ALSO carry
  *  commas (decimal commas, prose); the reverse is rare. */
 export function sniffCsvDelimiter(text: string): ',' | ';' | '\t' | null {
-	const lines = text.split(/\r?\n/).filter((l) => l.trim() !== '').slice(0, 20);
+	const lines = text
+		.split(/\r?\n/)
+		.filter((l) => l.trim() !== '')
+		.slice(0, 20);
 	if (lines.length === 0) return null;
 	const countOutsideQuotes = (line: string, ch: string) => {
 		let count = 0;
@@ -64,7 +67,12 @@ export function sniffCsvDelimiter(text: string): ',' | ';' | '\t' | null {
  *  step is async (the parser is a lazy chunk), hence the Promise. */
 export async function detectDataFormat(bytes: Uint8Array, fileName: string): Promise<DataKind> {
 	// 1. binary containers: zip (xlsx/xlsm/ods) and CFB (legacy .xls)
-	if (bytes.length >= 4 && bytes[0] === 0x50 && bytes[1] === 0x4b && (bytes[2] === 0x03 || bytes[2] === 0x05)) {
+	if (
+		bytes.length >= 4 &&
+		bytes[0] === 0x50 &&
+		bytes[1] === 0x4b &&
+		(bytes[2] === 0x03 || bytes[2] === 0x05)
+	) {
 		return 'spreadsheet-binary';
 	}
 	if (
@@ -101,7 +109,10 @@ export async function detectDataFormat(bytes: Uint8Array, fileName: string): Pro
 		}
 	}
 
-	const lines = text.split(/\r?\n/).filter((l) => l.trim() !== '').slice(0, 20);
+	const lines = text
+		.split(/\r?\n/)
+		.filter((l) => l.trim() !== '')
+		.slice(0, 20);
 	// 3. unmistakable YAML markers beat the CSV sniff
 	if (lines.some((l) => /^(---|%YAML)/.test(l))) return 'yaml';
 
@@ -141,10 +152,15 @@ function retypeNumericCells(ws: Worksheet, XLSX: typeof import('xlsx')): void {
 		for (let c = range.s.c; c <= range.e.c; c++) {
 			const addr = XLSX.utils.encode_cell({ r, c });
 			const cell = ws[addr];
-			if (cell && cell.t === 's' && typeof cell.v === 'string' && /^-?\d+(\.\d+)?$/.test(cell.v.trim())) {
-				cell.t = 'n';
-				cell.v = Number(cell.v);
-			}
+			if (!cell || cell.t !== 's' || typeof cell.v !== 'string') continue;
+			const v = cell.v.trim();
+			if (!/^-?\d+(\.\d+)?$/.test(v)) continue;
+			// Leading-zero codes ("01234" ZIP/product ids) and >15-digit
+			// identifiers don't survive Number() — they honestly stay text too.
+			if (/^-?0\d/.test(v)) continue;
+			if (v.replace(/\D/g, '').length > 15) continue;
+			cell.t = 'n';
+			cell.v = Number(v);
 		}
 	}
 }
@@ -175,7 +191,9 @@ async function xlsxToCsv(bytes: Uint8Array, settings: DataSettings): Promise<Dat
 	} catch (error) {
 		const message = error instanceof Error ? error.message : '';
 		if (/password/i.test(message)) {
-			throw new Error('This spreadsheet is password-protected — remove the password in Excel first');
+			throw new Error(
+				'This spreadsheet is password-protected — remove the password in Excel first'
+			);
 		}
 		throw new Error('This ZIP archive is not a spreadsheet — try the archive converter instead');
 	}
@@ -241,7 +259,9 @@ async function jsonToYaml(text: string): Promise<DataResult> {
 
 async function yamlToJson(text: string, settings: DataSettings): Promise<DataResult> {
 	const YAML = await import('yaml');
-	const docs = YAML.parseAllDocuments(text);
+	// merge: true — YAML 1.2 leaves `<<: *anchor` (docker-compose / CI inheritance)
+	// as a literal "<<" key by default; resolving it is what users mean.
+	const docs = YAML.parseAllDocuments(text, { merge: true });
 	if (docs.length > 1) {
 		throw new Error(
 			`This YAML file contains ${docs.length} documents — split it and convert one at a time`

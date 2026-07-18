@@ -1,9 +1,10 @@
 /**
- * SB-01…05: the subtitle tab — SRT/VTT/ASS converted between each other by
+ * SB-01…06: the subtitle tab — SRT/VTT/ASS converted between each other by
  * pure JS on the main thread. Input format is detected from content, the
  * target comes from the landing-page preset (hub /srt-to-vtt → VTT,
  * /vtt-to-srt & /ass-to-srt → SRT).
  */
+import { writeFileSync } from 'node:fs';
 import { expect, fx, test } from '../fixtures';
 import { compress, downloadRow, gotoPath, upload } from '../helpers';
 
@@ -85,4 +86,28 @@ test('SB-05: a home-dropped .srt routes to the subtitle tab', async ({ page }) =
 	// routing lands on the subtitle tab with the settings card visible
 	await expect(page.getByRole('button', { name: 'To VTT', exact: true })).toBeVisible();
 	await expect(page.getByTestId('compress-cta')).toHaveText('Convert 1 file to VTT');
+});
+
+test('SB-06: legacy CP-1252 and UTF-16 SRT files decode correctly', async ({ page }, testInfo) => {
+	// Blob.text() is UTF-8-only — these two real-world encodings used to ship
+	// U+FFFD (CP-1252) or fail detection outright (UTF-16, NULs hide the arrow).
+	const cp1252 = testInfo.outputPath('legacy-cp1252.srt');
+	writeFileSync(
+		cp1252,
+		Buffer.from('1\r\n00:00:01,000 --> 00:00:02,500\r\ncafé au lait\r\n', 'latin1')
+	);
+	const utf16 = testInfo.outputPath('notepad-utf16.srt');
+	writeFileSync(
+		utf16,
+		Buffer.from('﻿1\r\n00:00:01,000 --> 00:00:02,500\r\nČeprav žvižga\r\n', 'utf16le')
+	);
+	await gotoPath(page, '/srt-to-vtt');
+	await upload(page, cp1252, utf16);
+	await compress(page);
+	const legacy = (await downloadRow(page, 'legacy-cp1252')).bytes.toString('utf8');
+	expect(legacy).toContain('café au lait');
+	expect(legacy).not.toContain('�');
+	const unicode = (await downloadRow(page, 'notepad-utf16')).bytes.toString('utf8');
+	expect(unicode.startsWith('WEBVTT\n\n')).toBe(true);
+	expect(unicode).toContain('Čeprav žvižga');
 });

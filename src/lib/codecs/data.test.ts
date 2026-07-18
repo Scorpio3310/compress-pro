@@ -60,9 +60,9 @@ describe('detectDataFormat', () => {
 	});
 
 	it('detects binary spreadsheets by magic', async () => {
-		await expect(detectDataFormat(new Uint8Array([0x50, 0x4b, 0x03, 0x04, 1, 2]), 'x.xlsx')).resolves.toBe(
-			'spreadsheet-binary'
-		);
+		await expect(
+			detectDataFormat(new Uint8Array([0x50, 0x4b, 0x03, 0x04, 1, 2]), 'x.xlsx')
+		).resolves.toBe('spreadsheet-binary');
 		await expect(
 			detectDataFormat(new Uint8Array([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]), 'x.xls')
 		).resolves.toBe('spreadsheet-binary');
@@ -109,7 +109,11 @@ describe('directions (via convertData on synthetic files)', () => {
 	it('yaml → json expands anchors, minifies on jsonIndent 0', async () => {
 		const { convertData } = await import('./data');
 		const yaml = 'base: &b\n  x: 1\nref: *b\n';
-		const out = await convertData(uploaded('x.yaml', yaml), { ...settings, jsonIndent: 0 }, () => {});
+		const out = await convertData(
+			uploaded('x.yaml', yaml),
+			{ ...settings, jsonIndent: 0 },
+			() => {}
+		);
 		const parsed = JSON.parse(await out.blob.text());
 		expect(parsed.ref).toEqual(parsed.base);
 		expect((await out.blob.text()).includes('\n')).toBe(false);
@@ -123,6 +127,15 @@ describe('directions (via convertData on synthetic files)', () => {
 		await expect(
 			convertData(uploaded('d.yaml', 'a: 1\na: 2\n'), settings, () => {})
 		).rejects.toThrow(/not valid YAML/);
+	});
+
+	it('yaml → json resolves << merge keys (docker-compose idiom)', async () => {
+		const { convertData } = await import('./data');
+		const yaml = 'base: &b\n  image: redis\nsvc:\n  <<: *b\n  port: 6379\n';
+		const out = await convertData(uploaded('c.yaml', yaml), settings, () => {});
+		const parsed = JSON.parse(await out.blob.text());
+		expect(parsed.svc).toEqual({ image: 'redis', port: 6379 });
+		expect(Object.keys(parsed.svc)).not.toContain('<<');
 	});
 
 	it('Infinity becomes null with a warning', async () => {
@@ -147,6 +160,27 @@ describe('directions (via convertData on synthetic files)', () => {
 			raw: true
 		}) as unknown[][];
 		expect(rows[1]).toEqual(['MARCH1', '1/2', '2024-01-15', 4.5]);
+	});
+
+	it('csv → xlsx keeps leading zeros and >15-digit identifiers as text', async () => {
+		const { convertData } = await import('./data');
+		const XLSX = await import('xlsx');
+		const out = await convertData(
+			uploaded('ids.csv', 'zip,id,qty\n01234,9007199254740993,7\n'),
+			settings,
+			() => {}
+		);
+		const wb = XLSX.read(new Uint8Array(await out.blob.arrayBuffer()), { type: 'array' });
+		const ws = wb.Sheets[wb.SheetNames[0]];
+		// ZIP code: Number() would drop the leading zero → must stay a string
+		expect(ws['A2'].t).toBe('s');
+		expect(ws['A2'].v).toBe('01234');
+		// 16-digit id: beyond 2^53, Number() rounds to …992 → must stay a string
+		expect(ws['B2'].t).toBe('s');
+		expect(ws['B2'].v).toBe('9007199254740993');
+		// plain small number still becomes numeric
+		expect(ws['C2'].t).toBe('n');
+		expect(ws['C2'].v).toBe(7);
 	});
 
 	it('xlsx → csv: BOM, first-sheet rule, cached formula, uncached dropped', async () => {

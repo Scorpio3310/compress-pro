@@ -883,8 +883,12 @@ export async function compressFiles(
 			);
 		} else if (format === 'subtitle') {
 			const { to } = settings as SubtitleSettings;
-			const { convertSubtitle } = await import('$lib/codecs/subtitles');
-			const out = convertSubtitle(await file.file.text(), to);
+			const { convertSubtitle, decodeSubtitleText } = await import('$lib/codecs/subtitles');
+			// Decode from bytes, not .text() — legacy SRTs are often UTF-16 or CP-1252.
+			const out = convertSubtitle(
+				decodeSubtitleText(new Uint8Array(await file.file.arrayBuffer())),
+				to
+			);
 			blob = new Blob([out.text], {
 				type: to === 'vtt' ? 'text/vtt' : 'application/x-subrip'
 			});

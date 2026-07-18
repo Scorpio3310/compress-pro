@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
 	convertSubtitle,
+	decodeSubtitleText,
 	detectSubtitleFormat,
 	parseAss,
 	parseSrt,
@@ -146,6 +147,68 @@ describe('convertSubtitle', () => {
 	});
 
 	it('throws when no cues survive parsing', () => {
-		expect(() => convertSubtitle('WEBVTT\n\nNOTE nothing here\n', 'srt')).toThrow(/No subtitle cues/);
+		expect(() => convertSubtitle('WEBVTT\n\nNOTE nothing here\n', 'srt')).toThrow(
+			/No subtitle cues/
+		);
+	});
+
+	it('vtt → srt strips hourless karaoke timestamps too', () => {
+		const out = convertSubtitle(
+			'WEBVTT\n\n00:00:15.000 --> 00:00:18.500\n<00:16.000>Never <00:17.000>gonna <00:00:18.000>give\n',
+			'srt'
+		);
+		expect(out.text).toContain('Never gonna give');
+		expect(out.text).not.toContain('<');
+	});
+});
+
+describe('decodeSubtitleText', () => {
+	const srtFor = (text: string) => `1\r\n00:00:01,000 --> 00:00:02,000\r\n${text}\r\n`;
+
+	const utf16 = (s: string, endian: 'le' | 'be', bom: boolean) => {
+		const withBom = bom ? '﻿' + s : s;
+		const buf = new Uint8Array(withBom.length * 2);
+		for (let i = 0; i < withBom.length; i++) {
+			const c = withBom.charCodeAt(i);
+			buf[2 * i] = endian === 'le' ? c & 0xff : c >> 8;
+			buf[2 * i + 1] = endian === 'le' ? c >> 8 : c & 0xff;
+		}
+		return buf;
+	};
+
+	it('passes UTF-8 through and strips the BOM', () => {
+		const decoded = decodeSubtitleText(new TextEncoder().encode('﻿' + srtFor('čšž')));
+		expect(decoded).toContain('čšž');
+		expect(decoded.charCodeAt(0)).not.toBe(0xfeff);
+	});
+
+	it('decodes UTF-16LE with BOM (Windows Notepad "Unicode") end to end', () => {
+		const bytes = utf16(srtFor('Čeprav žvižga'), 'le', true);
+		const out = convertSubtitle(decodeSubtitleText(bytes), 'vtt');
+		expect(out.from).toBe('srt');
+		expect(out.cueCount).toBe(1);
+		expect(out.text).toContain('Čeprav žvižga');
+	});
+
+	it('decodes UTF-16BE with BOM', () => {
+		const bytes = utf16(srtFor('Čeprav žvižga'), 'be', true);
+		expect(decodeSubtitleText(bytes)).toContain('Čeprav žvižga');
+	});
+
+	it('guesses BOM-less UTF-16LE from the NUL-byte pattern', () => {
+		const bytes = utf16(srtFor('plain ascii cue'), 'le', false);
+		const out = convertSubtitle(decodeSubtitleText(bytes), 'vtt');
+		expect(out.text).toContain('plain ascii cue');
+	});
+
+	it('falls back to windows-1252 when strict UTF-8 fails — no U+FFFD', () => {
+		// é as a single 0xE9 byte — the opensubtitles CP-1252 legacy shape.
+		// (Only 0xA0–0xFF asserted: Node's ICU maps the 0x80–0x9F smart-quote
+		// range to C1 controls, browsers follow WHATWG — 0xE9 agrees in both.)
+		const template = srtFor('caf# au lait');
+		const bytes = Uint8Array.from(template, (ch) => (ch === '#' ? 0xe9 : ch.charCodeAt(0)));
+		const out = convertSubtitle(decodeSubtitleText(bytes), 'vtt');
+		expect(out.text).toContain('café au lait');
+		expect(out.text).not.toContain('\uFFFD');
 	});
 });
