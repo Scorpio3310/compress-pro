@@ -97,6 +97,9 @@
 	"dependencies": {
 		"7z-wasm": "1.2.0",
 		"@fontsource-variable/plus-jakarta-sans": "^5.2.8",
+		"@gltf-transform/core": "^4.4.1",
+		"@gltf-transform/extensions": "^4.4.1",
+		"@gltf-transform/functions": "^4.4.1",
 		"@jsquash/avif": "^2.1.1",
 		"@jsquash/jpeg": "^1.6.0",
 		"@jsquash/oxipng": "^2.3.0",
@@ -106,18 +109,27 @@
 		"@mediabunny/aac-encoder": "1.50.8",
 		"@mediabunny/flac-encoder": "1.50.8",
 		"@mediabunny/mp3-encoder": "1.50.8",
+		"@neslinesli93/qpdf-wasm": "0.3.0",
 		"@okathira/ghostpdl-wasm": "^1.1.0",
+		"@webtoon/psd": "^0.4.0",
+		"draco3d": "1.5.7",
 		"fflate": "^0.8.3",
 		"fonteditor-core": "^2.6.3",
 		"gifenc": "^1.0.3",
 		"gifsicle-wasm-browser": "^1.5.19",
 		"harfbuzzjs": "^1.4.0",
 		"icodec": "^0.6.0",
+		"libraw-wasm": "1.6.0",
 		"mediabunny": "1.50.8",
+		"meshoptimizer": "1.2.0",
 		"motion": "^12.42.2",
 		"pdf-lib": "1.17.1",
 		"pdfjs-dist": "^6.1.200",
 		"svgo": "^4.0.1",
-		"utif2": "4.1.0"
+		"tesseract.js": "7.0.0",
+		"utif2": "4.1.0",
+		"vtracer-wasm": "0.1.0",
+		"xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
+		"yaml": "^2.9.0"
 	}
 }
