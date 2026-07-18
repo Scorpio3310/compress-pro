@@ -61,6 +61,17 @@ export function wrapWoff1(sfnt: Uint8Array): Uint8Array {
 	return out;
 }
 
+/** WOFF header meta/priv block presence (extended-metadata XML at offsets
+ *  24-32, private data at 36-40). These blocks live OUTSIDE the sfnt, so
+ *  unwrap→repack drops them — callers owe the user a note when they exist.
+ *  Header-only check; never throws (returns false/false on non-WOFF bytes). */
+export function woff1ExtraBlocks(woff: Uint8Array): { meta: boolean; priv: boolean } {
+	if (woff.length < HEADER_SIZE) return { meta: false, priv: false };
+	const dv = new DataView(woff.buffer, woff.byteOffset, woff.byteLength);
+	if (dv.getUint32(0) !== WOFF_SIG) return { meta: false, priv: false };
+	return { meta: dv.getUint32(28) > 0, priv: dv.getUint32(40) > 0 };
+}
+
 /** WOFF → sfnt: rebuilds the header/directory, table bytes come out verbatim. */
 export function unwrapWoff1(woff: Uint8Array): Uint8Array {
 	if (woff.length < HEADER_SIZE) throw new Error(INVALID_WOFF);

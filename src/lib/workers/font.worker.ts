@@ -5,7 +5,7 @@ import { expose } from './host';
 import type { FontFormat } from '$lib/types';
 import { sniffFont, type FontSniff } from '$lib/codecs/font-sniff';
 import { findTable, readSfnt } from '$lib/codecs/sfnt';
-import { unwrapWoff1, wrapWoff1 } from '$lib/codecs/woff1';
+import { unwrapWoff1, woff1ExtraBlocks, wrapWoff1 } from '$lib/codecs/woff1';
 import { unwrapEot, wrapEot } from '$lib/codecs/eot';
 import { parseFvar } from '$lib/codecs/fvar';
 import { subsetSfnt, type HbExports } from '$lib/codecs/hb-subset';
@@ -47,6 +47,32 @@ function releaseWoff2IfHuge(woff2: Woff2, ...byteSizes: number[]): void {
 	woff2Promise = null;
 }
 
+/** emscripten's abort() throws a raw STRING (not an Error) and permanently
+ *  poisons the instance — ABORT stays set, the wasm stack is never unwound
+ *  and the failed job's heap is leaked. Same rule as resetHb(): drop the
+ *  instance so the NEXT woff2 job re-inits a healthy one, and fail THIS file
+ *  with an honest message instead of the raw abort text. Plain Errors (embind
+ *  BindingError etc.) pass through — they don't poison the heap. */
+function runWoff2<T>(woff2: Woff2, op: () => T): T {
+	try {
+		return op();
+	} catch (error) {
+		if (error instanceof Error && !(error instanceof WebAssembly.RuntimeError)) throw error;
+		try {
+			woff2.dispose();
+		} catch {
+			// the instance may be too broken even to dispose — dropping the
+			// cached promise below is what actually matters
+		}
+		woff2Promise = null;
+		throw new Error(
+			'The WOFF2 engine crashed on this font — it may be too large for this device, ' +
+				'or corrupted. Other files are unaffected',
+			{ cause: error }
+		);
+	}
+}
+
 /** Lazy: the ~710 KB wasm (+ CJS glue) loads only when a woff2 endpoint is hit. */
 function getWoff2(): Promise<Woff2> {
 	woff2Promise ??= (async () => {
@@ -56,7 +82,28 @@ function getWoff2(): Promise<Woff2> {
 		(globalThis as { window?: unknown }).window ??= globalThis;
 		// unknown hop: dispose() is a pnpm-patched addition the shipped d.ts lacks.
 		const mod = (await import('fonteditor-core/woff2')).default as unknown as Woff2;
-		await mod.init(woff2WasmUrl);
+		// The glue's init() settles ONLY via onRuntimeInitialized — it has no
+		// reject path, so a failed wasm fetch aborts inside a promise reaction
+		// and the await would pend until the 10-minute watchdog blames the file.
+		// Fetch the wasm here instead (fail fast, honest message) and hand the
+		// glue a blob: URL its own fetch cannot fail on.
+		let wasmBlobUrl: string;
+		try {
+			const response = await fetch(woff2WasmUrl);
+			if (!response.ok) throw new Error(`HTTP ${response.status}`);
+			wasmBlobUrl = URL.createObjectURL(
+				new Blob([await response.arrayBuffer()], { type: 'application/wasm' })
+			);
+		} catch (error) {
+			throw new Error('Could not load the WOFF2 engine — check your connection and try again', {
+				cause: error
+			});
+		}
+		try {
+			await mod.init(wasmBlobUrl);
+		} finally {
+			URL.revokeObjectURL(wasmBlobUrl);
+		}
 		return mod;
 	})().catch((error) => {
 		// A transient chunk/wasm fetch failure must not brick every later
@@ -145,7 +192,7 @@ async function toSfnt(bytes: Uint8Array, container: FontFormat): Promise<Uint8Ar
 			return unwrapWoff1(bytes);
 		case 'woff2': {
 			const woff2 = await getWoff2();
-			const sfnt = woff2.decode(bytes);
+			const sfnt = runWoff2(woff2, () => woff2.decode(bytes));
 			releaseWoff2IfHuge(woff2, bytes.byteLength, sfnt?.length ?? 0);
 			if (!sfnt?.length) throw new Error('WOFF2 decoding failed — the file may be corrupted');
 			return sfnt;
@@ -184,12 +231,38 @@ async function packageSfnt(
 			? 'Digital signature (DSIG) removed — the WOFF2 spec requires it'
 			: null;
 		const woff2 = await getWoff2();
-		const bytes = woff2.encode(sfnt);
+		const bytes = runWoff2(woff2, () => woff2.encode(sfnt));
 		releaseWoff2IfHuge(woff2, sfnt.byteLength, bytes?.length ?? 0);
 		if (!bytes?.length) throw new Error('WOFF2 encoding failed — the file may be corrupted');
 		return { bytes, outputFormat: 'woff2', note };
 	}
+	// EOT's only consumers (IE 6-8's T2Embed — the tool's own hint) render
+	// TrueType outlines exclusively: a CFF EOT downloads fine and then
+	// silently falls back to a system font. Refuse honestly, like the CFF
+	// subsetter rule, instead of shipping a functionally dead file.
+	if (sfntContainer(sfnt) === 'otf') {
+		throw new Error(
+			'This font has PostScript (CFF) outlines, which EOT consumers (Internet Explorer 6-8) ' +
+				'cannot render — convert it to WOFF or WOFF2 instead'
+		);
+	}
 	return { bytes: wrapEot(sfnt), outputFormat: 'eot', note: null };
+}
+
+/** Disclosure when a WOFF source carries extended-metadata / private blocks —
+ *  they live outside the sfnt, so every repack drops them (the woff→woff
+ *  passthrough is the one path that keeps them). Same honesty rule as the
+ *  DSIG note. */
+function woffDroppedNote(input: Uint8Array, sourceFormat: FontFormat): string | null {
+	if (sourceFormat !== 'woff') return null;
+	const { meta, priv } = woff1ExtraBlocks(input);
+	const dropped = [
+		meta ? 'extended metadata (license/credits XML)' : null,
+		priv ? 'private data' : null
+	].filter(Boolean);
+	return dropped.length
+		? `WOFF ${dropped.join(' and ')} removed — repacking keeps only the font tables`
+		: null;
 }
 
 /** input came in as a transferred buffer; hand a tight copy straight back. */
@@ -212,7 +285,12 @@ expose<WorkerContracts['font']>({
 		let note: string | null = null;
 		if (to === sourceFormat || (wantsSfnt && isSfntSource)) {
 			// Passthrough — also the flavor rule's trivial case (ttf→otf request
-			// on an sfnt source returns the source container unchanged).
+			// on an sfnt source returns the source container unchanged). Magic
+			// bytes alone would ship a truncated/corrupt WOFF/WOFF2/EOT back as
+			// a green "conversion" — unwrap non-sfnt containers to prove they
+			// are whole (sfnt sources were directory-validated in sniffOrThrow),
+			// then return the ORIGINAL bytes untouched (meta/priv blocks included).
+			if (!isSfntSource) await toSfnt(input, sourceFormat);
 			out = input;
 			outputFormat = sourceFormat;
 			if (wantsSfnt && outputFormat !== to) note = flavorNote(outputFormat as 'ttf' | 'otf');
@@ -220,7 +298,7 @@ expose<WorkerContracts['font']>({
 			const packaged = await packageSfnt(await toSfnt(input, sourceFormat), to);
 			out = packaged.bytes;
 			outputFormat = packaged.outputFormat;
-			note = packaged.note;
+			note = joinNotes(woffDroppedNote(input, sourceFormat), packaged.note);
 		}
 
 		const buffer = toTransfer(out);
@@ -278,7 +356,7 @@ expose<WorkerContracts['font']>({
 				bytes: buffer,
 				outputFormat: packaged.outputFormat,
 				sourceFormat,
-				note: joinNotes(pinNote, packaged.note),
+				note: joinNotes(pinNote, woffDroppedNote(input, sourceFormat), packaged.note),
 				glyphsBefore,
 				glyphsAfter,
 				instanced: result.pinned

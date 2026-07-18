@@ -36,9 +36,14 @@ export function sniffFont(bytes: Uint8Array): FontSniff | null {
 	if (asSfnt) return { container: asSfnt === 'cff' ? 'otf' : 'ttf', flavor: asSfnt };
 	if (magic === SFNT_TTC) return { container: 'ttc', flavor: null };
 	if (magic === WOFF_SIG || magic === WOFF2_SIG) {
+		const inner = dv.getUint32(4);
+		// WOFF/WOFF2 can pack a whole collection ('ttcf' inner flavor) — report
+		// it as ttc so the worker's honest collections hint fires instead of a
+		// generic "not a valid font" after unwrap.
+		if (inner === SFNT_TTC) return { container: 'ttc', flavor: null };
 		return {
 			container: magic === WOFF_SIG ? 'woff' : 'woff2',
-			flavor: sfntFlavor(dv.getUint32(4))
+			flavor: sfntFlavor(inner)
 		};
 	}
 	// EOT is little-endian with no leading magic — identify via the magic

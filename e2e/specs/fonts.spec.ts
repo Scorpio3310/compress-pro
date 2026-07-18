@@ -290,6 +290,37 @@ test('FT-14: corrupt sfnt on /subset-font shows the banner and recovers', async 
 	await expect(page.getByTestId('compress-cta'), 'CTA recovers for a retry').toBeEnabled();
 });
 
+test('FT-15: truncated WOFF on the same-format path errors instead of green success', async ({
+	page
+}, testInfo) => {
+	// The woff→woff "conversion" is a passthrough; magic bytes alone used to
+	// let a corrupt file complete green with 0% saved and download broken bytes.
+	const woff = readFileSync(fx('font-tiny.woff'));
+	const tmp = testInfo.outputPath('font-trunc.woff');
+	writeFileSync(tmp, woff.subarray(0, 100)); // header + partial directory survive
+	await gotoPath(page, '/ttf-to-woff'); // presets WOFF → woff source hits passthrough
+	await upload(page, tmp);
+	const run = await compress(page, { expectError: true });
+	expect(run.error).toMatch(/valid WOFF/);
+	await expect(rows(page).getByRole('button', { name: 'Download' })).toHaveCount(0);
+	await expect(page.getByTestId('compress-cta'), 'CTA recovers for a retry').toBeEnabled();
+});
+
+test('FT-16: WOFF2-packed collection gets the collections hint, not "not a valid font"', async ({
+	page
+}, testInfo) => {
+	// Spec-valid shape: wOF2 signature with 'ttcf' inner flavor (a packed .ttc).
+	const fake = Buffer.alloc(48);
+	fake.write('wOF2', 0, 'latin1');
+	fake.write('ttcf', 4, 'latin1');
+	const tmp = testInfo.outputPath('font-collection.woff2');
+	writeFileSync(tmp, fake);
+	await gotoPath(page, '/woff2-to-ttf');
+	await upload(page, tmp);
+	const run = await compress(page, { expectError: true });
+	expect(run.error).toMatch(/extract a single font/);
+});
+
 test('FT-08: MicroType-compressed EOT fails with the actionable message', async ({ page, rec }) => {
 	await gotoPath(page, '/eot-to-ttf');
 	await upload(page, fx('mtx.eot'));
