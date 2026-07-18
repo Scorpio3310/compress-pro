@@ -109,6 +109,16 @@ export async function setSvgPrecision(page: Page, value: number): Promise<void> 
 
 /** Expand the "Advanced options" disclosure (no-op on tabs without one). */
 export async function openAdvanced(page: Page): Promise<void> {
+	// The settings card lazy-loads after the first file lands (loadControls in
+	// +page pops it in "a frame later") — probing advanced-toggle before it
+	// mounts used to silently no-op on tabs that DO have a disclosure, leaving
+	// later switch clicks stuck against the collapsed inert panel (measured
+	// flake: svg/video/image toggles on a cold dev server). Wait for the panel
+	// itself, then decide whether this tab has a disclosure at all.
+	await page
+		.getByTestId('settings-panel')
+		.waitFor({ state: 'attached', timeout: 10_000 })
+		.catch(() => {});
 	const btn = page.getByTestId('advanced-toggle');
 	if ((await btn.count()) === 0) return;
 	if ((await btn.getAttribute('aria-expanded')) === 'true') return;

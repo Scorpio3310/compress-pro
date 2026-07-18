@@ -109,7 +109,7 @@
 
 <!-- The settings panel — the CTA lives in the page's action card at the
      bottom of the flow, so this component is settings-only. -->
-<div class={isCompressing ? 'shimmer' : ''} {@attach reveal({ y: 6 })}>
+<div data-testid="settings-panel" class={isCompressing ? 'shimmer' : ''} {@attach reveal({ y: 6 })}>
 	<!-- settings go inert while a job runs; the CTA in the action card stays live -->
 	<div
 		class="transition-opacity duration-300 {isCompressing ? 'pointer-events-none opacity-50' : ''}"
