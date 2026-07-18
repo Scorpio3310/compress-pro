@@ -85,21 +85,39 @@ function wordsOf(blocks: OcrBlock[] | null): OcrWord[] {
  * is bottom-left and drawText's y is the BASELINE — the bbox bottom
  * approximates it (descenders land slightly low; invisible text doesn't
  * care, selection rectangles still line up).
+ *
+ * `rotation` is the page's /Rotate. pdf.js rasters the rotation-APPLIED
+ * presentation (landscape ADF scans: portrait MediaBox + /Rotate 90 render
+ * upright), while pdf-lib's pageWidth/pageHeight are the raw MediaBox — so
+ * the bbox must ride the inverse viewport transform per quadrant, and the
+ * returned `rotation` is the drawText angle that keeps the invisible baseline
+ * running along the visible text.
  */
 export function mapWordToPdf(
 	word: OcrWord,
 	renderWidth: number,
 	renderHeight: number,
 	pageWidth: number,
-	pageHeight: number
-): { x: number; y: number; size: number } {
-	const scaleX = pageWidth / renderWidth;
-	const scaleY = pageHeight / renderHeight;
-	return {
-		x: word.bbox.x0 * scaleX,
-		y: pageHeight - word.bbox.y1 * scaleY,
-		size: Math.max(1, (word.bbox.y1 - word.bbox.y0) * scaleY)
-	};
+	pageHeight: number,
+	rotation = 0
+): { x: number; y: number; size: number; rotation: number } {
+	const rot = (((Math.round(rotation / 90) * 90) % 360) + 360) % 360;
+	const { x0, y0, y1 } = word.bbox; // (x0, y1) = baseline-left in render px
+	if (rot === 90 || rot === 270) {
+		// Axes swap: render-x runs along PDF y, render-y across PDF x.
+		const kAcross = pageWidth / renderHeight;
+		const kAlong = pageHeight / renderWidth;
+		const size = Math.max(1, (y1 - y0) * kAcross);
+		return rot === 90
+			? { x: y1 * kAcross, y: x0 * kAlong, size, rotation: rot }
+			: { x: pageWidth - y1 * kAcross, y: pageHeight - x0 * kAlong, size, rotation: rot };
+	}
+	const kx = pageWidth / renderWidth;
+	const ky = pageHeight / renderHeight;
+	const size = Math.max(1, (y1 - y0) * ky);
+	return rot === 180
+		? { x: pageWidth - x0 * kx, y: y1 * ky, size, rotation: rot }
+		: { x: x0 * kx, y: pageHeight - y1 * ky, size, rotation: 0 };
 }
 
 export interface OcrOutput {
@@ -153,13 +171,19 @@ export async function ocrPdf(
 	signal?.addEventListener('abort', onAbort, { once: true });
 	try {
 		const bytes = await file.arrayBuffer();
-		const [{ getPdfjs, renderPdfPageToBlob }, { PDFDocument, StandardFonts }] = await Promise.all([
-			import('$lib/pdf-preview'),
-			import('pdf-lib')
-		]);
+		const { PDFDocument, StandardFonts, degrees } = await import('pdf-lib');
+		// The guard must run BEFORE any recognition work: pdf.js opens
+		// owner-locked scans fine (empty user password), but pdf-lib cannot
+		// decrypt, so the saved copy would come out unreadable in every viewer.
+		const out = await PDFDocument.load(new Uint8Array(bytes), { ignoreEncryption: true });
+		if (out.isEncrypted) {
+			throw new Error(
+				'This PDF is password-protected — remove the protection on /unlock-pdf first, then run OCR'
+			);
+		}
+		const { getPdfjs, renderPdfPageToBlob } = await import('$lib/pdf-preview');
 		const pdfjs = await getPdfjs();
 		const src = await pdfjs.getDocument({ data: new Uint8Array(bytes.slice(0)) }).promise;
-		const out = await PDFDocument.load(new Uint8Array(bytes), { ignoreEncryption: true });
 		const font = await out.embedFont(StandardFonts.Helvetica);
 		const worker = await getWorker(settings.language);
 
@@ -185,15 +209,32 @@ export async function ocrPdf(
 			for (const word of wordsOf(data.blocks)) {
 				const text = word.text.trim();
 				if (!text) continue;
-				const at = mapWordToPdf(word, rendered.width, rendered.height, page.getWidth(), page.getHeight());
+				// The raster is the /Rotate-applied view — map back into the raw
+				// MediaBox and draw at the matching angle (landscape scans).
+				const at = mapWordToPdf(
+					word,
+					rendered.width,
+					rendered.height,
+					page.getWidth(),
+					page.getHeight(),
+					page.getRotation().angle
+				);
+				const opts = {
+					x: at.x,
+					y: at.y,
+					size: at.size,
+					rotate: degrees(at.rotation),
+					font,
+					opacity: 0
+				};
 				try {
-					page.drawText(text, { x: at.x, y: at.y, size: at.size, font, opacity: 0 });
+					page.drawText(text, opts);
 				} catch {
 					// Helvetica is WinAnsi-only — retry without combining marks, then
 					// give the word up rather than fail the page (č → c stays findable).
 					const ascii = text.normalize('NFD').replace(/[̀-ͯ]/g, '');
 					try {
-						page.drawText(ascii, { x: at.x, y: at.y, size: at.size, font, opacity: 0 });
+						page.drawText(ascii, opts);
 					} catch {
 						continue;
 					}
