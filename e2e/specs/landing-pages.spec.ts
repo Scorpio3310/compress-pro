@@ -6,7 +6,7 @@
  * the preset landing, plus two end-to-end flows.
  */
 import { expect, fx, fxAudio, fxVideo, FIXTURES, test } from '../fixtures';
-import { compress, downloadCombined, gotoPath, upload } from '../helpers';
+import { compress, downloadCombined, downloadRow, gotoPath, rows, upload } from '../helpers';
 import { pdfInfo } from '../verify';
 
 function pill(page: import('@playwright/test').Page, name: string) {
@@ -235,4 +235,57 @@ test('LP-16: the before/after demo renders where honest and nowhere else', async
 	await expect(page.locator('[aria-label="Image comparison slider"]')).toHaveCount(0);
 	await gotoPath(page, '/compress-mov');
 	await expect(page.locator('[aria-label="Image comparison slider"]')).toHaveCount(0);
+});
+
+test('LP-17: a converter preset never mutates a tab that is mid-run @slow', async ({ page }) => {
+	test.setTimeout(240_000);
+	// Every user-facing mutation surface freezes while a tab compresses (inert
+	// settings, opsDisabled, busy-gated intake) — landing on a converter page
+	// mid-run must obey the same freeze instead of flipping the live settings
+	// (or, on the pdf/zip op pages, clearing the running tab's files).
+	// Three 12 MP AVIF encodes (concurrency-capped) keep the tab busy for many
+	// seconds: plenty of window for the navigation to land mid-run.
+	await gotoPath(page, '/compress-jpg');
+	await upload(
+		page,
+		fx('photo-4000x3000.jpg'),
+		fx('photo-4000x3000.jpg'),
+		fx('photo-4000x3000.jpg')
+	);
+	await pill(page, 'AVIF').click();
+	await expect(pill(page, 'AVIF')).toHaveAttribute('aria-pressed', 'true');
+	await page.getByTestId('compress-cta').click();
+
+	// Client-side navigation to the converter page that presets THIS busy tab.
+	// The anchor must live INSIDE the SvelteKit app container (main) — the
+	// router only intercepts clicks there; outside it the click would be a
+	// full page load that resets every tab.
+	await page.evaluate(() => {
+		const a = document.createElement('a');
+		a.href = '/jpg-to-jxl';
+		a.dataset.testid = 'lp17-nav';
+		a.textContent = 'nav';
+		document.querySelector('main')!.append(a);
+	});
+	await page.getByTestId('lp17-nav').click();
+	await expect(page).toHaveURL(/\/jpg-to-jxl$/);
+	// The files survive the landing (the pdf/zip op presets clear files the
+	// same guarded way).
+	await expect(rows(page)).toHaveCount(3);
+
+	// The converter page pins its own conversion and hides the format picker —
+	// hop back to the format page (presetless) to inspect the live settings.
+	await page.locator('nav a[data-seg="jpg"]').click();
+	await expect(page).toHaveURL(/\/compress-jpg$/);
+	// The preset must not have touched the in-flight run's settings — AVIF
+	// still pressed proves outputFormat never flipped to the preset's jxl
+	// (the picker has no JXL pill at all; that output is preset-only).
+	await expect(pill(page, 'AVIF')).toHaveAttribute('aria-pressed', 'true');
+
+	// The run settles untouched: every file an AVIF result, no error banner.
+	await expect(rows(page).getByRole('button', { name: 'Download' })).toHaveCount(3, {
+		timeout: 180_000
+	});
+	await expect(page.getByTestId('error-banner')).toHaveCount(0);
+	expect((await downloadRow(page)).name).toBe('photo-4000x3000.avif');
 });

@@ -161,3 +161,52 @@ test('E-10: exotic real formats are rejected by name, with a count', async ({ pa
 	);
 	await expect(rows(page)).toHaveCount(0);
 });
+
+test('E-11: removing a failed row takes its stale banner and red badge with it', async ({
+	page
+}) => {
+	// The failure banner (and the red tab badge derived from it) used to keep
+	// naming a file the user had already removed from the list.
+	await gotoTab(page, 'jpg');
+	await upload(page, fx('corrupt.jpg'), fx('photo-1200x800.jpg'));
+	await setOutputFormat(page, 'JPG');
+	const run = await compress(page, { expectError: true });
+	expect(run.error, 'banner names the failing file').toMatch(/corrupt\.jpg/);
+
+	await page.getByLabel('Remove corrupt.jpg').click();
+	await expect(rows(page)).toHaveCount(1);
+	// No failed row remains — neither may the banner that described it…
+	await expect(page.getByTestId('error-banner')).toHaveCount(0);
+	// …nor the red error badge on any tab pill (the healthy result stays).
+	await expect(page.locator('nav span.bg-red-500')).toHaveCount(0);
+	await expect(rows(page).getByRole('button', { name: 'Download' })).toHaveCount(1);
+});
+
+test.describe('offline chunk fetch', () => {
+	// route() cannot intercept requests the service worker answers — blocking
+	// SW registration also matches the failure being modeled: a visitor whose
+	// SW never got to precache the codec chunk before the network went away.
+	test.use({ serviceWorkers: 'block' });
+
+	test('E-12: a failed compress-chunk fetch reads as an honest offline hint', async ({ page }) => {
+		// Blocks the codec-orchestration module the way a flaky/offline network
+		// would — the banner must explain, not leak the browser's internal
+		// "Failed to fetch dynamically imported module: <chunk url>" loader text.
+		test.skip(!!process.env.E2E_PREVIEW, 'dev-server module URLs only');
+		await gotoTab(page, 'jpg');
+		// Installed before upload so the file-add prefetch cannot cache the chunk.
+		await page.route('**/src/lib/compress.ts*', (route) => route.abort());
+		await upload(page, fx('photo-1200x800.jpg'));
+		await setOutputFormat(page, 'JPG');
+		await page.getByTestId('compress-cta').click();
+
+		const banner = page.getByTestId('error-banner');
+		await expect(banner).toBeVisible();
+		const text = ((await banner.textContent()) ?? '').trim();
+		expect(text).not.toMatch(/dynamically imported module|Importing a module script/i);
+		expect(text, 'no internal chunk URLs').not.toMatch(/https?:\/\//);
+		expect(text, 'actionable next step').toMatch(/connection|offline/i);
+		// The run settles cleanly — CTA ready for a retry once back online.
+		await expect(page.getByTestId('compress-cta')).toBeEnabled();
+	});
+});

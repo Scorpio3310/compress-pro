@@ -31,7 +31,8 @@
 	import Seo from '$lib/components/Seo.svelte';
 	import FormatInfo from '$lib/components/FormatInfo.svelte';
 	import Icon from '$lib/components/Icon.svelte';
-	import { pathFor } from '$lib/seo';
+	import { pathFor, type ConverterPreset } from '$lib/seo';
+	import { busyTabsMessage, pickTitleRun } from '$lib/tab-ui';
 	import { page } from '$app/state';
 	import { goto, afterNavigate } from '$app/navigation';
 	import { resolve } from '$app/paths';
@@ -256,8 +257,10 @@
 			])
 		) as Partial<Record<FileFormat, TabBadgeStatus | null>>
 	);
+	// The ACTIVE tab's run wins the title when it is compressing — with runs on
+	// several tabs, object order must not decide which one the user watches.
 	let pageTitle = $derived.by(() => {
-		const running = Object.values(tabStates).find((s) => s.isCompressing);
+		const running = pickTitleRun(tabStates, activeTab);
 		return running ? `(${Math.round(running.progress * 100)}%) ${seo.title}` : seo.title;
 	});
 
@@ -440,7 +443,18 @@
 			// Codec orchestration loads on the click (interaction-gated) so compress.ts
 			// and every codec wrapper stay out of the initial per-page bundle; it's
 			// prefetched on file-add, so this normally resolves from cache instantly.
-			const { compressFiles, runArchiveTool, runPdfTool } = await import('$lib/compress');
+			// A failed chunk fetch (offline before the SW cached it, flaky network,
+			// stale tab across a deploy) rejects with the browser's internal loader
+			// text — "Failed to fetch dynamically imported module: <chunk url>" —
+			// which must never reach the banner. Translate it here; the catch
+			// below renders the message as-is.
+			const { compressFiles, runArchiveTool, runPdfTool } = await import('$lib/compress').catch(
+				() => {
+					throw new Error(
+						"Couldn't load the compression engine — check your connection and try again."
+					);
+				}
+			);
 			const pdfSettings = settings.pdf;
 			if (tab === 'zip') {
 				const out = await runArchiveTool(state.files, settings.zip, onProgress, controller.signal);
@@ -505,6 +519,11 @@
 		state.files = state.files.filter((f) => f.id !== id);
 		state.results = state.results.filter((r) => r.id !== id);
 		state.failures = state.failures.filter((f) => f.id !== id);
+		// The failure banner (and the red tab badge derived from it) must not
+		// outlive the row it describes — recompute from the failures that
+		// remain; non-failure banners clear like they do on file-add.
+		state.error =
+			state.failures.length > 0 ? failureBanner(state.failures, state.files.length) : null;
 		// A combined output no longer matches the remaining inputs.
 		if (state.combinedResult) {
 			URL.revokeObjectURL(state.combinedResult.objectUrl);
@@ -521,6 +540,8 @@
 		[next[index], next[target]] = [next[target], next[index]];
 		state.files = next;
 		clearResults(state);
+		// clearResults just emptied failures — a banner describing them is stale.
+		state.error = null;
 	}
 
 	function handleZipOpChange(op: ZipSettings['op']) {
@@ -569,19 +590,63 @@
 	// mounted — once per navigation, so manual changes afterwards are never
 	// fought. Writes go through the persisted settings store: identical to the
 	// user clicking the option themselves.
+
+	/** The tab whose files/settings a preset mutates. null = no-op kinds and
+	 *  'resize' (spans every image tab; its loop busy-guards per tab). */
+	function presetTargetTab(preset: ConverterPreset): FileFormat | null {
+		switch (preset.kind) {
+			case 'image':
+				return preset.tab;
+			case 'image-any':
+			case 'data':
+			case 'resize':
+				return null;
+			case 'svg':
+				return 'svg';
+			case 'video':
+				return 'video';
+			case 'audio':
+				return 'audio';
+			case 'font':
+			case 'font-op':
+				return 'font';
+			case 'ocr':
+				return 'ocr';
+			case 'subtitle':
+				return 'subtitle';
+			case 'ebook':
+				return 'ebook';
+			case 'archive':
+				return 'zip';
+			default:
+				// pdf-op, pdf-to-images, pdf-from-images
+				return 'pdf';
+		}
+	}
+
 	afterNavigate(() => {
 		// data is this navigation's resolved load output — afterNavigate fires
 		// only after load settled and the DOM updated, so the preset is current.
 		const preset = data.converter?.preset;
 		if (!preset) return;
+		// "Identical to the user clicking" also means obeying the busy freeze
+		// every click-surface has (inert settings, opsDisabled, gated intake):
+		// a preset landing on a mid-run tab would clear the running tab's files
+		// (pdf/zip op flips) or flip formats under the in-flight job, which
+		// reads settings per file. Skip it — the user can still apply anything
+		// by hand once the run settles.
+		const target = presetTargetTab(preset);
+		if (target && tabStates[target].isCompressing) return;
 		if (preset.kind === 'image') {
 			settings[preset.tab].outputFormat = preset.to;
 			if (preset.quality != null) settings[preset.tab].quality = preset.quality;
 			// Target-size landing pages ship the mode flipped and the cap typed in.
 			if (preset.mode) settings[preset.tab].mode = preset.mode;
 			if (preset.targetKb != null) settings[preset.tab].targetKb = preset.targetKb;
-		} else if (preset.kind === 'image-any') {
-			// Universal image intake — the tab defaults (Auto format) ARE the preset.
+		} else if (preset.kind === 'image-any' || preset.kind === 'data') {
+			// Universal image intake / data tab — the tab defaults ARE the preset.
+			// ('data' previously fell through to the pdf-from-images fallback,
+			// silently flipping the pdf tab's op on every data-converter visit.)
 		} else if (preset.kind === 'svg') {
 			settings.svg.outputFormat = preset.to;
 		} else if (preset.kind === 'video') {
@@ -613,6 +678,7 @@
 			if (preset.to) settings.zip.outputFormat = preset.to;
 		} else if (preset.kind === 'resize') {
 			for (const tab of IMAGE_FORMATS) {
+				if (tabStates[tab].isCompressing) continue; // same freeze, per tab
 				settings[tab].maxDimension = preset.maxDimension;
 			}
 			// The preset's whole point is the dimension cap — surface it.
@@ -697,11 +763,9 @@
 			busyCount += group.length;
 			groups.delete(format);
 		}
-		const busyMsg = busyTabs.length
-			? `${busyCount === 1 ? '1 file' : `${busyCount} files`} not added — the ${busyTabs.join(', ')} ` +
-				`${busyTabs.length === 1 ? 'tab is' : 'tabs are'} busy compressing. ` +
-				'Cancel the run or wait for it to finish, then add them again.'
-			: null;
+		// Named by their nav-pill labels (zip → "Archive") — the message points
+		// at tabs the user can actually find on screen, never internal ids.
+		const busyMsg = busyTabs.length ? busyTabsMessage(busyCount, busyTabs) : null;
 		const unknownMsg = firstUnknown
 			? `Unsupported file type: ${firstUnknown}` +
 				(unknownCount > 1 ? ` (+${unknownCount - 1} more)` : '')
@@ -874,19 +938,19 @@
 							? settings.ocr.op === 'toPdf'
 								? 'PDFs'
 								: 'images'
-						: activeTab === 'subtitle'
-							? 'subtitle files'
-						: activeTab === 'ebook'
-							? 'EPUB, CBZ or CBR files'
-						: activeTab === 'model'
-							? 'GLB models'
-						: activeTab === 'data'
-							? 'CSV, Excel, JSON or YAML files'
-						: activeTab === 'zip'
-							? zipOp === 'create'
-								? 'files'
-								: 'archives'
-							: undefined)}
+							: activeTab === 'subtitle'
+								? 'subtitle files'
+								: activeTab === 'ebook'
+									? 'EPUB, CBZ or CBR files'
+									: activeTab === 'model'
+										? 'GLB models'
+										: activeTab === 'data'
+											? 'CSV, Excel, JSON or YAML files'
+											: activeTab === 'zip'
+												? zipOp === 'create'
+													? 'files'
+													: 'archives'
+												: undefined)}
 			compact={currentState.files.length > 0}
 			disabled={currentState.isCompressing}
 		/>
