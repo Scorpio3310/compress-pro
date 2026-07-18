@@ -40,6 +40,17 @@ describe('resolvePageRange', () => {
 		expect(() => resolvePageRange('4-2', 5)).toThrow(/reversed/);
 	});
 
+	it('reports out-of-range (not reversed) for open ends past the last page', () => {
+		expect(() => resolvePageRange('12-', 5)).toThrow(/page 12 is out of range/);
+		expect(() => resolvePageRange('12-', 5)).not.toThrow(/reversed/);
+	});
+
+	it('reports page 0 as out of range, not reversed', () => {
+		expect(() => resolvePageRange('-0', 5)).toThrow(/page 0 is out of range/);
+		expect(() => resolvePageRange('0', 5)).toThrow(/page 0 is out of range/);
+		expect(() => resolvePageRange('0-3', 5)).toThrow(/page 0 is out of range/);
+	});
+
 	it('throws the syntax hint for invalid input', () => {
 		expect(() => resolvePageRange('abc', 5)).toThrow(/Invalid range/);
 	});

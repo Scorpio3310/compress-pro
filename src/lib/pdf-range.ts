@@ -26,23 +26,30 @@ export function resolvePageRange(input: string, pageCount: number): number[] {
 		const match = TERM.exec(raw.trim());
 		if (!match) continue;
 		let from: number;
-		let to: number;
+		// null = open end ("N-"), resolved to the last page AFTER bounds checks —
+		// otherwise "12-" on a 5-page doc reports a phantom "12-5 is reversed"
+		// instead of the real problem (page 12 doesn't exist).
+		let to: number | null;
 		if (match[4] !== undefined) {
-			from = to = Number(match[4]);
+			from = Number(match[4]);
+			to = from;
 		} else if (match[3] !== undefined) {
 			from = 1;
 			to = Number(match[3]);
 		} else {
 			from = Number(match[1]);
-			to = match[2] !== undefined ? Number(match[2]) : pageCount;
+			to = match[2] !== undefined ? Number(match[2]) : null;
 		}
-		if (from < 1 || to > pageCount) {
+		const typed = to === null ? [from] : [from, to];
+		const outOfRange = typed.find((p) => p < 1 || p > pageCount);
+		if (outOfRange !== undefined) {
 			throw new Error(
-				`page ${to > pageCount ? to : from} is out of range (document has ${pageCount} page${pageCount === 1 ? '' : 's'})`
+				`page ${outOfRange} is out of range (document has ${pageCount} page${pageCount === 1 ? '' : 's'})`
 			);
 		}
-		if (from > to) throw new Error(`range ${from}-${to} is reversed`);
-		for (let p = from; p <= to; p++) pages.add(p);
+		const end = to ?? pageCount;
+		if (from > end) throw new Error(`range ${from}-${end} is reversed`);
+		for (let p = from; p <= end; p++) pages.add(p);
 	}
 	return [...pages].sort((a, b) => a - b);
 }

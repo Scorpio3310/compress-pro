@@ -429,15 +429,23 @@ async function compressToTarget(
 	onProgress: (p: PdfProgress) => void,
 	signal?: AbortSignal
 ): Promise<{ blob: Blob; warning: string | null }> {
+	// The link transplant re-saves through pdf-lib without object streams,
+	// which can expand a rung well past its raw gs size on object-heavy
+	// documents — so the search must judge each rung by the size the user
+	// actually downloads, not the raw gs output. restoreLinks is identity for
+	// link-less files and cheap (no re-interpretation) next to a gs pass.
 	const { best, smallest } = await searchTargetSize<Uint8Array>(
 		LADDER.length,
 		targetBytes,
-		(rung, state) =>
-			runPipeline(
-				gsInput,
-				LADDER[rung],
-				(page, pageCount) => onProgress({ ...state, page, pageCount }),
-				signal
+		async (rung, state) =>
+			restoreLinks(
+				await runPipeline(
+					gsInput,
+					LADDER[rung],
+					(page, pageCount) => onProgress({ ...state, page, pageCount }),
+					signal
+				),
+				links
 			),
 		(out) => out.byteLength,
 		onProgress,
@@ -451,17 +459,15 @@ async function compressToTarget(
 	}
 
 	if (best) {
-		const withLinks = await restoreLinks(best, links);
 		return {
-			blob: new Blob([withLinks as BlobPart], { type: 'application/pdf' }),
+			blob: new Blob([best as BlobPart], { type: 'application/pdf' }),
 			warning: flattenNote
 		};
 	}
 
 	// Nothing fits — return the smallest result with a warning.
-	const withLinks = await restoreLinks(smallest, links);
 	return {
-		blob: new Blob([withLinks as BlobPart], { type: 'application/pdf' }),
+		blob: new Blob([smallest as BlobPart], { type: 'application/pdf' }),
 		warning: [targetNotReachableWarning(targetBytes, smallest.byteLength), flattenNote]
 			.filter(Boolean)
 			.join(' ')

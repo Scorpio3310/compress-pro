@@ -9,13 +9,49 @@ const MAX_RENDER_PX = 8192;
 
 async function loadPdf(file: File) {
 	const { PDFDocument } = await import('pdf-lib');
+	let doc;
 	try {
-		// ignoreEncryption lets password-less "owner-locked" PDFs load; truly
-		// broken/encrypted content still throws below with the file name attached.
-		return await PDFDocument.load(await file.arrayBuffer(), { ignoreEncryption: true });
+		// ignoreEncryption lets the parser read the structure so the /Encrypt
+		// check below can run; truly broken content still throws here with the
+		// file name attached.
+		doc = await PDFDocument.load(await file.arrayBuffer(), { ignoreEncryption: true });
 	} catch (error) {
 		throw new Error(
 			`${file.name}: ${error instanceof Error ? error.message : 'could not read PDF'}`,
+			{ cause: error }
+		);
+	}
+	// pdf-lib cannot decrypt — editing an encrypted file (even an owner-locked
+	// one that opens fine in every viewer) would silently ship ciphertext pages
+	// or stamps that decrypt to garbage. Fail fast with the way out instead.
+	if (doc.isEncrypted) {
+		throw new Error(
+			`${file.name}: this PDF is password-protected — run Compress on it first ` +
+				'(that rewrites it without encryption), or remove the password with the Unlock tool'
+		);
+	}
+	return doc;
+}
+
+/** pdf.js loader: guaranteed task cleanup on failure (each getDocument spawns
+ *  its own worker) + the app's password message instead of pdf.js's raw
+ *  "No password given". */
+async function openPdfjsDoc(file: File) {
+	const pdfjs = await getPdfjs();
+	const task = pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()) });
+	try {
+		return { task, doc: await task.promise };
+	} catch (error) {
+		try {
+			await task.destroy();
+		} catch {
+			// Already failed — destroy is best-effort cleanup.
+		}
+		const needsPassword = (error as { name?: string } | null)?.name === 'PasswordException';
+		throw new Error(
+			needsPassword
+				? `${file.name}: this PDF is password-protected — remove the password with the Unlock tool first`
+				: `${file.name}: ${error instanceof Error ? error.message : 'could not read PDF'}`,
 			{ cause: error }
 		);
 	}
@@ -80,14 +116,15 @@ export async function pdfToImages(
 	opts: { dpi: 72 | 150 | 300; format: 'jpg' | 'png'; quality: number },
 	onProgress?: ToolProgress
 ): Promise<{ blob: Blob; name: string; pages: number; warning: string | null }> {
-	const pdfjs = await getPdfjs();
-	const task = pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()) });
+	const { task, doc } = await openPdfjsDoc(file);
 	try {
-		const doc = await task.promise;
 		const mime = opts.format === 'jpg' ? 'image/jpeg' : 'image/png';
 		const stem = file.name.replace(/\.pdf$/i, '');
 		const canvas = document.createElement('canvas'); // reused across pages
 		const entries: Record<string, Uint8Array> = {};
+		// Width follows the page count (min 2) so extracted files sort naturally
+		// past 99 pages: p001…p120, not p01…p10,p100,p11.
+		const pad = Math.max(2, String(doc.numPages).length);
 		let single: Blob | null = null;
 		let clampedAny = false;
 
@@ -103,7 +140,7 @@ export async function pdfToImages(
 			if (doc.numPages === 1) {
 				single = rendered.blob;
 			} else {
-				const pageName = `${stem}-p${String(n).padStart(2, '0')}.${opts.format}`;
+				const pageName = `${stem}-p${String(n).padStart(pad, '0')}.${opts.format}`;
 				entries[pageName] = new Uint8Array(await rendered.blob.arrayBuffer());
 			}
 			onProgress?.(n, doc.numPages, `page ${n}/${doc.numPages}`);
@@ -195,6 +232,36 @@ function drawTextSafe(
 	}
 }
 
+/** Page /Rotate normalized to 0|90|180|270 (spec allows negatives/multiples;
+ *  snap defensively — non-90° values are invalid PDF). */
+function pageRotation(page: import('pdf-lib').PDFPage): number {
+	const angle = ((page.getRotation().angle % 360) + 360) % 360;
+	return angle - (angle % 90);
+}
+
+/** Viewers rotate page content clockwise by /Rotate, so stamps designed for
+ *  the VIEWED orientation must be placed in unrotated MediaBox space. Maps a
+ *  point from visual coordinates (origin at the displayed bottom-left) into
+ *  page space; drawn text must additionally counter-rotate by `rotation`. */
+function visualToPage(
+	u: number,
+	v: number,
+	rotation: number,
+	width: number,
+	height: number
+): { x: number; y: number } {
+	switch (rotation) {
+		case 90:
+			return { x: width - v, y: u };
+		case 180:
+			return { x: width - u, y: height - v };
+		case 270:
+			return { x: v, y: height - u };
+		default:
+			return { x: u, y: v };
+	}
+}
+
 /** Stamp `text` diagonally across the middle of every page. */
 export async function watermarkPdf(file: File, text: string): Promise<Blob> {
 	const { StandardFonts, degrees, rgb } = await import('pdf-lib');
@@ -202,21 +269,34 @@ export async function watermarkPdf(file: File, text: string): Promise<Blob> {
 	const font = await doc.embedFont(StandardFonts.HelveticaBold);
 	for (const page of doc.getPages()) {
 		const { width, height } = page.getSize();
+		// Geometry works on the page AS VIEWED: a /Rotate 90 scan is landscape
+		// to the reader, so the diagonal follows the displayed page and the
+		// anchor maps back into unrotated page space.
+		const rotation = pageRotation(page);
+		const visWidth = rotation % 180 === 0 ? width : height;
+		const visHeight = rotation % 180 === 0 ? height : width;
 		// Size the stamp to span most of the diagonal, capped for short texts.
 		const size = Math.min(
-			(Math.hypot(width, height) * 0.7) / Math.max(1, font.widthOfTextAtSize(text, 1)),
-			Math.min(width, height) / 4
+			(Math.hypot(visWidth, visHeight) * 0.7) / Math.max(1, font.widthOfTextAtSize(text, 1)),
+			Math.min(visWidth, visHeight) / 4
 		);
 		const textWidth = font.widthOfTextAtSize(text, size);
-		const angle = Math.atan2(height, width);
+		const angle = Math.atan2(visHeight, visWidth);
+		const anchor = visualToPage(
+			visWidth / 2 - (textWidth / 2) * Math.cos(angle),
+			visHeight / 2 - (textWidth / 2) * Math.sin(angle),
+			rotation,
+			width,
+			height
+		);
 		drawTextSafe(page, text, {
-			x: width / 2 - (textWidth / 2) * Math.cos(angle),
-			y: height / 2 - (textWidth / 2) * Math.sin(angle),
+			x: anchor.x,
+			y: anchor.y,
 			size,
 			font,
 			color: rgb(0.5, 0.5, 0.5),
 			opacity: 0.18,
-			rotate: degrees((angle * 180) / Math.PI)
+			rotate: degrees(rotation + (angle * 180) / Math.PI)
 		});
 	}
 	const bytes = await doc.save();
@@ -225,7 +305,7 @@ export async function watermarkPdf(file: File, text: string): Promise<Blob> {
 
 /** Add "page / total" at the bottom center of every page. */
 export async function pageNumbersPdf(file: File): Promise<Blob> {
-	const { StandardFonts, rgb } = await import('pdf-lib');
+	const { StandardFonts, degrees, rgb } = await import('pdf-lib');
 	const doc = await loadPdf(file);
 	const font = await doc.embedFont(StandardFonts.Helvetica);
 	const pages = doc.getPages();
@@ -233,12 +313,24 @@ export async function pageNumbersPdf(file: File): Promise<Blob> {
 		const page = pages[i];
 		const label = `${i + 1} / ${pages.length}`;
 		const size = 10;
+		// Bottom-center of the page AS VIEWED (compensating /Rotate) with the
+		// label kept upright — not sideways on an edge of a rotated scan.
+		const rotation = pageRotation(page);
+		const visWidth = rotation % 180 === 0 ? page.getWidth() : page.getHeight();
+		const anchor = visualToPage(
+			visWidth / 2 - font.widthOfTextAtSize(label, size) / 2,
+			24,
+			rotation,
+			page.getWidth(),
+			page.getHeight()
+		);
 		drawTextSafe(page, label, {
-			x: page.getWidth() / 2 - font.widthOfTextAtSize(label, size) / 2,
-			y: 24,
+			x: anchor.x,
+			y: anchor.y,
 			size,
 			font,
-			color: rgb(0.25, 0.25, 0.25)
+			color: rgb(0.25, 0.25, 0.25),
+			rotate: degrees(rotation)
 		});
 	}
 	const bytes = await doc.save();
@@ -247,9 +339,7 @@ export async function pageNumbersPdf(file: File): Promise<Blob> {
 
 /** Extract the digital text layer into plain text (scans have none — that's OCR's job). */
 export async function pdfToText(file: File, onProgress?: ToolProgress): Promise<Blob> {
-	const pdfjs = await getPdfjs();
-	const task = pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()) });
-	const doc = await task.promise;
+	const { task, doc } = await openPdfjsDoc(file);
 	try {
 		const parts: string[] = [];
 		for (let p = 1; p <= doc.numPages; p++) {

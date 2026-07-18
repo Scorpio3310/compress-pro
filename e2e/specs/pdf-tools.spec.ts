@@ -7,7 +7,7 @@
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 import { basename } from 'node:path';
-import { PDFDocument } from 'pdf-lib';
+import { degrees, PDFDocument } from 'pdf-lib';
 import { expect, fx, fxMeta, realFile, test } from '../fixtures';
 import {
 	compress,
@@ -599,6 +599,125 @@ test('PT-23: /grayscale-pdf desaturates a colorful page', async ({ page }) => {
 			expect(Math.abs(g - b), `neutral at ${x},${y}`).toBeLessThanOrEqual(12);
 		}
 	}
+});
+
+/** Blank 600×800 pt page carrying /Rotate 90 — viewers display it landscape
+ *  (800×600). Blank so stamped text is the ONLY ink on the raster. */
+async function writeRotatedBlankPdf(path: string): Promise<void> {
+	const doc = await PDFDocument.create();
+	doc.addPage([600, 800]).setRotation(degrees(90));
+	writeFileSync(path, await doc.save());
+}
+
+/** Centroid + count of raster pixels darker than `threshold` on every channel. */
+function darkPixelStats(
+	raw: { data: Buffer | Uint8Array; width: number; height: number },
+	threshold: number
+) {
+	let sx = 0;
+	let sy = 0;
+	let n = 0;
+	for (let y = 0; y < raw.height; y++) {
+		for (let x = 0; x < raw.width; x++) {
+			const i = (y * raw.width + x) * 4;
+			if (raw.data[i] < threshold && raw.data[i + 1] < threshold && raw.data[i + 2] < threshold) {
+				sx += x;
+				sy += y;
+				n++;
+			}
+		}
+	}
+	return { cx: sx / Math.max(1, n), cy: sy / Math.max(1, n), n };
+}
+
+test('PT-27: merge refuses an encrypted PDF with the unlock hint', async ({ page }, testInfo) => {
+	// Classic-xref source so the encrypted file still PARSES in pdf-lib — the
+	// case that used to merge "successfully" and ship ciphertext pages.
+	const doc = await PDFDocument.create();
+	doc.addPage([300, 300]);
+	const plain = await doc.save({ useObjectStreams: false });
+	const locked = await qpdfEncrypt(Buffer.from(plain), 'owner-secret');
+	const lockedPath = testInfo.outputPath('locked.pdf');
+	writeFileSync(lockedPath, locked);
+
+	await gotoTab(page, 'pdf');
+	await setPdfOp(page, 'Merge');
+	await upload(page, fx('merge-a.pdf'), lockedPath);
+	const run = await compress(page, { expectError: true, timeout: 120_000 });
+	expect(run.error).toMatch(/password-protected/i);
+	expect(run.error).toMatch(/Unlock/);
+});
+
+test('PT-28: page numbers land bottom-center on /Rotate 90 pages', async ({ page }, testInfo) => {
+	const src = testInfo.outputPath('rotated-blank.pdf');
+	await writeRotatedBlankPdf(src);
+	await gotoPath(page, '/pdf-page-numbers');
+	await upload(page, src);
+	await compress(page, { timeout: 120_000 });
+	const art = await downloadRow(page);
+	expect(art.name).toBe('rotated-blank-numbered.pdf');
+	const png = await rasterizePdfInPage(page, art.bytes, 1);
+	test.skip(!png, 'rasterization unavailable (preview mode)');
+	const raw = await decodeRaw(png!);
+	expect(raw.width, 'page renders landscape').toBeGreaterThan(raw.height);
+	// The "1 / 1" label is the only ink — it must sit in the bottom-center
+	// band of the page AS VIEWED, not run sideways along an edge.
+	const { cx, cy, n } = darkPixelStats(raw, 128);
+	expect(n, 'label pixels found').toBeGreaterThan(20);
+	expect(cy, 'bottom band').toBeGreaterThan(raw.height * 0.85);
+	expect(cx, 'horizontally centered').toBeGreaterThan(raw.width * 0.4);
+	expect(cx, 'horizontally centered').toBeLessThan(raw.width * 0.6);
+});
+
+test('PT-29: watermark follows the VIEWED diagonal on /Rotate 90 pages', async ({
+	page
+}, testInfo) => {
+	const src = testInfo.outputPath('rotated-blank-wm.pdf');
+	await writeRotatedBlankPdf(src);
+	await gotoPath(page, '/watermark-pdf');
+	await upload(page, src);
+	await page.locator('#watermark-text').fill('CONFIDENTIAL');
+	await compress(page, { timeout: 120_000 });
+	const art = await downloadRow(page);
+	const png = await rasterizePdfInPage(page, art.bytes, 1);
+	test.skip(!png, 'rasterization unavailable (preview mode)');
+	const raw = await decodeRaw(png!);
+	// The stamp (the only ink) must run bottom-left → top-right of the VIEWED
+	// landscape page. Raster y grows downward, so the left half's centroid
+	// sits LOWER (larger y) than the right half's; the /Rotate bug flips it.
+	let leftY = 0;
+	let leftN = 0;
+	let rightY = 0;
+	let rightN = 0;
+	for (let y = 0; y < raw.height; y++) {
+		for (let x = 0; x < raw.width; x++) {
+			const i = (y * raw.width + x) * 4;
+			if (raw.data[i] < 245 && raw.data[i + 1] < 245 && raw.data[i + 2] < 245) {
+				if (x < raw.width / 2) {
+					leftY += y;
+					leftN++;
+				} else {
+					rightY += y;
+					rightN++;
+				}
+			}
+		}
+	}
+	expect(leftN, 'stamp ink in the left half').toBeGreaterThan(200);
+	expect(rightN, 'stamp ink in the right half').toBeGreaterThan(200);
+	expect(leftY / leftN - rightY / rightN, 'ascending diagonal').toBeGreaterThan(raw.height * 0.15);
+});
+
+test('PT-30: /pdf-to-text maps a protected PDF to the unlock hint', async ({ page }, testInfo) => {
+	const locked = await qpdfEncrypt(readFileSync(fx('text-3pages.pdf')), 'secret');
+	const lockedPath = testInfo.outputPath('locked-totext.pdf');
+	writeFileSync(lockedPath, locked);
+	await gotoPath(page, '/pdf-to-text');
+	await upload(page, lockedPath);
+	const run = await compress(page, { expectError: true, timeout: 120_000 });
+	expect(run.error).toMatch(/password-protected/i);
+	expect(run.error).toMatch(/Unlock/);
+	expect(run.error, 'no raw pdf.js text').not.toMatch(/No password given/);
 });
 
 test('PT-24: /pdf-to-pdfa declares PDF/A-2b conformance', async ({ page }) => {
