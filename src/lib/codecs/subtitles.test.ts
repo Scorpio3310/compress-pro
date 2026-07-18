@@ -212,3 +212,31 @@ describe('decodeSubtitleText', () => {
 		expect(out.text).not.toContain('\uFFFD');
 	});
 });
+
+describe('vtt cue-text escaping (F-58)', () => {
+	it('escapes bare < and & so the WebVTT tokenizer cannot swallow text', async () => {
+		const srt = '1\n00:00:01,000 --> 00:00:02,000\nScore is < 10 & rising\n';
+		const { text } = convertSubtitle(srt, 'vtt');
+		expect(text).toContain('Score is &lt; 10 &amp; rising');
+		expect(text).not.toMatch(/<\s10/);
+	});
+
+	it('keeps recognized VTT tags (<i>, <b>, <u>) intact', async () => {
+		const srt = '1\n00:00:01,000 --> 00:00:02,000\n<i>whisper</i> and <b>shout</b>\n';
+		const { text } = convertSubtitle(srt, 'vtt');
+		expect(text).toContain('<i>whisper</i> and <b>shout</b>');
+	});
+
+	it('leaves existing character entities alone', async () => {
+		const srt = '1\n00:00:01,000 --> 00:00:02,000\nfish &amp; chips\n';
+		const { text } = convertSubtitle(srt, 'vtt');
+		expect(text).toContain('fish &amp; chips');
+		expect(text).not.toContain('&amp;amp;');
+	});
+
+	it('placeholder restore cannot collide with numeric cue text', async () => {
+		const srt = '1\n00:00:01,000 --> 00:00:02,000\n<i>a</i> 0 b < 1\n';
+		const { text } = convertSubtitle(srt, 'vtt');
+		expect(text).toContain('<i>a</i> 0 b &lt; 1');
+	});
+});

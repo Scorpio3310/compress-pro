@@ -218,11 +218,34 @@ export function serializeSrt(cues: SubtitleCue[]): string {
 	);
 }
 
+/** Tags the WebVTT tokenizer recognizes — kept verbatim; everything else that
+ *  looks like markup gets escaped (F-58: a bare `<` opens a tag token that
+ *  swallows the rest of the cue in conforming renderers). */
+const VTT_TAG = /<\/?(?:i|b|u|v(?:[ .][^>\n]*)?|c(?:\.[^>\n]*)?|lang(?:[ .][^>\n]*)?|ruby|rt)>/gi;
+
+function escapeVttText(text: string): string {
+	const keep: string[] = [];
+	// NUL sentinels — impossible in decoded subtitle text, so they can never
+	// collide with real content (a plain " N " placeholder would).
+	const tokenized = text.replace(VTT_TAG, (tag) => {
+		keep.push(tag);
+		return `\u0000${keep.length - 1}\u0000`;
+	});
+	const escaped = tokenized
+		// Bare ampersands become entities; existing entities stay untouched.
+		.replace(/&(?![a-zA-Z]{2,8};|#\d{1,7};|#x[0-9a-fA-F]{1,6};)/g, '&amp;')
+		.replace(/</g, '&lt;')
+		.replace(/>/g, '&gt;');
+	return escaped.replace(/\u0000(\d+)\u0000/g, (_, i) => keep[Number(i)]);
+}
+
 export function serializeVtt(cues: SubtitleCue[]): string {
 	return (
 		'WEBVTT\n\n' +
 		cues
-			.map((c) => `${formatTime(c.start, '.')} --> ${formatTime(c.end, '.')}\n${c.text}`)
+			.map(
+				(c) => `${formatTime(c.start, '.')} --> ${formatTime(c.end, '.')}\n${escapeVttText(c.text)}`
+			)
 			.join('\n\n') +
 		'\n'
 	);
