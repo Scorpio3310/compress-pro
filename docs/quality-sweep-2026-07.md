@@ -32,8 +32,8 @@ limit — re-verify queued; full detail incl. failure scenarios + repro ideas in
 | F-13 | S2 | pdf | Named-destination internal links silently dropped by the link transplant (`src/lib/codecs/pdf-interactive.ts:166`) | FIXED | unit: /Names tree + old-style /Dests both resolve | 546c8eb |
 | F-14 | S2 | video-audio | Rotated MJPEG .mov: convertMjpeg squashes frames into swapped dims and drops rotation (`src/lib/workers/video.worker.ts:426`) | FIXED | rotatedDrawSpec unit (5) + V-32 quadrant e2e | 39377a7 |
 | F-15 | S2 | video-audio | ADTS .aac → M4A: EXT grouping lets keep-original silently return the raw ADTS file (`src/lib/codecs/audio.ts:22`) | FIXED | unit red-proof vs old EXT grouping + AU-22 | 39377a7 |
-| F-16 | S2 | archives | Encrypted ZIP with stored entries: fflate path returns raw ciphertext as output (`src/lib/compress.ts:441`) | QUEUED | — | — |
-| F-17 | S2 | archives | Extract silently drops dotfiles and 0-byte entries; all-dotfile zip gets wrong error (`src/lib/compress.ts:228`) | QUEUED | — | — |
+| F-16 | S2 | archives | Encrypted ZIP with stored entries: fflate path returns raw ciphertext as output (`src/lib/compress.ts:441`) | FIXED | zip-meta CD parser routes encrypted zips to worker; Z-08 e2e | 229b597 |
+| F-17 | S2 | archives | Extract silently drops dotfiles and 0-byte entries; all-dotfile zip gets wrong error (`src/lib/compress.ts:228`) | FIXED | dotfile/0-byte rows extracted; Z-07 + AR-05; honest all-noise error | 229b597 |
 | F-18 | S2 | docs-models | Subtitle converter decodes every input as UTF-8 — legacy/UTF-16 SRT corrupts or errors (`src/lib/compress.ts:887`) | FIXED | decodeSubtitleText unit (5) + SB-06 e2e | 1d5ad0a |
 | F-19 | S2 | docs-models | yaml-to-json leaves << merge keys unresolved — literal "<<" keys in the JSON output (`src/lib/codecs/data.ts:244`) | FIXED | unit docker-compose idiom | 1d5ad0a |
 | F-20 | S2 | docs-models | csv-to-xlsx numeric retype destroys leading zeros and >15-digit identifiers (`src/lib/codecs/data.ts:144`) | FIXED | unit leading-zero/15-digit | 1d5ad0a |
@@ -43,8 +43,8 @@ limit — re-verify queued; full detail incl. failure scenarios + repro ideas in
 | F-24 | S3 | images | Truncated GIF (<10 bytes) surfaces a raw DataView RangeError instead of an honest error (`src/lib/codecs/image.ts:449`) | FIXED | unit guard tests (3) | bcf5bbb |
 | F-25 | S3 | vectorize-raw-ocr | RAW + 'Keep metadata' silently drops all EXIF/GPS despite the toggle's promise (`src/lib/codecs/image.ts:242`) | FIXED | unit (2): honest 'Metadata not kept' note; full EXIF copy = OPEN wiring | bcf5bbb |
 | F-26 | S3 | vectorize-raw-ocr | vtracer wasm never re-inits after a panic — one bad job bricks vectorize until reload (`src/lib/workers/vtracer.worker.ts:18`) | FIXED | wasm-trap unit (4); pool-respawn mechanism | 61e016f |
-| F-27 | S3 | vectorize-raw-ocr | OCR dispatches by settings.op — op toggle after upload sends PDFs to tesseract (`src/lib/compress.ts:863`) | QUEUED | — | — |
-| F-28 | S3 | vectorize-raw-ocr | RAW/TIFF/PSD/JXL + SVG output bypasses their decoders — accepted files fail to vectorize (`src/lib/compress.ts:768`) | QUEUED | — | — |
+| F-27 | S3 | vectorize-raw-ocr | OCR dispatches by settings.op — op toggle after upload sends PDFs to tesseract (`src/lib/compress.ts:863`) | FIXED | compress-dispatch unit: %PDF sniff refusals name the right pill | 229b597 |
+| F-28 | S3 | vectorize-raw-ocr | RAW/TIFF/PSD/JXL + SVG output bypasses their decoders — accepted files fail to vectorize (`src/lib/compress.ts:768`) | FIXED | PNG bitmap bridge; VD-01..03 e2e tiff/psd/dng → svg | 229b597 |
 | F-29 | S3 | pdf | Target-size mode can ship a file over the requested target, unreported (`src/lib/codecs/pdf.ts:454`) | FIXED | pdf.test unit (2) | e0935c8 |
 | F-30 | S3 | pdf | Open-ended page range beyond the last page yields misleading 'reversed' error (`src/lib/pdf-range.ts:44`) | FIXED | pdf-range unit red→green | e0935c8 |
 | F-31 | S3 | pdf | pdf-to-images/pdf-to-text surface raw 'No password given' and leak the failed task (`src/lib/codecs/pdf-tools.ts:252`) | FIXED | unit (3) + PT-30 e2e | e0935c8 |
@@ -59,35 +59,35 @@ limit — re-verify queued; full detail incl. failure scenarios + repro ideas in
 | F-40 | S3 | fonts | OTF (CFF) to EOT conversion silently produces a file no EOT consumer can render (`src/lib/workers/font.worker.ts:192`) | FIXED | honest refusal test | 4dd6494 |
 | F-41 | S3 | fonts | woff2 emscripten abort poisons the cached module for every later woff2 job in the session (`src/lib/workers/font.worker.ts:187`) | FIXED | abort-recovery unit | 4dd6494 |
 | F-42 | S3 | docs-models | vtt-to-srt misses hourless karaoke timestamps — <MM:SS.mmm> tags leak into the SRT (`src/lib/codecs/subtitles.ts:74`) | FIXED | unit mixed-tags | 1d5ad0a |
-| F-43 | S3 | shared-infra | PDF merge ignores Cancel completely — run continues and commits its result (`src/lib/compress.ts:518`) | QUEUED | — | — |
+| F-43 | S3 | shared-infra | PDF merge ignores Cancel completely — run continues and commits its result (`src/lib/compress.ts:518`) | FIXED | abort gates around merge/fromImages/gs commits; unit: no commit after Cancel (mid-copyPages granularity = residual note) | 229b597 |
 | F-44 | S3 | shared-infra | callWorker accepts an already-aborted owner — encodes escape Cancel onto fresh workers (`src/lib/workers/rpc.ts:260`) | FIXED | rpc.test.ts submit-time guard (red→green) | 07d4a68 |
 | F-45 | S5 | images | ICO padToSquare allocates side² RGBA for extreme aspect ratios — ~1 GB+ for panoramas (`src/lib/workers/image.worker.ts:434`) | FIXED | CV-47 e2e 60MP pano (was stall/OOM) | bcf5bbb |
 | F-46 | S5 | vectorize-raw-ocr | Vectorize has no size cap and ignores max-dimension — huge photos hang for minutes (`src/lib/codecs/vectorize.ts:52`) | FIXED | vectorize-limits unit (3) + VC-01 e2e; user maxDimension wiring = OPEN | 61e016f |
 | F-47 | S5 | video-audio | Video→GIF has no hard frame/dimension cap; long or 4K sources OOM, warning shows post-run (`src/lib/codecs/video.ts:247`) | FIXED | planGif unit (5) + V-36 e2e | 39377a7 |
 | F-48 | S5 | video-audio | Cancel during Conversion.init window is lost: guaranteed 5 s stall, then worker kill (`src/lib/workers/video.worker.ts:307`) | FIXED | job-registry unit (5) | 39377a7 |
 | F-49 | S5 | archives | 60-line tail ring loses password signal; partly-failed extract discards good entries (`src/lib/workers/archive.worker.ts:81`) | QUEUED | — | — |
-| F-50 | S5 | archives | fflate fast paths buffer whole batch + output in main-thread RAM with no size gate (`src/lib/compress.ts:274`) | QUEUED | — | — |
-| F-51 | S5 | shared-infra | fflate plain-zip create buffers all inputs in RAM — multi-GB batch crashes the tab (`src/lib/compress.ts:280`) | QUEUED | — | — |
-| F-52 | S6 | images | Keep-original guard clears info but not warning — kept original keeps false frame warning (`src/lib/compress.ts:1023`) | QUEUED | — | — |
+| F-50 | S5 | archives | fflate fast paths buffer whole batch + output in main-thread RAM with no size gate (`src/lib/compress.ts:274`) | FIXED | FFLATE_FAST_PATH_MAX_BYTES=500MB routes big batches to worker; units | 229b597 |
+| F-51 | S5 | shared-infra | fflate plain-zip create buffers all inputs in RAM — multi-GB batch crashes the tab (`src/lib/compress.ts:280`) | FIXED | same gate covers create; worker createBundle handles plain zip | 229b597 |
+| F-52 | S6 | images | Keep-original guard clears info but not warning — kept original keeps false frame warning (`src/lib/compress.ts:1023`) | FIXED | guard nulls warning with info; unit + K-01 | 229b597 |
 | F-53 | S6 | pdf | pdf-to-images zip names pad to 2 digits — wrong sort order for 100+ page PDFs (`src/lib/codecs/pdf-tools.ts:106`) | FIXED | unit 120-page padding | e0935c8 |
-| F-54 | S6 | archives | Legacy non-UTF-8 zip names mojibake'd; C1 controls survive sanitizeEntryName (`src/lib/compress.ts:456`) | QUEUED | — | — |
+| F-54 | S6 | archives | Legacy non-UTF-8 zip names mojibake'd; C1 controls survive sanitizeEntryName (`src/lib/compress.ts:456`) | FIXED | cp437/UTF-8 CD decode + C1 strip; Z-09 e2e (7zz worker path residual → R3) | 229b597 |
 | F-55 | S6 | fonts | WOFF extended-metadata and private blocks silently dropped on every conversion, no note (`src/lib/codecs/woff1.ts:67`) | FIXED | note surfaced; unit | 4dd6494 |
-| F-56 | S6 | docs-models | Simplify is silently skipped on morph-target meshes — setting ignored with no warning (`src/lib/workers/model.worker.ts:192`) | QUEUED | — | — |
+| F-56 | S6 | docs-models | Simplify is silently skipped on morph-target meshes — setting ignored with no warning (`src/lib/workers/model.worker.ts:192`) | FIXED | modelWarning unit + MD-10 e2e (morph fixture) | a22c4c7 |
 
 ### Audit round 1b (re-verified after usage-limit failures — ALL 12 real)
 
-| F-57 | S3 | models | Truncated/corrupt GLB surfaces raw RangeError/JSON SyntaxError instead of a friendly error (`src/lib/codecs/model-shared.ts:85`) | QUEUED | — | — |
-| F-58 | S3 | subtitles | srt-to-vtt never escapes bare < — WebVTT tokenizer swallows the rest of the cue (`src/lib/codecs/subtitles.ts:206`) | QUEUED | — | — |
-| F-59 | S3 | shared-infra | Watchdog counts queue wait; expiry kills healthy co-tenant jobs on shared workers (`src/lib/workers/rpc.ts:271`) | QUEUED | — | — |
-| F-60 | S6 | shared-infra | Keep-original revert keeps the stale codec warning — numbers contradict shipped bytes (`src/lib/compress.ts:1023`) | QUEUED | — | — |
+| F-57 | S3 | models | Truncated/corrupt GLB surfaces raw RangeError/JSON SyntaxError instead of a friendly error (`src/lib/codecs/model-shared.ts:85`) | FIXED | model-shared units (4) + MD-11 e2e | a22c4c7 |
+| F-58 | S3 | subtitles | srt-to-vtt never escapes bare < — WebVTT tokenizer swallows the rest of the cue (`src/lib/codecs/subtitles.ts:206`) | FIXED | subtitles escaping units (4) | 37c1ba1 |
+| F-59 | S3 | shared-infra | Watchdog counts queue wait; expiry kills healthy co-tenant jobs on shared workers (`src/lib/workers/rpc.ts:271`) | FIXED | rpc instance-silence watchdog unit | 3e0d423 |
+| F-60 | S6 | shared-infra | Keep-original revert keeps the stale codec warning — numbers contradict shipped bytes (`src/lib/compress.ts:1023`) | FIXED | duplicate of F-52 — same fix | 229b597 |
 | F-61 | S6 | shared-infra | Settings persist effect writes localStorage unguarded — uncaught throw on blocked storage (`src/lib/stores/settings.svelte.ts:36`; theme.svelte.ts init read was the harder crash) | FIXED | ST-20 e2e (red→green via stash) | see git log |
-| F-62 | S2 | ui-layer | afterNavigate presets fire on busy tabs: files cleared mid-run, in-flight settings mutated (`+page.svelte:572`) | QUEUED | — | — |
-| F-63 | S3 | ui-layer | Offline chunk-load failure shows raw 'Failed to fetch dynamically imported module' (`+page.svelte:473`) | QUEUED | — | — |
-| F-64 | S6 | ui-layer | savingsPercent clamps at 0: grown outputs show '−0%' chip contradicting '↑ larger' note (`src/lib/compress.ts:77`) | QUEUED | — | — |
-| F-65 | S6 | ui-layer | Merge/create/images→PDF runs show all rows but one 'queued' and '0/N done' throughout (`src/lib/compress.ts:516`) | QUEUED | — | — |
-| F-66 | S6 | ui-layer | Removing a failed file's row leaves its stale error banner and red tab badge behind (`+page.svelte:507`) | QUEUED | — | — |
-| F-67 | S6 | ui-layer | Busy-tab refusal message names internal tab ids ('zip', 'subtitle'), not UI labels (`+page.svelte:701`) | QUEUED | — | — |
-| F-68 | S6 | ui-layer | Tab-title progress tracks first compressing tab in object order, not the watched one (`+page.svelte:260`) | QUEUED | — | — |
+| F-62 | S2 | ui-layer | afterNavigate presets fire on busy tabs: files cleared mid-run, in-flight settings mutated (`+page.svelte:572`) | FIXED | LP-17 e2e busy-tab guard (+latent data-preset fallthrough fix) | 270323b |
+| F-63 | S3 | ui-layer | Offline chunk-load failure shows raw 'Failed to fetch dynamically imported module' (`+page.svelte:473`) | FIXED | E-12 e2e offline chunk message | 270323b |
+| F-64 | S6 | ui-layer | savingsPercent clamps at 0: grown outputs show '−0%' chip contradicting '↑ larger' note (`src/lib/compress.ts:77`) | FIXED | signed savings; K-02 e2e | 270323b |
+| F-65 | S6 | ui-layer | Merge/create/images→PDF runs show all rows but one 'queued' and '0/N done' throughout (`src/lib/compress.ts:516`) | FIXED | spreadCombinedProgress units | 270323b |
+| F-66 | S6 | ui-layer | Removing a failed file's row leaves its stale error banner and red tab badge behind (`+page.svelte:507`) | FIXED | E-11 e2e banner/badge cleanup | 270323b |
+| F-67 | S6 | ui-layer | Busy-tab refusal message names internal tab ids ('zip', 'subtitle'), not UI labels (`+page.svelte:701`) | FIXED | tab-ui units: real labels | 270323b |
+| F-68 | S6 | ui-layer | Tab-title progress tracks first compressing tab in object order, not the watched one (`+page.svelte:260`) | FIXED | pickTitleRun units | 270323b |
 ## Real-file matrix
 
 Generated by `scripts/matrix-report.mjs` from `test-results/matrix/cells/`.
