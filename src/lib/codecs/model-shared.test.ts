@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest';
 import {
 	modelIdleTimeoutMs,
 	modelInfo,
+	modelWarning,
 	scanGlbJson,
 	sniffTexture,
-	validateModelInput
+	validateModelInput,
+	type ModelStatsX
 } from './model-shared';
 import type { ModelStats } from '$lib/workers/protocol';
 import type { ModelSettings } from '$lib/types';
@@ -29,9 +31,9 @@ describe('sniffTexture', () => {
 	it('recognizes jpg/png/webp/ktx2 by magic', () => {
 		expect(sniffTexture(bytes(0xff, 0xd8, 0xff, 0xe0))).toBe('jpg');
 		expect(sniffTexture(bytes(0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a))).toBe('png');
-		expect(
-			sniffTexture(bytes(0x52, 0x49, 0x46, 0x46, 0, 0, 0, 0, 0x57, 0x45, 0x42, 0x50))
-		).toBe('webp');
+		expect(sniffTexture(bytes(0x52, 0x49, 0x46, 0x46, 0, 0, 0, 0, 0x57, 0x45, 0x42, 0x50))).toBe(
+			'webp'
+		);
 		expect(sniffTexture(bytes(0xab, 0x4b, 0x54, 0x58, 0x20, 0x32, 0x30, 0xbb))).toBe('ktx2');
 	});
 
@@ -43,7 +45,9 @@ describe('sniffTexture', () => {
 
 describe('validateModelInput', () => {
 	it('accepts a glTF 2.0 binary header', () => {
-		expect(() => validateModelInput(glbWithJson({ asset: { version: '2.0' } }), 'model.glb')).not.toThrow();
+		expect(() =>
+			validateModelInput(glbWithJson({ asset: { version: '2.0' } }), 'model.glb')
+		).not.toThrow();
 	});
 
 	it('routes .gltf (and any JSON) to the export-as-glb message', () => {
@@ -69,7 +73,11 @@ describe('scanGlbJson', () => {
 
 	it('accepts data: uris and embedded buffers', () => {
 		expect(
-			scanGlbJson(glbWithJson({ buffers: [{ byteLength: 4 }, { uri: 'data:application/octet-stream;base64,AAAA' }] }))
+			scanGlbJson(
+				glbWithJson({
+					buffers: [{ byteLength: 4 }, { uri: 'data:application/octet-stream;base64,AAAA' }]
+				})
+			)
 		).toEqual({ inputCompression: null });
 	});
 
@@ -81,6 +89,33 @@ describe('scanGlbJson', () => {
 		expect(
 			scanGlbJson(glbWithJson({ extensionsRequired: ['EXT_meshopt_compression'] })).inputCompression
 		).toBe('meshopt');
+	});
+
+	// validateModelInput only guarantees the 12-byte header — everything past
+	// it can be missing or lying, and the raw DataView/JSON.parse text must
+	// never reach the failure row.
+	it('maps a header-only stub to the friendly truncation error, not a RangeError', () => {
+		const stub = glbWithJson({}).slice(0, 12);
+		expect(() => scanGlbJson(stub)).toThrow(/incomplete.*re-download/);
+		expect(() => scanGlbJson(stub)).not.toThrow(/DataView|Offset/);
+	});
+
+	it('maps a GLB cut off inside its JSON chunk to the truncation error', () => {
+		const full = glbWithJson({ asset: { version: '2.0' }, meshes: [{ primitives: [] }] });
+		const cut = full.slice(0, 20 + Math.floor((full.length - 20) * 0.6));
+		expect(() => scanGlbJson(cut)).toThrow(/incomplete.*re-download/);
+	});
+
+	it('treats a jsonLength pointing past the end of the file as truncation', () => {
+		const lying = glbWithJson({});
+		new DataView(lying.buffer).setUint32(12, 0x7fff_ffff, true);
+		expect(() => scanGlbJson(lying)).toThrow(/incomplete.*re-download/);
+	});
+
+	it('maps unparseable JSON bytes to the damaged-glb message, not a SyntaxError', () => {
+		const garbled = glbWithJson({ asset: { version: '2.0' } });
+		garbled.fill(0xfe, 20); // lengths valid, chunk bytes garbage
+		expect(() => scanGlbJson(garbled)).toThrow(/damaged or not a real \.glb/);
 	});
 });
 
@@ -125,6 +160,40 @@ describe('modelInfo', () => {
 				settings('draco')
 			)
 		).toBe('Draco geometry · 1 of 1 texture recompressed (2 GPU-format kept)');
+	});
+});
+
+describe('modelWarning', () => {
+	const stats = (over: Partial<ModelStatsX>): ModelStatsX => ({
+		trianglesBefore: 24_320,
+		trianglesAfter: 24_320,
+		verticesBefore: 12_511,
+		verticesAfter: 12_511,
+		texturesChanged: 0,
+		texturesTotal: 0,
+		texturesSkipped: 0,
+		texturesFailed: 0,
+		textureResized: false,
+		inputCompression: null,
+		...over
+	});
+
+	it('surfaces the morph-target simplify skip instead of staying silent', () => {
+		expect(modelWarning(stats({ simplifySkippedMorphs: true }))).toMatch(
+			/Simplify skipped.*morph targets/
+		);
+	});
+
+	it('keeps the damaged-texture warning and joins both', () => {
+		expect(modelWarning(stats({ texturesFailed: 2 }))).toBe('2 damaged textures kept unchanged');
+		expect(modelWarning(stats({ simplifySkippedMorphs: true, texturesFailed: 1 }))).toMatch(
+			/morph targets.* · 1 damaged texture kept unchanged/
+		);
+	});
+
+	it('is null when nothing needs saying', () => {
+		expect(modelWarning(stats({}))).toBeNull();
+		expect(modelWarning(stats({ simplifySkippedMorphs: false }))).toBeNull();
 	});
 });
 

@@ -5,7 +5,13 @@
  */
 import type { ModelSettings, UploadedFile } from '$lib/types';
 import { callWorker } from '$lib/workers/rpc';
-import { modelIdleTimeoutMs, modelInfo, validateModelInput } from './model-shared';
+import {
+	modelIdleTimeoutMs,
+	modelInfo,
+	modelWarning,
+	validateModelInput,
+	type ModelStatsX
+} from './model-shared';
 
 export interface ModelResult {
 	blob: Blob;
@@ -41,14 +47,13 @@ export async function compressModel(
 		(p) => onProgress(p.fraction, p.detail),
 		{ owner: signal, idleTimeoutMs: modelIdleTimeoutMs(file.size) }
 	);
-	const stats = out.stats;
+	// The worker ships the family's extended stats (ModelStatsX) over the
+	// plain wire type — the extra fields are optional and clone-safe.
+	const stats = out.stats as ModelStatsX;
 	return {
 		blob: new Blob([out.bytes], { type: 'model/gltf-binary' }),
 		info: modelInfo(stats, settings),
-		warning:
-			stats.texturesFailed > 0
-				? `${stats.texturesFailed} damaged texture${stats.texturesFailed === 1 ? '' : 's'} kept unchanged`
-				: null,
+		warning: modelWarning(stats),
 		transformed: stats.textureResized || stats.trianglesAfter < stats.trianglesBefore
 	};
 }

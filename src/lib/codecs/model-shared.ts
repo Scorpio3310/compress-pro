@@ -13,7 +13,8 @@ export const SIMPLIFY_ERROR = 0.001;
 /** Raster formats inside GLB textures; magic bytes are authoritative — the
  *  declared mimeType lies often enough that it only gets corrected on write. */
 export function sniffTexture(bytes: Uint8Array): 'jpg' | 'png' | 'webp' | 'ktx2' | null {
-	if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return 'jpg';
+	if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff)
+		return 'jpg';
 	if (
 		bytes.length >= 8 &&
 		bytes[0] === 0x89 &&
@@ -74,19 +75,35 @@ export function validateModelInput(bytes: Uint8Array, name: string): void {
 	}
 }
 
+const GLB_TRUNCATED =
+	'This .glb is incomplete — the file ends before its data does (often a cut-off download); re-download or re-export it and try again';
+const GLB_DAMAGED =
+	'This file could not be read as a glTF binary — it may be damaged or not a real .glb';
+
 /** Parses the GLB's JSON chunk without decoding geometry: rejects external
  *  references with a clear message and records the input's compression (the
- *  decoded Document no longer reliably carries extensionsRequired). */
+ *  decoded Document no longer reliably carries extensionsRequired).
+ *
+ *  validateModelInput only guarantees the 12-byte header — everything past it
+ *  can be missing or lying, so the chunk reads map their own failures to the
+ *  honest messages instead of leaking RangeError/SyntaxError to the row. */
 export function scanGlbJson(bytes: Uint8Array): { inputCompression: 'draco' | 'meshopt' | null } {
+	if (bytes.byteLength < 20) throw new Error(GLB_TRUNCATED);
 	const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
 	const jsonLength = view.getUint32(12, true);
 	const jsonType = view.getUint32(16, true);
 	if (jsonType !== 0x4e4f534a) throw new Error('Not a glTF binary (.glb) file'); // 'JSON'
-	const json = JSON.parse(new TextDecoder().decode(bytes.slice(20, 20 + jsonLength))) as {
+	if (20 + jsonLength > bytes.byteLength) throw new Error(GLB_TRUNCATED);
+	let json: {
 		buffers?: { uri?: string }[];
 		images?: { uri?: string }[];
 		extensionsRequired?: string[];
 	};
+	try {
+		json = JSON.parse(new TextDecoder().decode(bytes.slice(20, 20 + jsonLength)));
+	} catch {
+		throw new Error(GLB_DAMAGED);
+	}
 	for (const resource of [...(json.buffers ?? []), ...(json.images ?? [])]) {
 		if (resource.uri && !resource.uri.startsWith('data:')) {
 			throw new Error(
@@ -102,6 +119,31 @@ export function scanGlbJson(bytes: Uint8Array): { inputCompression: 'draco' | 'm
 				? 'meshopt'
 				: null
 	};
+}
+
+/** Model-family extension of the wire ModelStats — declared here (the family
+ *  owns its own seam) and optional, so the shared protocol stays untouched
+ *  and older readers simply ignore it. Rides structured clone unchanged. */
+export interface ModelStatsX extends ModelStats {
+	/** Simplify was requested but skipped wholesale: primitives carry morph
+	 *  targets that MeshoptSimplifier would desync. */
+	simplifySkippedMorphs?: boolean;
+}
+
+/** Row warning: every way the run quietly did less than the settings asked. */
+export function modelWarning(stats: ModelStatsX): string | null {
+	const parts: string[] = [];
+	if (stats.simplifySkippedMorphs) {
+		parts.push(
+			'Simplify skipped — morph targets (blend shapes) would fall out of sync with a decimated mesh'
+		);
+	}
+	if (stats.texturesFailed > 0) {
+		parts.push(
+			`${stats.texturesFailed} damaged texture${stats.texturesFailed === 1 ? '' : 's'} kept unchanged`
+		);
+	}
+	return parts.length > 0 ? parts.join(' · ') : null;
 }
 
 function fmtCount(n: number): string {

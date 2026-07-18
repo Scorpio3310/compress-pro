@@ -1,10 +1,10 @@
 /**
- * MD-01…09: the model tab — GLB optimization via gltf-transform (Draco /
+ * MD-01…11: the model tab — GLB optimization via gltf-transform (Draco /
  * Meshopt / quantize) + embedded-texture recompression. Output verification
  * runs the SAME engine in Node (verify.ts glbInfo). All tests are
  * preview-safe: pure UI drive + Node-side byte checks.
  */
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { expect, fx, fxMeta, test } from '../fixtures';
 import { compress, downloadRow, gotoPath, setModelSimplify, upload } from '../helpers';
 import { glbDecodesWithoutCodecs, glbInfo, glbJson } from '../verify';
@@ -138,4 +138,37 @@ test('MD-09: an already-Draco input re-optimizes cleanly', async ({ page }) => {
 	// canvas q80 re-encode beats the fixture's q92 texture → net smaller
 	expect(art.bytes.length).toBeLessThan(readFileSync(fx('sample-draco.glb')).length);
 	await expect(page.getByTestId('row-info')).toContainText('1 of 1 texture recompressed');
+});
+
+test('MD-10: simplify on a morph-target model is skipped with an honest warning', async ({
+	page
+}) => {
+	await gotoPath(page, '/compress-glb');
+	await upload(page, fx('sample-morph.glb'));
+	await setModelSimplify(page, 50);
+	await compress(page, { timeout: 150_000 });
+	const art = await downloadRow(page);
+	const info = await glbInfo(art.bytes);
+	// The skip is wholesale — the full triangle count survives — and the row
+	// must say WHY the explicit simplify setting was ignored.
+	expect(info.triangles).toBe(TRIANGLES);
+	await expect(page.getByTestId('row-warning')).toContainText('Simplify skipped');
+	await expect(page.getByTestId('row-warning')).toContainText('morph targets');
+});
+
+test('MD-11: a .glb truncated mid-JSON gets the honest message, not a raw SyntaxError', async ({
+	page
+}, testInfo) => {
+	const full = readFileSync(fx('sample.glb'));
+	const jsonLength = full.readUInt32LE(12);
+	const cut = full.subarray(0, 20 + Math.floor(jsonLength / 2));
+	const path = testInfo.outputPath('truncated.glb');
+	writeFileSync(path, cut);
+	await gotoPath(page, '/compress-glb');
+	await upload(page, path);
+	const run = await compress(page, { expectError: true });
+	expect(run.error).toMatch(/incomplete/);
+	expect(run.error).toMatch(/re-download/);
+	expect(run.error).not.toMatch(/JSON|DataView|Offset/);
+	await expect(page.getByTestId('compress-cta')).toBeEnabled();
 });

@@ -14,9 +14,14 @@ import { WebIO, Logger, type Document } from '@gltf-transform/core';
 import { ALL_EXTENSIONS } from '@gltf-transform/extensions';
 import { dedup, prune, weld, simplify, quantize, draco, meshopt } from '@gltf-transform/functions';
 import type { ModelSettings } from '$lib/types';
-import type { WorkerContracts, ModelStats } from './protocol';
+import type { WorkerContracts } from './protocol';
 import { expose } from './host';
-import { sniffTexture, scanGlbJson, SIMPLIFY_ERROR } from '$lib/codecs/model-shared';
+import {
+	sniffTexture,
+	scanGlbJson,
+	SIMPLIFY_ERROR,
+	type ModelStatsX
+} from '$lib/codecs/model-shared';
 import { containScale } from '$lib/codecs/video-math';
 
 const SILENT = new Logger(Logger.Verbosity.SILENT);
@@ -45,15 +50,12 @@ function getEngine(): Promise<WebIO> {
 			MeshoptDecoder.ready,
 			MeshoptSimplifier.ready
 		]);
-		return new WebIO()
-			.setLogger(SILENT)
-			.registerExtensions(ALL_EXTENSIONS)
-			.registerDependencies({
-				'draco3d.encoder': encoderModule,
-				'draco3d.decoder': decoderModule,
-				'meshopt.encoder': MeshoptEncoder,
-				'meshopt.decoder': MeshoptDecoder
-			});
+		return new WebIO().setLogger(SILENT).registerExtensions(ALL_EXTENSIONS).registerDependencies({
+			'draco3d.encoder': encoderModule,
+			'draco3d.decoder': decoderModule,
+			'meshopt.encoder': MeshoptEncoder,
+			'meshopt.decoder': MeshoptDecoder
+		});
 	})().catch((error) => {
 		enginePromise = null;
 		throw error;
@@ -182,14 +184,16 @@ expose<WorkerContracts['model']>({
 		progress({ fraction: 0.12, detail: 'optimizing structure' });
 		await document.transform(dedup(), prune(), weld());
 
+		let simplifySkippedMorphs = false;
 		if (settings.simplify != null) {
 			// MeshoptSimplifier doesn't understand morph targets — decimating a
-			// primitive with targets would desync them, so skip simplify wholesale.
-			const hasMorphTargets = document
+			// primitive with targets would desync them, so skip simplify wholesale
+			// and record it: the row warning must say the setting was ignored.
+			simplifySkippedMorphs = document
 				.getRoot()
 				.listMeshes()
 				.some((mesh) => mesh.listPrimitives().some((p) => p.listTargets().length > 0));
-			if (!hasMorphTargets) {
+			if (!simplifySkippedMorphs) {
 				progress({ fraction: 0.2, detail: 'simplifying mesh' });
 				await document.transform(
 					simplify({
@@ -207,8 +211,7 @@ expose<WorkerContracts['model']>({
 
 		progress({
 			fraction: 0.75,
-			detail:
-				settings.compression === 'none' ? 'quantizing geometry' : 'preparing geometry codec'
+			detail: settings.compression === 'none' ? 'quantizing geometry' : 'preparing geometry codec'
 		});
 		if (settings.compression === 'draco') {
 			// Draco quantizes internally — no quantize() first (double loss, no win).
@@ -226,7 +229,7 @@ expose<WorkerContracts['model']>({
 		const outBytes = await io.writeBinary(document);
 		const after = countGeometry(document);
 
-		const stats: ModelStats = {
+		const stats: ModelStatsX = {
 			trianglesBefore: before.triangles,
 			trianglesAfter: after.triangles,
 			verticesBefore: before.vertices,
@@ -236,7 +239,8 @@ expose<WorkerContracts['model']>({
 			texturesSkipped: textures.skipped,
 			texturesFailed: textures.failed,
 			textureResized: textures.resized,
-			inputCompression: scan.inputCompression
+			inputCompression: scan.inputCompression,
+			simplifySkippedMorphs
 		};
 		const result = { bytes: exactBuffer(outBytes), stats };
 		return { result, transfer: [result.bytes] };
