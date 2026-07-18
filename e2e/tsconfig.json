@@ -8,12 +8,17 @@
 		"strict": true,
 		"esModuleInterop": true,
 		"skipLibCheck": true,
-		"noEmit": true
+		"noEmit": true,
+		// The matrix classifier imports src/lib/routing.ts, which imports $lib/types.
+		"baseUrl": ".",
+		"paths": { "$lib/*": ["../src/lib/*"] }
 	},
 	"include": [
 		"./**/*.ts",
 		"../playwright.config.ts",
 		"../playwright.bench.config.ts",
-		"../scripts/*.mjs"
+		"../playwright.matrix.config.ts",
+		"../scripts/*.mjs",
+		"../src/lib/ambient.d.ts"
 	]
 }

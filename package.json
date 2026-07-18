@@ -61,7 +61,9 @@
 		"test:e2e:ui": "playwright test --ui",
 		"bench:memory": "E2E_BENCH=1 E2E_PREVIEW=1 playwright test --config playwright.bench.config.ts",
 		"demo-assets": "playwright test --config playwright.demo.config.ts",
-		"report": "node scripts/build-report.mjs --open"
+		"report": "node scripts/build-report.mjs --open",
+		"test:matrix": "playwright test --config playwright.matrix.config.ts",
+		"matrix:report": "node scripts/matrix-report.mjs"
 	},
 	"devDependencies": {
 		"@cloudflare/workers-types": "^5.20260708.1",
