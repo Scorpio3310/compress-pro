@@ -379,9 +379,19 @@ if (vids.length > 0) {
 			expect(outInfo.audioCodec, 'audio track removed').toBeNull();
 			expect(outInfo.videoCodec, 'video track intact').toBeTruthy();
 			expect([outInfo.width, outInfo.height]).toEqual([info.width, info.height]);
+			// The input's CONTAINER duration = max(track durations); once the audio
+			// track goes, the output legitimately equals the VIDEO track duration
+			// (real webm sample: audio runs 0.49 s longer than video). Compare
+			// against the video track, not the container.
+			const { ALL_FORMATS, BufferSource, Input } = await import('mediabunny');
+			const inputParsed = new Input({
+				source: new BufferSource(new Uint8Array(input)),
+				formats: ALL_FORMATS
+			});
+			const videoTrackDuration = await (await inputParsed.getPrimaryVideoTrack())!.computeDuration();
 			expect(
-				Math.abs(outInfo.durationSec - info.durationSec),
-				'duration preserved'
+				Math.abs(outInfo.durationSec - videoTrackDuration),
+				'video-track duration preserved'
 			).toBeLessThanOrEqual(0.3);
 			rec.cell({
 				family: 'video',

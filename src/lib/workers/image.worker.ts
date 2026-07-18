@@ -690,6 +690,13 @@ async function encodeImage(
 			// quality < 100 → lossy palette quantization first; 100 → lossless.
 			const sourceData = quality < 100 ? await reducePngColors(imageData, quality) : imageData;
 			const png = await encode(sourceData);
+			// oxipng cost explodes with megapixels — on a 48 MP HEIC→PNG the
+			// optimise pass ground for 8+ minutes for single-digit % savings
+			// (matrix F-69). Past the ceiling, ship the straight encode.
+			const OXIPNG_MAX_PIXELS = 12_000_000;
+			if (sourceData.width * sourceData.height > OXIPNG_MAX_PIXELS) {
+				return { bytes: png, resized, ...dims, chosenFormat: 'png' };
+			}
 			// Small files can afford a deeper oxipng pass; keep big ones snappy.
 			const level = png.byteLength < 500_000 ? 4 : 2;
 			return {
