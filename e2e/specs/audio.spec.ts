@@ -596,3 +596,61 @@ test('AU-21: FLAC output in target mode says the target does not apply', async (
 		warnings: run.warnings
 	});
 });
+
+test('AU-22: raw ADTS .aac → M4A always ships a real ISOBMFF file', async ({ page, rec }) => {
+	// formatChanged must follow the CONTAINER: .aac is a raw ADTS stream, M4A
+	// wraps it in ISOBMFF. Grouping the two used to let the keep-original guard
+	// hand back the untouched ADTS bytes whenever the re-encode came out bigger
+	// — strict importers (iTunes/iOS, picky uploaders) then reject the "m4a".
+	test.skip(!audioFixtures().files['tone-3s.m4a'], 'no AAC encoder in this Chromium');
+
+	// Derive the ADTS fixture by transmuxing the AAC packets out of the m4a
+	// twin (pure Node, no encoder needed) — idempotent like the generators.
+	const { existsSync, writeFileSync } = await import('node:fs');
+	const aacPath = fxAudio('tone-3s.aac');
+	if (!existsSync(aacPath)) {
+		const mb = await import('mediabunny');
+		const src = readFileSync(fxAudio('tone-3s.m4a'));
+		const input = new mb.Input({
+			source: new mb.BufferSource(
+				src.buffer.slice(src.byteOffset, src.byteOffset + src.byteLength) as ArrayBuffer
+			),
+			formats: mb.ALL_FORMATS
+		});
+		const track = await input.getPrimaryAudioTrack();
+		expect(track, 'm4a fixture must carry an audio track').not.toBeNull();
+		const target = new mb.BufferTarget();
+		const out = new mb.Output({ format: new mb.AdtsOutputFormat(), target });
+		const source = new mb.EncodedAudioPacketSource('aac');
+		out.addAudioTrack(source);
+		await out.start();
+		const sink = new mb.EncodedPacketSink(track!);
+		const decoderConfig = (await track!.getDecoderConfig()) ?? undefined;
+		let first = true;
+		for (let p = await sink.getFirstPacket(); p; p = await sink.getNextPacket(p)) {
+			await source.add(p, first ? { decoderConfig } : undefined);
+			first = false;
+		}
+		await out.finalize();
+		writeFileSync(aacPath, Buffer.from(target.buffer!));
+	}
+
+	await gotoTab(page, 'audio');
+	await upload(page, aacPath);
+	await setAudioOutput(page, 'M4A');
+	await compress(page);
+	const art = await downloadRow(page);
+	expect(art.name, 'renamed to the requested container — never the raw ADTS back').toBe(
+		'tone-3s.m4a'
+	);
+	expect(art.bytes.subarray(4, 8).toString('latin1'), 'ISOBMFF ftyp box').toBe('ftyp');
+	const info = await audioInfo(art.bytes);
+	expect(info.audioCodec).toBe('aac');
+	rec.record({
+		id: 'AU-22',
+		title: 'ADTS .aac → M4A crosses the container split (never keep-original)',
+		settings: { tab: 'audio', output: 'm4a', source: 'adts aac' },
+		input: { name: 'tone-3s.aac', bytes: readFileSync(aacPath).length },
+		output: { name: art.name, bytes: art.bytes.length }
+	});
+});

@@ -9,6 +9,9 @@ import {
 	cappedTargetBitrate,
 	fitDimensions,
 	formatTime,
+	GIF_MAX_DIMENSION,
+	GIF_MAX_FRAMES,
+	planGif,
 	qualityToBitrate,
 	retryBitrate
 } from './video-math';
@@ -230,8 +233,6 @@ export async function convertVideo(
 /** GIF frames sampled per second — capped hard: high-fps GIFs balloon fast. */
 const GIF_MAX_FPS = 15;
 const GIF_DEFAULT_FPS = 12;
-/** Soft size guard: past this many frames the GIF gets a heads-up warning. */
-const GIF_FRAME_WARNING = 900;
 
 async function convertVideoToGif(
 	file: File,
@@ -243,10 +244,26 @@ async function convertVideoToGif(
 	signal?.throwIfAborted();
 
 	const fps = settings.fps === 'original' ? GIF_DEFAULT_FPS : Math.min(settings.fps, GIF_MAX_FPS);
+	// Hard bounds BEFORE any work: gifenc holds the entire GIF in memory until
+	// the end, so an unbounded frame count or 4K frames is a worker OOM with an
+	// opaque crash, not just a big file. Refuse over-long clips up front and
+	// clamp the frame size to the GIF ceiling.
+	const plan = planGif(probe.durationSec, probe.width, probe.height, fps, settings.maxDimension);
+	if (plan.tooManyFrames) {
+		throw new Error(
+			`This clip would need ${plan.frameCount.toLocaleString()} GIF frames — more than the ` +
+				`${GIF_MAX_FRAMES.toLocaleString()}-frame cap. Trim the video or pick a lower frame rate.`
+		);
+	}
 	const warnings: (string | null)[] = [];
-	if (Math.ceil(probe.durationSec * fps) > GIF_FRAME_WARNING) {
+	if (plan.longGif) {
 		warnings.push(
 			'Long video — the GIF will be large; consider a lower frame rate or a shorter clip'
+		);
+	}
+	if (plan.dimensionCapped) {
+		warnings.push(
+			`Downscaled to ${GIF_MAX_DIMENSION} px for GIF output — larger GIFs get huge with no visible gain`
 		);
 	}
 
@@ -254,7 +271,7 @@ async function convertVideoToGif(
 		const out = await callWorker(
 			'video',
 			'toGif',
-			{ jobId, file, fps, maxDimension: settings.maxDimension, quality: settings.quality },
+			{ jobId, file, fps, maxDimension: plan.maxDimension, quality: settings.quality },
 			[],
 			(p) =>
 				onProgress?.({

@@ -5,12 +5,18 @@ import {
 	capFrameRate,
 	cappedTargetBitrate,
 	containScale,
+	createFrameRateDecimator,
 	fitDimensions,
 	formatTime,
 	frameDelayMs,
+	GIF_MAX_DIMENSION,
+	GIF_MAX_FRAMES,
+	planGif,
 	qualityToBitrate,
 	retryBitrate,
-	targetBitrate
+	rotatedDrawSpec,
+	targetBitrate,
+	type RotatedDrawSpec
 } from './video-math';
 
 describe('containScale', () => {
@@ -185,5 +191,135 @@ describe('formatTime', () => {
 		expect(formatTime(0)).toBe('0:00');
 		expect(formatTime(62)).toBe('1:02');
 		expect(formatTime(3723)).toBe('1:02:03');
+	});
+});
+
+// Applies the spec's canvas transform chain (translate → rotate → scale →
+// drawImage rect) to a normalized source point (u,v ∈ 0..1) the way a 2d
+// context would, so the tests verify real corner mapping, not internals.
+function applyDraw(spec: RotatedDrawSpec, u: number, v: number): [number, number] {
+	const x0 = spec.dx + u * spec.dWidth;
+	const y0 = spec.dy + v * spec.dHeight;
+	const xs = x0 * spec.scaleX;
+	const ys = y0 * spec.scaleY;
+	const cos = Math.cos(spec.rotateRad);
+	const sin = Math.sin(spec.rotateRad);
+	const xr = xs * cos - ys * sin;
+	const yr = xs * sin + ys * cos;
+	// `+ 0` folds the IEEE −0 that exact 180°/270° rotations produce.
+	return [Math.round(xr + spec.translateX) + 0, Math.round(yr + spec.translateY) + 0];
+}
+
+describe('rotatedDrawSpec', () => {
+	// Display canvas 64×96 (portrait) fed by unrotated 96×64 JPEG frames —
+	// the rotated-MJPEG shape. Rotation is clockwise, like mediabunny's.
+	it('90°: source top-left lands top-right, bottom-left lands top-left', () => {
+		const spec = rotatedDrawSpec(90, 64, 96);
+		expect(applyDraw(spec, 0, 0)).toEqual([64, 0]);
+		expect(applyDraw(spec, 1, 0)).toEqual([64, 96]);
+		expect(applyDraw(spec, 0, 1)).toEqual([0, 0]);
+		expect(applyDraw(spec, 1, 1)).toEqual([0, 96]);
+	});
+
+	it('180°: corners swap diagonally on the same canvas', () => {
+		const spec = rotatedDrawSpec(180, 64, 96);
+		expect(applyDraw(spec, 0, 0)).toEqual([64, 96]);
+		expect(applyDraw(spec, 1, 0)).toEqual([0, 96]);
+		expect(applyDraw(spec, 1, 1)).toEqual([0, 0]);
+	});
+
+	it('270°: source top-left lands bottom-left', () => {
+		const spec = rotatedDrawSpec(270, 64, 96);
+		expect(applyDraw(spec, 0, 0)).toEqual([0, 96]);
+		expect(applyDraw(spec, 1, 0)).toEqual([0, 0]);
+		expect(applyDraw(spec, 1, 1)).toEqual([64, 0]);
+	});
+
+	it('0°: identity mapping filling the whole canvas', () => {
+		const spec = rotatedDrawSpec(0, 96, 64);
+		expect(applyDraw(spec, 0, 0)).toEqual([0, 0]);
+		expect(applyDraw(spec, 1, 1)).toEqual([96, 64]);
+	});
+
+	it('every rotation covers the full canvas exactly (corner set equality)', () => {
+		for (const rotation of [0, 90, 180, 270] as const) {
+			const spec = rotatedDrawSpec(rotation, 64, 96);
+			const corners = (
+				[
+					[0, 0],
+					[1, 0],
+					[0, 1],
+					[1, 1]
+				] as const
+			).map(([u, v]) => applyDraw(spec, u, v).join(','));
+			expect(new Set(corners)).toEqual(new Set(['0,0', '64,0', '0,96', '64,96']));
+		}
+	});
+});
+
+describe('createFrameRateDecimator', () => {
+	it('keeps everything when no cap is set', () => {
+		const keep = createFrameRateDecimator(undefined);
+		for (let i = 0; i < 10; i++) expect(keep(i / 60)).toBe(true);
+	});
+
+	it('halves a 60 fps stream to 30 fps', () => {
+		const keep = createFrameRateDecimator(30);
+		const kept = Array.from({ length: 60 }, (_, i) => keep(i / 60)).filter(Boolean).length;
+		expect(kept).toBe(30);
+	});
+
+	it('keeps every frame when the source is already below the cap', () => {
+		const keep = createFrameRateDecimator(15);
+		const kept = Array.from({ length: 20 }, (_, i) => keep(i / 10)).filter(Boolean).length;
+		expect(kept).toBe(20);
+	});
+
+	it('recovers after a timestamp gap without a burst of kept frames', () => {
+		const keep = createFrameRateDecimator(30);
+		expect(keep(0)).toBe(true);
+		expect(keep(1 / 60)).toBe(false);
+		// 2-second hole (e.g. an edit) — the very next frame is kept, but the
+		// grid re-anchors there instead of replaying the missed slots.
+		expect(keep(2)).toBe(true);
+		expect(keep(2 + 1 / 60)).toBe(false);
+		expect(keep(2 + 2 / 60)).toBe(true);
+	});
+});
+
+describe('planGif', () => {
+	it('auto-caps 4K sources to the GIF dimension ceiling with a flag', () => {
+		const plan = planGif(3, 3840, 2160, 12, null);
+		expect(plan.maxDimension).toBe(GIF_MAX_DIMENSION);
+		expect(plan.dimensionCapped).toBe(true);
+	});
+
+	it('leaves small sources and tighter user caps alone', () => {
+		expect(planGif(3, 320, 240, 12, null).dimensionCapped).toBe(false);
+		const user = planGif(3, 3840, 2160, 12, 320);
+		expect(user.maxDimension).toBe(320);
+		expect(user.dimensionCapped).toBe(false);
+	});
+
+	it('clamps a user cap above the ceiling back down, flagged', () => {
+		const plan = planGif(3, 3840, 2160, 12, 1280);
+		expect(plan.maxDimension).toBe(GIF_MAX_DIMENSION);
+		expect(plan.dimensionCapped).toBe(true);
+	});
+
+	it('hard-fails frame counts past the cap, soft-warns on long clips', () => {
+		expect(planGif(1800, 1280, 720, 12, null).tooManyFrames).toBe(true); // 21600 frames
+		const long = planGif(60, 1280, 720, 12, null); // 720 frames
+		expect(long.tooManyFrames).toBe(false);
+		expect(long.longGif).toBe(true);
+		const short = planGif(10, 1280, 720, 15, null); // 150 frames
+		expect(short.tooManyFrames).toBe(false);
+		expect(short.longGif).toBe(false);
+	});
+
+	it('frame count mirrors the worker sampling grid', () => {
+		expect(planGif(3, 320, 240, 15, null).frameCount).toBe(45);
+		expect(planGif(GIF_MAX_FRAMES / 12, 320, 240, 12, null).tooManyFrames).toBe(false);
+		expect(planGif(GIF_MAX_FRAMES / 12 + 1, 320, 240, 12, null).tooManyFrames).toBe(true);
 	});
 });

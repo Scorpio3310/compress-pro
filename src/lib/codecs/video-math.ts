@@ -51,6 +51,107 @@ export function frameDelayMs(durationUs: number | null, gifQuirk: boolean): numb
 	return gifQuirk && ms <= 10 ? 100 : ms;
 }
 
+/**
+ * Canvas transform for baking a clockwise rotation into a frame draw.
+ * `width`/`height` are the DISPLAY (rotation-applied) canvas dimensions; the
+ * source bitmap is the raw, unrotated frame. Apply as: translate → rotate →
+ * scale → drawImage(dx, dy, dWidth, dHeight). Mirrors mediabunny's own
+ * VideoSample.draw() math (center-rotate + aspect-compensating scale), so the
+ * hand-rolled MJPEG path rotates exactly like the Conversion path bakes.
+ */
+export interface RotatedDrawSpec {
+	translateX: number;
+	translateY: number;
+	rotateRad: number;
+	scaleX: number;
+	scaleY: number;
+	dx: number;
+	dy: number;
+	dWidth: number;
+	dHeight: number;
+}
+
+export function rotatedDrawSpec(
+	rotation: 0 | 90 | 180 | 270,
+	width: number,
+	height: number
+): RotatedDrawSpec {
+	// Scale compensates the aspect swap on 90°/270°: the dWidth×dHeight box is
+	// first stretched to the source's aspect, then rotated back onto the canvas.
+	const aspectChange = rotation % 180 === 0 ? 1 : width / height;
+	return {
+		translateX: width / 2,
+		translateY: height / 2,
+		rotateRad: (rotation * Math.PI) / 180,
+		scaleX: 1 / aspectChange,
+		scaleY: aspectChange,
+		dx: -width / 2,
+		dy: -height / 2,
+		dWidth: width,
+		dHeight: height
+	};
+}
+
+/**
+ * Frame-drop filter for hand-rolled pipelines (MJPEG) where mediabunny's
+ * Conversion — which normally implements the fps cap — can't run. Keeps
+ * frames on a 1/capFps grid; after a timestamp gap the grid re-anchors at the
+ * next kept frame instead of replaying missed slots.
+ */
+export function createFrameRateDecimator(capFps: number | undefined): (ts: number) => boolean {
+	if (!capFps) return () => true;
+	const interval = 1 / capFps;
+	const epsilon = interval / 1000; // float-safe grid comparison
+	let nextTs = -Infinity;
+	return (ts: number): boolean => {
+		if (ts < nextTs - epsilon) return false;
+		nextTs = Math.max(nextTs, ts) + interval;
+		return true;
+	};
+}
+
+/** GIF output ceiling: past this edge length palettes+LZW balloon for nothing. */
+export const GIF_MAX_DIMENSION = 800;
+/** Hard frame cap — gifenc holds the whole GIF in memory until the end, so an
+ *  unbounded frame count is an OOM, not a big file. 900 ≈ 75 s at 12 fps. */
+export const GIF_MAX_FRAMES = 900;
+/** Soft heads-up threshold (≈25 s at 12 fps): the GIF will be large. */
+export const GIF_FRAME_WARNING = 300;
+
+export interface GifPlan {
+	/** Sampling-grid frame count the worker will produce. */
+	frameCount: number;
+	/** Effective dimension cap to pass to the worker (never above the ceiling). */
+	maxDimension: number;
+	/** True when the CEILING (not the user's own setting) shrinks the source. */
+	dimensionCapped: boolean;
+	/** Over the hard cap — the caller should refuse up front, before any work. */
+	tooManyFrames: boolean;
+	/** Over the soft threshold — worth a size warning. */
+	longGif: boolean;
+}
+
+/** Pre-run plan for video → GIF: bounded frames + bounded dimensions. */
+export function planGif(
+	durationSec: number,
+	width: number,
+	height: number,
+	fps: number,
+	userMaxDimension: number | null
+): GifPlan {
+	const maxDimension = Math.min(userMaxDimension ?? GIF_MAX_DIMENSION, GIF_MAX_DIMENSION);
+	const longest = Math.max(width, height);
+	const frameCount = Math.ceil(durationSec * fps);
+	return {
+		frameCount,
+		maxDimension,
+		dimensionCapped:
+			longest > maxDimension && (userMaxDimension === null || userMaxDimension > maxDimension),
+		tooManyFrames: frameCount > GIF_MAX_FRAMES,
+		longGif: frameCount > GIF_FRAME_WARNING && frameCount <= GIF_MAX_FRAMES
+	};
+}
+
 /** Cap-only frame rate: undefined = leave the source rate untouched. */
 export function capFrameRate(
 	sourceFps: number | null,

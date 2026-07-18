@@ -19,7 +19,11 @@ export interface AudioResult {
 
 const EXT: Record<AudioConversionSettings['outputFormat'], string[]> = {
 	mp3: ['.mp3'],
-	m4a: ['.m4a', '.aac'],
+	// .aac is deliberately NOT grouped here: a .aac file is a raw ADTS stream,
+	// and M4A output rewraps it in ISOBMFF — a real container change. Grouping
+	// them let the keep-original guard ship the raw ADTS bytes back whenever
+	// the re-encode came out bigger, silently skipping the requested wrap.
+	m4a: ['.m4a'],
 	wav: ['.wav'],
 	// .opus is its own output now — an .opus file sent to OGG re-encodes and
 	// renames to .ogg instead of tripping the keep-original guard.
@@ -28,6 +32,16 @@ const EXT: Record<AudioConversionSettings['outputFormat'], string[]> = {
 	opus: ['.opus'],
 	weba: ['.weba']
 };
+
+/** Extension/container crossing check behind AudioResult.formatChanged —
+ *  formatChanged follows the CONTAINER, not the codec (ebook-family rule). */
+export function audioFormatChanged(
+	fileName: string,
+	outputFormat: AudioConversionSettings['outputFormat']
+): boolean {
+	const name = fileName.toLowerCase();
+	return !EXT[outputFormat].some((ext) => name.endsWith(ext));
+}
 
 export async function convertAudio(
 	file: File,
@@ -67,12 +81,11 @@ export async function convertAudio(
 						? 'WAV is uncompressed — the target size doesn’t apply to WAV output'
 						: 'FLAC is lossless — the target size doesn’t apply to FLAC output'
 					: null;
-		const name = file.name.toLowerCase();
 		return {
 			blob,
 			warning,
 			outputFormat: settings.outputFormat,
-			formatChanged: !EXT[settings.outputFormat].some((ext) => name.endsWith(ext))
+			formatChanged: audioFormatChanged(file.name, settings.outputFormat)
 		};
 	});
 }

@@ -1,10 +1,13 @@
 import type { WorkerContracts, VideoProbeResult } from './protocol';
 import { expose } from './host';
+import { createJobRegistry } from './job-registry';
 import {
 	containScale,
+	createFrameRateDecimator,
 	fitDimensions,
 	frameDelayMs,
-	qualityToBitrate
+	qualityToBitrate,
+	rotatedDrawSpec
 } from '$lib/codecs/video-math';
 import {
 	ALL_FORMATS,
@@ -29,8 +32,11 @@ import {
 	canEncodeAudio,
 	getFirstEncodableVideoCodec,
 	type AudioCodec,
+	type EncodedPacket,
+	type InputAudioTrack,
 	type InputVideoTrack,
-	type OutputFormat
+	type OutputFormat,
+	type Rotation
 } from 'mediabunny';
 import { isLosslessAudioFormat, type AudioConversionSettings } from '$lib/types';
 
@@ -38,15 +44,11 @@ function openInput(file: File) {
 	return new Input({ source: new BlobSource(file), formats: ALL_FORMATS });
 }
 
-/** Jobs in flight, so `cancel` can reach them by id (Conversion or GIF loop). */
-const active = new Map<number, { cancel(): void | Promise<void> }>();
-
-class JobCancelledError extends Error {
-	constructor() {
-		super('Cancelled');
-		this.name = 'JobCancelledError';
-	}
-}
+/** Jobs in flight, so `cancel` can reach them by id. Every handler registers
+ *  BEFORE its heavy setup (see job-registry.ts) — a cancel arriving during
+ *  encoder fetch / Conversion.init must not be silently dropped, or the main
+ *  thread's 5 s fallback hard-kills this healthy worker. */
+const jobs = createJobRegistry();
 
 function undecodableMessage(codec: string | null): string {
 	const name = codec ? codec.toUpperCase() : 'this';
@@ -71,6 +73,66 @@ async function isMotionJpeg(video: InputVideoTrack): Promise<boolean> {
 	} catch {
 		return false;
 	}
+}
+
+/** One MJPEG packet = one whole JPEG file. Copy into a plain ArrayBuffer
+ *  first — under cross-origin isolation packet.data may be
+ *  SharedArrayBuffer-backed, which Blob rejects. */
+async function decodeJpegPacket(packet: EncodedPacket): Promise<ImageBitmap> {
+	try {
+		return await createImageBitmap(new Blob([new Uint8Array(packet.data)], { type: 'image/jpeg' }));
+	} catch {
+		throw new Error('Couldn’t decode a Motion-JPEG frame — the file may be corrupt');
+	}
+}
+
+/** Draw one raw (unrotated) MJPEG frame onto the display-dims canvas, baking
+ *  the container's tkhd rotation in — the same thing mediabunny's Conversion
+ *  does for decodable codecs. Without this, a QuickTime-rotated Photo-JPEG
+ *  .mov gets its frames squashed into the swapped dims and plays sideways. */
+function drawFrame(
+	ctx: OffscreenCanvasRenderingContext2D,
+	bitmap: ImageBitmap,
+	width: number,
+	height: number,
+	rotation: Rotation
+): void {
+	if (rotation === 0) {
+		ctx.drawImage(bitmap, 0, 0, width, height);
+		return;
+	}
+	const spec = rotatedDrawSpec(rotation, width, height);
+	ctx.save();
+	ctx.translate(spec.translateX, spec.translateY);
+	ctx.rotate(spec.rotateRad);
+	ctx.scale(spec.scaleX, spec.scaleY);
+	ctx.drawImage(bitmap, spec.dx, spec.dy, spec.dWidth, spec.dHeight);
+	ctx.restore();
+}
+
+/**
+ * Encoder-parameter fallback for the hand-rolled MJPEG audio path. mediabunny
+ * builds the AAC codec string from the SOURCE sample rate, and ≤24 kHz maps to
+ * HE-AAC profiles (mp4a.40.5/.29) no browser encoder accepts — exactly the
+ * 8/22.05 kHz mono tracks vintage Photo-JPEG cameras record. Conversion
+ * resamples such sources to its 48 kHz/stereo fallback; mirror that here,
+ * resampling only as much as the encoder actually requires.
+ */
+async function audioEncodeTransform(
+	track: InputAudioTrack,
+	codec: AudioCodec,
+	bitrate: number
+): Promise<{ transform?: { sampleRate: number; numberOfChannels?: number } }> {
+	const [numberOfChannels, sampleRate] = await Promise.all([
+		track.getNumberOfChannels(),
+		track.getSampleRate()
+	]);
+	if (await canEncodeAudio(codec, { numberOfChannels, sampleRate, bitrate })) return {};
+	if (await canEncodeAudio(codec, { numberOfChannels, sampleRate: 48_000, bitrate })) {
+		return { transform: { sampleRate: 48_000 } };
+	}
+	// Conversion's own last-resort parameters (48 kHz stereo).
+	return { transform: { sampleRate: 48_000, numberOfChannels: 2 } };
 }
 
 /** Container → muxer + result MIME. MOV is MP4's ISOBMFF sibling — same codecs. */
@@ -228,95 +290,102 @@ expose<WorkerContracts['video']>({
 	},
 
 	convert: async ({ jobId, file, container, video, audio }, progress) => {
-		// The convert worker is authoritative for "can this browser produce this
-		// audio codec": it registers the wasm encoder sequentially (unlike the
-		// probe's racy Promise.all) and verifies before muxing, so an Opus source
-		// re-encodes to AAC even on Linux Chromium, where the native encoder is
-		// absent and the probe-time capability answer flapped.
-		if (audio.kind === 'encode') {
-			if (audio.codec === 'aac') await ensureAacEncoder();
-			if (!(await canEncodeAudio(audio.codec))) {
-				throw new Error(
-					`This browser can’t produce ${audio.codec.toUpperCase()} audio for ` +
-						`${container.toUpperCase()} — choose WebM to keep the audio track`
-				);
-			}
-		}
-		const input = openInput(file);
-		const target = new BufferTarget();
-		const output = new Output({
-			format: VIDEO_OUTPUT[container].format(),
-			target
-		});
-
-		const conversion = await Conversion.init({
-			input,
-			output,
-			video: {
-				codec: video.codec,
-				bitrate: video.bitrate,
-				...(video.width && video.height
-					? { width: video.width, height: video.height, fit: 'contain' as const }
-					: {}),
-				...(video.frameRate ? { frameRate: video.frameRate } : {})
-			},
-			audio:
-				audio.kind === 'discard'
-					? { discard: true }
-					: audio.kind === 'encode'
-						? { codec: audio.codec, bitrate: audio.bitrate }
-						: undefined, // copy: transmux when the codec is container-legal
-			// Discard reasons are inspected below instead of console noise.
-			showWarnings: false
-		});
-
-		// Backstop for anything the probe missed: name the reason instead of
-		// failing later with an empty output.
-		const videoDropped = conversion.discardedTracks.find(
-			(d) =>
-				d.track.isVideoTrack() &&
-				(d.reason === 'undecodable_source_codec' || d.reason === 'unknown_source_codec')
-		);
-		if (videoDropped) {
-			throw new Error(undecodableMessage(await videoDropped.track.getCodec().catch(() => null)));
-		}
-		// An audio-only drop leaves isValid === true (the video track still carries
-		// the file), so the check below won't catch it — a silent, audio-less
-		// download is exactly the XB-06 defect. Name the reason instead of shipping
-		// it. Gated on `encode` so `discard` (removeAudio) and `copy` are untouched.
-		if (audio.kind === 'encode') {
-			const audioDropped = conversion.discardedTracks.find((d) => d.track.isAudioTrack());
-			if (audioDropped) {
-				throw new Error(
-					audioDropped.reason === 'undecodable_source_codec' ||
-						audioDropped.reason === 'unknown_source_codec'
-						? 'This browser can’t read the source audio — choose WebM, or turn on Remove audio'
-						: `This browser can’t produce ${audio.codec.toUpperCase()} audio for ` +
-								`${container.toUpperCase()} — choose WebM to keep the audio track`
-				);
-			}
-		}
-		if (!conversion.isValid) {
-			const reasons = conversion.discardedTracks.map((d) => d.reason).join(', ');
-			throw new Error(
-				`This file can’t be converted in this browser (${reasons || 'no usable tracks'})`
-			);
-		}
-
-		conversion.onProgress = (fraction) => progress({ fraction });
-		active.set(jobId, conversion);
+		// Registered BEFORE the encoder fetch + Conversion.init: a cancel in
+		// that multi-second window must settle the job, not evaporate.
+		const job = jobs.register(jobId);
 		try {
-			await conversion.execute();
-		} finally {
-			active.delete(jobId);
-		}
+			// The convert worker is authoritative for "can this browser produce this
+			// audio codec": it registers the wasm encoder sequentially (unlike the
+			// probe's racy Promise.all) and verifies before muxing, so an Opus source
+			// re-encodes to AAC even on Linux Chromium, where the native encoder is
+			// absent and the probe-time capability answer flapped.
+			if (audio.kind === 'encode') {
+				if (audio.codec === 'aac') await ensureAacEncoder();
+				if (!(await canEncodeAudio(audio.codec))) {
+					throw new Error(
+						`This browser can’t produce ${audio.codec.toUpperCase()} audio for ` +
+							`${container.toUpperCase()} — choose WebM to keep the audio track`
+					);
+				}
+			}
+			job.throwIfCancelled();
+			const input = openInput(file);
+			const target = new BufferTarget();
+			const output = new Output({
+				format: VIDEO_OUTPUT[container].format(),
+				target
+			});
 
-		const bytes = target.buffer;
-		if (!bytes || bytes.byteLength === 0) throw new Error('Video conversion produced no output');
-		return {
-			result: { bytes, mimeType: VIDEO_OUTPUT[container].mime },
-			transfer: [bytes]
-		};
+			const conversion = await Conversion.init({
+				input,
+				output,
+				video: {
+					codec: video.codec,
+					bitrate: video.bitrate,
+					...(video.width && video.height
+						? { width: video.width, height: video.height, fit: 'contain' as const }
+						: {}),
+					...(video.frameRate ? { frameRate: video.frameRate } : {})
+				},
+				audio:
+					audio.kind === 'discard'
+						? { discard: true }
+						: audio.kind === 'encode'
+							? { codec: audio.codec, bitrate: audio.bitrate }
+							: undefined, // copy: transmux when the codec is container-legal
+				// Discard reasons are inspected below instead of console noise.
+				showWarnings: false
+			});
+			// A cancel that raced init: adopt() forwards it to the conversion,
+			// and the throw settles this call instead of running the full encode.
+			job.adopt(conversion);
+			job.throwIfCancelled();
+
+			// Backstop for anything the probe missed: name the reason instead of
+			// failing later with an empty output.
+			const videoDropped = conversion.discardedTracks.find(
+				(d) =>
+					d.track.isVideoTrack() &&
+					(d.reason === 'undecodable_source_codec' || d.reason === 'unknown_source_codec')
+			);
+			if (videoDropped) {
+				throw new Error(undecodableMessage(await videoDropped.track.getCodec().catch(() => null)));
+			}
+			// An audio-only drop leaves isValid === true (the video track still carries
+			// the file), so the check below won't catch it — a silent, audio-less
+			// download is exactly the XB-06 defect. Name the reason instead of shipping
+			// it. Gated on `encode` so `discard` (removeAudio) and `copy` are untouched.
+			if (audio.kind === 'encode') {
+				const audioDropped = conversion.discardedTracks.find((d) => d.track.isAudioTrack());
+				if (audioDropped) {
+					throw new Error(
+						audioDropped.reason === 'undecodable_source_codec' ||
+							audioDropped.reason === 'unknown_source_codec'
+							? 'This browser can’t read the source audio — choose WebM, or turn on Remove audio'
+							: `This browser can’t produce ${audio.codec.toUpperCase()} audio for ` +
+									`${container.toUpperCase()} — choose WebM to keep the audio track`
+					);
+				}
+			}
+			if (!conversion.isValid) {
+				const reasons = conversion.discardedTracks.map((d) => d.reason).join(', ');
+				throw new Error(
+					`This file can’t be converted in this browser (${reasons || 'no usable tracks'})`
+				);
+			}
+
+			conversion.onProgress = (fraction) => progress({ fraction });
+			await conversion.execute();
+
+			const bytes = target.buffer;
+			if (!bytes || bytes.byteLength === 0) throw new Error('Video conversion produced no output');
+			return {
+				result: { bytes, mimeType: VIDEO_OUTPUT[container].mime },
+				transfer: [bytes]
+			};
+		} finally {
+			job.finish();
+		}
 	},
 
 	// Motion-JPEG re-encode. mediabunny can't decode the 'jpeg' track (null codec),
@@ -326,40 +395,38 @@ expose<WorkerContracts['video']>({
 	// the same Output. Video is streamed frame-by-frame so a multi-GB source never
 	// lands in memory whole.
 	convertMjpeg: async ({ jobId, file, container, video: v, audio }, progress) => {
-		// Same authoritative audio-encoder guard as `convert`.
-		if (audio.kind === 'encode') {
-			if (audio.codec === 'aac') await ensureAacEncoder();
-			if (!(await canEncodeAudio(audio.codec))) {
-				throw new Error(
-					`This browser can’t produce ${audio.codec.toUpperCase()} audio for ` +
-						`${container.toUpperCase()} — choose WebM to keep the audio track`
-				);
-			}
-		}
-
-		const input = openInput(file);
-		const videoTrack = await input.getPrimaryVideoTrack();
-		if (!videoTrack) throw new Error('No video track found in this file');
-		const audioTrack = audio.kind === 'discard' ? null : await input.getPrimaryAudioTrack();
-
-		const [duration, dw, dh] = await Promise.all([
-			input.computeDuration(),
-			videoTrack.getDisplayWidth(),
-			videoTrack.getDisplayHeight()
-		]);
-		// Main thread only forwards dims when it downscaled; otherwise fit to even
-		// numbers here (encoders reject odd dimensions).
-		const { width, height } =
-			v.width && v.height ? { width: v.width, height: v.height } : fitDimensions(dw, dh, null);
-
-		const flag = { cancelled: false };
+		const job = jobs.register(jobId);
 		let output: Output | null = null;
-		active.set(jobId, {
-			cancel: () => {
-				flag.cancelled = true;
-			}
-		});
 		try {
+			// Same authoritative audio-encoder guard as `convert`.
+			if (audio.kind === 'encode') {
+				if (audio.codec === 'aac') await ensureAacEncoder();
+				if (!(await canEncodeAudio(audio.codec))) {
+					throw new Error(
+						`This browser can’t produce ${audio.codec.toUpperCase()} audio for ` +
+							`${container.toUpperCase()} — choose WebM to keep the audio track`
+					);
+				}
+			}
+			job.throwIfCancelled();
+
+			const input = openInput(file);
+			const videoTrack = await input.getPrimaryVideoTrack();
+			if (!videoTrack) throw new Error('No video track found in this file');
+			const audioTrack = audio.kind === 'discard' ? null : await input.getPrimaryAudioTrack();
+
+			const [duration, dw, dh, rotation] = await Promise.all([
+				input.computeDuration(),
+				videoTrack.getDisplayWidth(),
+				videoTrack.getDisplayHeight(),
+				videoTrack.getRotation()
+			]);
+			// Main thread only forwards dims when it downscaled; otherwise fit to even
+			// numbers here (encoders reject odd dimensions). Dims are DISPLAY dims
+			// (rotation applied) — drawFrame bakes the rotation into the pixels.
+			const { width, height } =
+				v.width && v.height ? { width: v.width, height: v.height } : fitDimensions(dw, dh, null);
+
 			const target = new BufferTarget();
 			output = new Output({ format: VIDEO_OUTPUT[container].format(), target });
 
@@ -379,7 +446,12 @@ expose<WorkerContracts['video']>({
 					output.addAudioTrack(audioSource);
 				}
 			} else if (audioTrack && audio.kind === 'encode') {
-				audioSource = new AudioSampleSource({ codec: audio.codec, bitrate: audio.bitrate });
+				audioSource = new AudioSampleSource({
+					codec: audio.codec,
+					bitrate: audio.bitrate,
+					// 8/22.05 kHz sources would otherwise demand HE-AAC and die.
+					...(await audioEncodeTransform(audioTrack, audio.codec, audio.bitrate))
+				});
 				output.addAudioTrack(audioSource);
 			}
 
@@ -393,13 +465,13 @@ expose<WorkerContracts['video']>({
 					const meta = { decoderConfig: (await audioTrack.getDecoderConfig()) ?? undefined };
 					let first = true;
 					for await (const packet of new EncodedPacketSink(audioTrack).packets()) {
-						if (flag.cancelled) throw new JobCancelledError();
+						job.throwIfCancelled();
 						await audioSource.add(packet, first ? meta : undefined);
 						first = false;
 					}
 				} else if (audio.kind === 'encode' && audioSource instanceof AudioSampleSource) {
 					for await (const sample of new AudioSampleSink(audioTrack).samples()) {
-						if (flag.cancelled) throw new JobCancelledError();
+						job.throwIfCancelled();
 						try {
 							await audioSource.add(sample);
 						} finally {
@@ -410,21 +482,20 @@ expose<WorkerContracts['video']>({
 			};
 
 			const pumpVideo = async () => {
+				// The fps cap is applied by hand here — mediabunny's Conversion,
+				// which normally implements it, can't decode MJPEG. Kept frames
+				// tile at the cap's cadence so the duration stays intact.
+				const keepFrame = createFrameRateDecimator(v.frameRate);
 				for await (const packet of new EncodedPacketSink(videoTrack).packets()) {
-					if (flag.cancelled) throw new JobCancelledError();
-					let bitmap: ImageBitmap;
+					job.throwIfCancelled();
+					if (!keepFrame(packet.timestamp)) continue;
+					const bitmap = await decodeJpegPacket(packet);
 					try {
-						// Copy into a plain ArrayBuffer — under cross-origin isolation
-						// packet.data may be SharedArrayBuffer-backed, which Blob rejects.
-						bitmap = await createImageBitmap(
-							new Blob([new Uint8Array(packet.data)], { type: 'image/jpeg' })
+						drawFrame(ctx, bitmap, width, height, rotation);
+						await videoSource.add(
+							packet.timestamp,
+							v.frameRate ? 1 / v.frameRate : packet.duration
 						);
-					} catch {
-						throw new Error('Couldn’t decode a Motion-JPEG frame — the file may be corrupt');
-					}
-					try {
-						ctx.drawImage(bitmap, 0, 0, width, height);
-						await videoSource.add(packet.timestamp, packet.duration);
 					} finally {
 						bitmap.close();
 					}
@@ -451,40 +522,38 @@ expose<WorkerContracts['video']>({
 			}
 			throw error;
 		} finally {
-			active.delete(jobId);
+			job.finish();
 		}
 	},
 
 	toGif: async ({ jobId, file, fps, maxDimension, quality }, progress) => {
-		const input = openInput(file);
-		const video = await input.getPrimaryVideoTrack();
-		if (!video) throw new Error('No video track found in this file');
-		if (!(await video.canDecode().catch(() => false))) {
-			throw new Error(undecodableMessage(await video.getCodec().catch(() => null)));
-		}
-
-		const [duration, dw, dh] = await Promise.all([
-			input.computeDuration(),
-			video.getDisplayWidth(),
-			video.getDisplayHeight()
-		]);
-		const scale = containScale(dw, dh, maxDimension);
-		const width = Math.max(1, Math.round(dw * scale));
-		const height = Math.max(1, Math.round(dh * scale));
-
-		const timestamps: number[] = [];
-		for (let t = 0; t < duration; t += 1 / fps) timestamps.push(t);
-
-		const flag = { cancelled: false };
-		active.set(jobId, {
-			cancel: () => {
-				flag.cancelled = true;
-			}
-		});
+		const job = jobs.register(jobId);
 		try {
-			// CanvasSink scales for us; frames are copied onto our own canvas so
-			// getImageData never depends on the sink's internal context type.
-			const sink = new CanvasSink(video, { width, height, fit: 'fill' });
+			const input = openInput(file);
+			const video = await input.getPrimaryVideoTrack();
+			if (!video) throw new Error('No video track found in this file');
+			const canDecode = await video.canDecode().catch(() => false);
+			// Same routing rule as the probe: MJPEG is undecodable for mediabunny
+			// but perfectly decodable for us — never tell a user to switch
+			// browsers over a file this app converts fine to MP4/WebM.
+			const mjpeg = !canDecode && (await video.getCodec()) === null && (await isMotionJpeg(video));
+			if (!canDecode && !mjpeg) {
+				throw new Error(undecodableMessage(await video.getCodec().catch(() => null)));
+			}
+
+			const [duration, dw, dh, rotation] = await Promise.all([
+				input.computeDuration(),
+				video.getDisplayWidth(),
+				video.getDisplayHeight(),
+				video.getRotation()
+			]);
+			const scale = containScale(dw, dh, maxDimension);
+			const width = Math.max(1, Math.round(dw * scale));
+			const height = Math.max(1, Math.round(dh * scale));
+
+			const timestamps: number[] = [];
+			for (let t = 0; t < duration; t += 1 / fps) timestamps.push(t);
+
 			const canvas = new OffscreenCanvas(width, height);
 			const ctx = canvas.getContext('2d', { willReadFrequently: true });
 			if (!ctx) throw new Error('OffscreenCanvas 2d context unavailable');
@@ -494,12 +563,7 @@ expose<WorkerContracts['video']>({
 			const maxColors = Math.max(2, Math.round((quality / 100) * 256));
 			const delayMs = Math.round(1000 / fps);
 
-			let frame = 0;
-			for await (const wrapped of sink.canvasesAtTimestamps(timestamps)) {
-				if (flag.cancelled) throw new JobCancelledError();
-				frame++;
-				if (!wrapped) continue;
-				ctx.drawImage(wrapped.canvas, 0, 0);
+			const quantizeCanvas = () => {
 				const imageData = ctx.getImageData(0, 0, width, height);
 				const rgba = new Uint8Array(
 					imageData.data.buffer,
@@ -508,8 +572,55 @@ expose<WorkerContracts['video']>({
 				);
 				const palette = quantize(rgba, maxColors);
 				const index = applyPalette(rgba, palette);
-				gif.writeFrame(index, width, height, { palette, delay: delayMs });
-				progress({ frame, frameCount: timestamps.length });
+				return { palette, index };
+			};
+
+			let frame = 0;
+			if (mjpeg) {
+				// Sample the same fps grid by holding each decoded JPEG frame until
+				// the next packet's timestamp passes the slot — what CanvasSink
+				// does for decodable codecs. Held frames reuse their quantization.
+				const sink = new EncodedPacketSink(video);
+				let current = await sink.getFirstPacket();
+				if (!current) throw new Error('No video frames found in this file');
+				let next = await sink.getNextPacket(current);
+				let quantized: ReturnType<typeof quantizeCanvas> | null = null;
+				for (const t of timestamps) {
+					job.throwIfCancelled();
+					frame++;
+					while (next && next.timestamp <= t) {
+						current = next;
+						next = await sink.getNextPacket(current);
+						quantized = null;
+					}
+					if (!quantized) {
+						const bitmap = await decodeJpegPacket(current);
+						try {
+							drawFrame(ctx, bitmap, width, height, rotation);
+						} finally {
+							bitmap.close();
+						}
+						quantized = quantizeCanvas();
+					}
+					gif.writeFrame(quantized.index, width, height, {
+						palette: quantized.palette,
+						delay: delayMs
+					});
+					progress({ frame, frameCount: timestamps.length });
+				}
+			} else {
+				// CanvasSink scales for us; frames are copied onto our own canvas so
+				// getImageData never depends on the sink's internal context type.
+				const sink = new CanvasSink(video, { width, height, fit: 'fill' });
+				for await (const wrapped of sink.canvasesAtTimestamps(timestamps)) {
+					job.throwIfCancelled();
+					frame++;
+					if (!wrapped) continue;
+					ctx.drawImage(wrapped.canvas, 0, 0);
+					const { palette, index } = quantizeCanvas();
+					gif.writeFrame(index, width, height, { palette, delay: delayMs });
+					progress({ frame, frameCount: timestamps.length });
+				}
 			}
 			gif.finish();
 			const out = gif.bytes();
@@ -520,7 +631,7 @@ expose<WorkerContracts['video']>({
 			if (bytes.byteLength === 0) throw new Error('GIF conversion produced no output');
 			return { result: { bytes }, transfer: [bytes] };
 		} finally {
-			active.delete(jobId);
+			job.finish();
 		}
 	},
 
@@ -540,18 +651,13 @@ expose<WorkerContracts['video']>({
 		}
 
 		const decoder = new ImageDecoder({ data: bytes, type: 'image/gif' });
-		const flag = { cancelled: false };
+		const job = jobs.register(jobId);
 		// Frame 0 is decoded once up front (dims + fps proxy) and reused as the
 		// first encode-loop frame; consumed there or closed in the finally.
 		let firstImage: VideoFrame | null = null;
 		// Hoisted so the catch below can reach it — this hand-rolled pipeline
 		// has no Conversion wrapper to self-cancel on failure.
 		let output: Output | null = null;
-		active.set(jobId, {
-			cancel: () => {
-				flag.cancelled = true;
-			}
-		});
 		try {
 			await decoder.tracks.ready;
 			const track = decoder.tracks.selectedTrack;
@@ -589,7 +695,7 @@ expose<WorkerContracts['video']>({
 
 			let t = 0;
 			for (let i = 0; i < frameCount; i++) {
-				if (flag.cancelled) throw new JobCancelledError();
+				job.throwIfCancelled();
 				const image =
 					i === 0 && firstImage ? firstImage : (await decoder.decode({ frameIndex: i })).image;
 				try {
@@ -626,7 +732,7 @@ expose<WorkerContracts['video']>({
 		} finally {
 			firstImage?.close(); // error before the loop consumed it (close is idempotent)
 			decoder.close();
-			active.delete(jobId);
+			job.finish();
 		}
 	},
 
@@ -654,65 +760,72 @@ expose<WorkerContracts['video']>({
 	},
 
 	convertAudio: async ({ jobId, file, output, bitrate }, progress) => {
-		if (output === 'mp3') await ensureMp3Encoder();
-		else if (output === 'flac') await ensureFlacEncoder();
-		else if (output === 'm4a') await ensureAacEncoder();
-		const spec = AUDIO_OUTPUT[output];
-		if (!(await canEncodeAudio(spec.codec))) {
-			throw new Error(`This browser can’t encode ${output.toUpperCase()} audio — try WAV instead`);
-		}
-
-		const input = openInput(file);
-		const target = new BufferTarget();
-		const out = new Output({ format: spec.format(), target });
-		// `bitrate` reaches AudioEncoder.configure() verbatim, but WebCodecs
-		// defaults to bitrateMode 'variable' and mediabunny's Conversion API
-		// (≤1.50.8) has no way to request 'constant'. Measured 2026-07-11 on
-		// real music: AAC lands at 91-99% of the request (96→95.4, 192→174,
-		// 256→239 kbps) — the pills are honest; only trivial content (pure
-		// tones, silence) undershoots hard, which is VBR doing its job.
-		// AU-15 guards this with a white-noise fixture.
-		const conversion = await Conversion.init({
-			input,
-			output: out,
-			video: { discard: true }, // audio-only by contract
-			audio: {
-				codec: spec.codec,
-				...(isLosslessAudioFormat(output) ? {} : { bitrate })
-			},
-			showWarnings: false
-		});
-
-		const audioDropped = conversion.discardedTracks.find((d) => d.track.isAudioTrack());
-		if (audioDropped) {
-			throw new Error(
-				audioDropped.reason === 'undecodable_source_codec' ||
-					audioDropped.reason === 'unknown_source_codec'
-					? 'This browser can’t decode the source audio — try Chrome'
-					: `This file can’t be converted (${audioDropped.reason})`
-			);
-		}
-		if (!conversion.isValid) {
-			const reasons = conversion.discardedTracks.map((d) => d.reason).join(', ');
-			throw new Error(`This file can’t be converted (${reasons || 'no usable tracks'})`);
-		}
-
-		conversion.onProgress = (fraction) => progress({ fraction });
-		active.set(jobId, conversion);
+		// Registered BEFORE the encoder fetch + Conversion.init — same lost-cancel
+		// window as `convert` (the MP3/FLAC/AAC wasm fetch can take seconds).
+		const job = jobs.register(jobId);
 		try {
-			await conversion.execute();
-		} finally {
-			active.delete(jobId);
-		}
+			if (output === 'mp3') await ensureMp3Encoder();
+			else if (output === 'flac') await ensureFlacEncoder();
+			else if (output === 'm4a') await ensureAacEncoder();
+			const spec = AUDIO_OUTPUT[output];
+			if (!(await canEncodeAudio(spec.codec))) {
+				throw new Error(
+					`This browser can’t encode ${output.toUpperCase()} audio — try WAV instead`
+				);
+			}
+			job.throwIfCancelled();
 
-		const bytes = target.buffer;
-		if (!bytes || bytes.byteLength === 0) throw new Error('Audio conversion produced no output');
-		return { result: { bytes, mimeType: spec.mime }, transfer: [bytes] };
+			const input = openInput(file);
+			const target = new BufferTarget();
+			const out = new Output({ format: spec.format(), target });
+			// `bitrate` reaches AudioEncoder.configure() verbatim, but WebCodecs
+			// defaults to bitrateMode 'variable' and mediabunny's Conversion API
+			// (≤1.50.8) has no way to request 'constant'. Measured 2026-07-11 on
+			// real music: AAC lands at 91-99% of the request (96→95.4, 192→174,
+			// 256→239 kbps) — the pills are honest; only trivial content (pure
+			// tones, silence) undershoots hard, which is VBR doing its job.
+			// AU-15 guards this with a white-noise fixture.
+			const conversion = await Conversion.init({
+				input,
+				output: out,
+				video: { discard: true }, // audio-only by contract
+				audio: {
+					codec: spec.codec,
+					...(isLosslessAudioFormat(output) ? {} : { bitrate })
+				},
+				showWarnings: false
+			});
+			job.adopt(conversion);
+			job.throwIfCancelled();
+
+			const audioDropped = conversion.discardedTracks.find((d) => d.track.isAudioTrack());
+			if (audioDropped) {
+				throw new Error(
+					audioDropped.reason === 'undecodable_source_codec' ||
+						audioDropped.reason === 'unknown_source_codec'
+						? 'This browser can’t decode the source audio — try Chrome'
+						: `This file can’t be converted (${audioDropped.reason})`
+				);
+			}
+			if (!conversion.isValid) {
+				const reasons = conversion.discardedTracks.map((d) => d.reason).join(', ');
+				throw new Error(`This file can’t be converted (${reasons || 'no usable tracks'})`);
+			}
+
+			conversion.onProgress = (fraction) => progress({ fraction });
+			await conversion.execute();
+
+			const bytes = target.buffer;
+			if (!bytes || bytes.byteLength === 0) throw new Error('Audio conversion produced no output');
+			return { result: { bytes, mimeType: spec.mime }, transfer: [bytes] };
+		} finally {
+			job.finish();
+		}
 	},
 
 	cancel: async ({ jobId }) => {
-		// Missing id = the conversion already finished; nothing to do.
-		await active.get(jobId)?.cancel();
+		// Missing id = the job already finished; nothing to do (see job-registry).
+		await jobs.cancel(jobId);
 		return { result: null };
 	}
 });

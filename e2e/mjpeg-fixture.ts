@@ -19,6 +19,23 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const MJPEG_DIR = join(ROOT, 'tests', 'fixtures', 'generated', 'video');
 
 export const MJPEG_NAME = 'v-mjpeg-96x64.mov';
+
+/** 90°-rotated (tkhd display matrix) twin — the QuickTime "Rotate + Save"
+ *  shape. Frames are split-color because rotation is invisible on solid ones:
+ *  top half `top`, bottom half `bottom`; after the 90° cw bake the top half
+ *  must land on the RIGHT of the portrait output. */
+export const MJPEG_ROT90_NAME = 'v-mjpeg-rot90-96x64.mov';
+export const MJPEG_ROT90_COLORS = {
+	top: [220, 40, 40] as [number, number, number],
+	bottom: [40, 80, 230] as [number, number, number]
+};
+
+/** 8 kHz-mono-audio twin at 60 fps — the vintage-camera shape that (a) maps
+ *  to HE-AAC codec strings browsers refuse to encode and (b) gives the fps
+ *  cap a source rate above the video tab's 30 fps pill. */
+export const MJPEG_LOWRATE_NAME = 'v-mjpeg-8khz-60fps.mov';
+export const MJPEG_LOWRATE_SPEC = { fps: 60, frames: 120, audioRate: 8000 };
+
 export const MJPEG_SPEC = {
 	width: 96,
 	height: 64,
@@ -68,21 +85,48 @@ const fullbox = (type: string, version: number, flags: number, ...parts: Part[])
 		...parts
 	);
 const MATRIX = Buffer.concat([0x00010000, 0, 0, 0, 0x00010000, 0, 0, 0, 0x40000000].map(u32));
+/** QuickTime display matrix for a 90° clockwise rotation of a W×H track:
+ *  (x,y) → (H−y, x). mediabunny reads rotation from atan2(b, a) = atan2(1, 0). */
+const matrix90 = (h: number): Buffer =>
+	Buffer.concat([0, 0x00010000, 0, -0x00010000, 0, 0, h << 16, 0, 0x40000000].map(u32));
 
-async function buildMov(): Promise<Buffer> {
-	const {
-		width: W,
-		height: H,
-		fps,
-		frames: N,
-		timescale: TS,
-		audioRate: AR,
-		channels: CH
-	} = MJPEG_SPEC;
+interface MjpegBuildOptions {
+	fps?: number;
+	frames?: number;
+	audioRate?: number;
+	/** tkhd display-matrix rotation of the video track (clockwise degrees). */
+	rotation?: 0 | 90;
+	/** 'solid' cycling per-frame colors, or 'hsplit' top/bottom halves. */
+	pattern?: 'solid' | 'hsplit';
+}
+
+async function buildMov(opts: MjpegBuildOptions = {}): Promise<Buffer> {
+	const { width: W, height: H, timescale: TS, channels: CH } = MJPEG_SPEC;
+	const fps = opts.fps ?? MJPEG_SPEC.fps;
+	const N = opts.frames ?? MJPEG_SPEC.frames;
+	const AR = opts.audioRate ?? MJPEG_SPEC.audioRate;
 	const vDur = TS / fps;
 
 	const jpegs: Buffer[] = [];
 	for (let i = 0; i < N; i++) {
+		if (opts.pattern === 'hsplit') {
+			const raw = Buffer.alloc(W * H * 3);
+			for (let y = 0; y < H; y++) {
+				const [r, g, b] = y < H / 2 ? MJPEG_ROT90_COLORS.top : MJPEG_ROT90_COLORS.bottom;
+				for (let x = 0; x < W; x++) {
+					const o = (y * W + x) * 3;
+					raw[o] = r;
+					raw[o + 1] = g;
+					raw[o + 2] = b;
+				}
+			}
+			jpegs.push(
+				await sharp(raw, { raw: { width: W, height: H, channels: 3 } })
+					.jpeg({ quality: 92 })
+					.toBuffer()
+			);
+			continue;
+		}
 		const [r, g, b] = MJPEG_SPEC.colors[i % MJPEG_SPEC.colors.length];
 		jpegs.push(
 			await sharp({ create: { width: W, height: H, channels: 3, background: { r, g, b } } })
@@ -178,7 +222,7 @@ async function buildMov(): Promise<Buffer> {
 			u16(0),
 			u16(0),
 			u16(0),
-			MATRIX,
+			opts.rotation === 90 ? matrix90(H) : MATRIX,
 			u32(W << 16),
 			u32(H << 16)
 		);
@@ -253,10 +297,14 @@ async function buildMov(): Promise<Buffer> {
 	return Buffer.concat([ftyp, moov, box('mdat', mdatData)]);
 }
 
-/** Writes the MJPEG .mov into the generated-video dir (idempotent). */
+/** Writes the MJPEG .mov fixtures into the generated-video dir (idempotent). */
 export async function generateMjpegFixtures(): Promise<string> {
 	mkdirSync(MJPEG_DIR, { recursive: true });
 	const out = join(MJPEG_DIR, MJPEG_NAME);
 	if (!existsSync(out)) writeFileSync(out, await buildMov());
+	const rot = join(MJPEG_DIR, MJPEG_ROT90_NAME);
+	if (!existsSync(rot)) writeFileSync(rot, await buildMov({ rotation: 90, pattern: 'hsplit' }));
+	const lowrate = join(MJPEG_DIR, MJPEG_LOWRATE_NAME);
+	if (!existsSync(lowrate)) writeFileSync(lowrate, await buildMov(MJPEG_LOWRATE_SPEC));
 	return out;
 }

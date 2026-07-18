@@ -7,7 +7,14 @@
 import { readFileSync } from 'node:fs';
 import { basename } from 'node:path';
 import { assertFloor, expect, fx, fxVideo, realFile, test, videoFixtures } from '../fixtures';
-import { MJPEG_NAME, MJPEG_SPEC } from '../mjpeg-fixture';
+import {
+	MJPEG_LOWRATE_NAME,
+	MJPEG_LOWRATE_SPEC,
+	MJPEG_NAME,
+	MJPEG_ROT90_COLORS,
+	MJPEG_ROT90_NAME,
+	MJPEG_SPEC
+} from '../mjpeg-fixture';
 import {
 	compress,
 	downloadRow,
@@ -813,4 +820,139 @@ test('V-31: Motion-JPEG .mov → webm downscaled, audio kept as Opus', async ({ 
 	expect([info.width, info.height]).toEqual([48, 32]);
 	expect(info.audioCodec, 'PCM → Opus for WebM').toBe('opus');
 	expect(info.trackCount).toBe(2);
+});
+
+test('V-32: rotated Motion-JPEG .mov bakes the 90° rotation instead of squashing', async ({
+	page,
+	rec
+}) => {
+	// tkhd matrix says 90° cw; source frames are top-red / bottom-blue, so the
+	// correct portrait output has blue on the LEFT half and red on the RIGHT.
+	// The old path stretched the unrotated frame into the swapped dims, which
+	// kept red on top — every sampled quadrant flips when rotation is baked.
+	await gotoTab(page, 'video');
+	await upload(page, fxVideo(MJPEG_ROT90_NAME));
+	await setContainer(page, 'mp4');
+	const run = await compress(page);
+	expect(run.error).toBeNull();
+	const art = await downloadRow(page);
+	const info = await videoInfo(art.bytes);
+	expect([info.width, info.height], 'portrait display dims').toEqual([64, 96]);
+
+	const frame = await rasterizeVideoFrameInPage(page, art.bytes, 'video/mp4', 0.6);
+	const raw = await decodeRaw(frame);
+	const tol = VIDEO_QUALITY.bandTolerance;
+	const expectColor = (x: number, y: number, [er, eg, eb]: [number, number, number]) => {
+		const [r, g, b] = pixelAt(raw, x, y);
+		expect(Math.abs(r - er), `(${x},${y}) red ${r} vs ${er}`).toBeLessThanOrEqual(tol);
+		expect(Math.abs(g - eg), `(${x},${y}) green ${g} vs ${eg}`).toBeLessThanOrEqual(tol);
+		expect(Math.abs(b - eb), `(${x},${y}) blue ${b} vs ${eb}`).toBeLessThanOrEqual(tol);
+	};
+	// Left half = source bottom (blue), right half = source top (red).
+	expectColor(16, 24, MJPEG_ROT90_COLORS.bottom);
+	expectColor(16, 72, MJPEG_ROT90_COLORS.bottom);
+	expectColor(48, 24, MJPEG_ROT90_COLORS.top);
+	expectColor(48, 72, MJPEG_ROT90_COLORS.top);
+	rec.record({
+		id: 'V-32',
+		title: 'rotated MJPEG .mov → mp4 bakes the tkhd rotation into the pixels',
+		settings: { tab: 'video', container: 'mp4', source: 'mjpeg rot90' },
+		input: { name: MJPEG_ROT90_NAME, bytes: readFileSync(fxVideo(MJPEG_ROT90_NAME)).length },
+		output: { name: art.name, bytes: art.bytes.length, width: info.width, height: info.height },
+		assets: {
+			output: rec.saveAsset('V-32', 'output', art.name, art.bytes),
+			visual: rec.saveAsset('V-32', 'visual', 'frame-0.6s.png', frame)
+		}
+	});
+});
+
+test('V-33: Motion-JPEG honors the fps cap (60 → 30)', async ({ page }) => {
+	// The Conversion path caps fps for decodable codecs; the hand-rolled MJPEG
+	// path must decimate by hand — it used to forward all frames silently.
+	await gotoTab(page, 'video');
+	await upload(page, fxVideo(MJPEG_LOWRATE_NAME));
+	await setContainer(page, 'mp4');
+	await setFps(page, 30);
+	const run = await compress(page);
+	expect(run.error).toBeNull();
+	const art = await downloadRow(page);
+	const info = await videoInfo(art.bytes);
+	expect(info.frameRate, 'packet rate ≈ capped fps').not.toBeNull();
+	expect(Math.abs((info.frameRate ?? 0) - 30), `rate ${info.frameRate}`).toBeLessThanOrEqual(3);
+	const srcDuration = MJPEG_LOWRATE_SPEC.frames / MJPEG_LOWRATE_SPEC.fps;
+	expect(Math.abs(info.durationSec - srcDuration)).toBeLessThanOrEqual(0.3);
+});
+
+test('V-34: Motion-JPEG with 8 kHz mono audio converts (resampled AAC, no HE-AAC error)', async ({
+	page,
+	rec
+}) => {
+	// ≤24 kHz sources map to HE-AAC codec strings (mp4a.40.5) no browser
+	// encoder accepts — the worker must resample toward 48 kHz like the
+	// Conversion path does, not die with the raw encoder-config message.
+	await gotoTab(page, 'video');
+	await upload(page, fxVideo(MJPEG_LOWRATE_NAME));
+	await setContainer(page, 'mp4');
+	const run = await compress(page);
+	expect(run.error).toBeNull();
+	expect(run.warnings).toEqual([]);
+	const art = await downloadRow(page);
+	const info = await videoInfo(art.bytes);
+	expect(info.videoCodec).toBe('avc');
+	expect(info.audioCodec, '8 kHz PCM → resampled AAC, never dropped or fatal').toBe('aac');
+	expect(info.trackCount).toBe(2);
+	rec.record({
+		id: 'V-34',
+		title: '8 kHz-audio MJPEG .mov → mp4 with resampled AAC',
+		settings: { tab: 'video', container: 'mp4', source: 'mjpeg 8 kHz mono' },
+		input: { name: MJPEG_LOWRATE_NAME, bytes: readFileSync(fxVideo(MJPEG_LOWRATE_NAME)).length },
+		output: { name: art.name, bytes: art.bytes.length },
+		metrics: { audioCodec: info.audioCodec ?? '' },
+		assets: { output: rec.saveAsset('V-34', 'output', art.name, art.bytes) }
+	});
+});
+
+test('V-35: Motion-JPEG .mov → GIF converts instead of blaming the browser', async ({
+	page,
+	rec
+}) => {
+	// toGif used to re-check canDecode() and throw "try Chrome" for a file the
+	// app itself converts fine to MP4/WebM — the JPEG-frame branch fixes that.
+	await gotoTab(page, 'video');
+	await upload(page, fxVideo(MJPEG_NAME));
+	await setContainer(page, 'gif'); // fps snaps to 15
+	const run = await compress(page, { timeout: 120_000 });
+	expect(run.error).toBeNull();
+	const art = await downloadRow(page);
+	expect(art.name).toBe('v-mjpeg-96x64.gif');
+	const m = await imageMeta(art.bytes);
+	expect(m.format).toBe('gif');
+	expect([m.width, m.height]).toEqual([MJPEG_SPEC.width, MJPEG_SPEC.height]);
+	// 1.2 s sampled at 15 fps — the same grid the decodable-codec path uses.
+	expect(m.pages).toBeGreaterThanOrEqual(16);
+	expect(m.pages).toBeLessThanOrEqual(19);
+	rec.record({
+		id: 'V-35',
+		title: 'MJPEG → GIF via the JPEG-frame branch',
+		settings: { tab: 'video', container: 'gif', source: 'mjpeg' },
+		input: { name: MJPEG_NAME, bytes: readFileSync(fxVideo(MJPEG_NAME)).length },
+		output: { name: art.name, bytes: art.bytes.length, pages: m.pages },
+		assets: { output: rec.saveAsset('V-35', 'output', art.name, art.bytes) }
+	});
+});
+
+test('V-36: 720p → GIF auto-caps the dimensions and says so', async ({ page }) => {
+	// gifenc holds the whole GIF in memory — quantizing native 4K/1080p frames
+	// is an OOM path, so sources above the GIF ceiling downscale with a warning.
+	test.setTimeout(240_000);
+	await gotoTab(page, 'video');
+	await upload(page, fxVideo('v-720p-10s.mp4'));
+	await setContainer(page, 'gif');
+	await setFps(page, 5); // 50 frames — keeps the 800 px encode quick
+	const run = await compress(page, { timeout: 220_000 });
+	expect(run.error).toBeNull();
+	expect(run.warnings.join('\n')).toMatch(/Downscaled to 800 px/);
+	const art = await downloadRow(page);
+	const m = await imageMeta(art.bytes);
+	expect([m.width, m.height], 'longest side capped to 800').toEqual([800, 450]);
 });
