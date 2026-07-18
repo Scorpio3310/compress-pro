@@ -105,6 +105,25 @@ function sourceKind(f: RealFile): SourceKind {
 
 /** Any decodable image buffer → PNG (rasters must be png-decodable; jxl/heic
  *  go through icodec via decodeRaw). Null when undecodable. */
+
+/** JPEG (and other opaque) outputs carry no alpha — matte a transparent
+ *  reference onto WHITE first, matching the app's flattenToWhite rule.
+ *  Comparing against black-premultiplied pixels scored a perfectly correct
+ *  alpha leaf texture at PSNR 2 (matrix v2 false positive). Non-sharp
+ *  references (PSD/RAW/BMP) fall through unmatted. */
+async function metricsVsRef(input: Buffer, out: Buffer): ReturnType<typeof qualityMetrics> {
+	try {
+		const [inMeta, outMeta] = await Promise.all([imageMeta(input), imageMeta(out)]);
+		if (inMeta.hasAlpha && !outMeta.hasAlpha) {
+			const matted = await sharp(input).flatten({ background: '#ffffff' }).png().toBuffer();
+			return qualityMetrics(matted, out);
+		}
+	} catch {
+		// undecodable reference for sharp — compare unmatted
+	}
+	return qualityMetrics(input, out);
+}
+
 async function toPngAny(buf: Buffer): Promise<Buffer | null> {
 	try {
 		const raw = await decodeRaw(buf);
@@ -192,7 +211,7 @@ async function verifyImageRow(
 
 	const afterPng = await toPngAny(art.bytes);
 	if (sourceKind(f) === 'full') {
-		const q = await qualityMetrics(input, art.bytes);
+		const q = await metricsVsRef(input, art.bytes);
 		metrics.psnr = Number(q.psnr.toFixed(1));
 		metrics.diffRatio = Number(q.ratio.toFixed(5));
 		if (q.psnr < HARD_PSNR_FLOOR)
@@ -404,7 +423,7 @@ for (const repCase of LADDER) {
 				const m = await imageMeta(art.bytes);
 				if (m.format !== repCase.outFormat) failures.push(`q${q}: format ${m.format}`);
 				sizes[q] = art.bytes.length;
-				const qm = await qualityMetrics(input, art.bytes);
+				const qm = await metricsVsRef(input, art.bytes);
 				psnrs[q] = qm.psnr;
 				const rasters: string[] = [];
 				const afterPng = await toPngAny(art.bytes);
@@ -637,7 +656,7 @@ if (resizeRep) {
 			// ±1 px absorbs rounding-kernel differences; aspect must survive.
 			if (Math.abs(m.width - expW) > 1 || Math.abs(m.height - expH) > 1)
 				failures.push(`dims ${m.width}x${m.height} != ~${expW}x${expH}`);
-			const q = await qualityMetrics(input, art.bytes); // original lanczos3-aligned
+			const q = await metricsVsRef(input, art.bytes); // original lanczos3-aligned
 			if (q.psnr < HARD_PSNR_FLOOR) failures.push(`psnr ${q.psnr.toFixed(1)} < ${HARD_PSNR_FLOOR}`);
 			const rasters: string[] = [];
 			const beforePng = await toPngAny(input);
@@ -806,7 +825,7 @@ test('MX [images] exif-bearing-jpg :: remove-exif @default', async ({ page }) =>
 		if (m.width !== srcM.width || m.height !== srcM.height)
 			failures.push(`dims ${m.width}x${m.height} != ${srcM.width}x${srcM.height}`);
 		// Byte surgery, not re-encode — pixels must be near-identical.
-		const q = await qualityMetrics(input!, art.bytes);
+		const q = await metricsVsRef(input!, art.bytes);
 		if (q.psnr <= 40) failures.push(`psnr ${q.psnr.toFixed(1)} <= 40 (pixels changed)`);
 		const rasters: string[] = [];
 		const beforePng = await toPngAny(input!);
