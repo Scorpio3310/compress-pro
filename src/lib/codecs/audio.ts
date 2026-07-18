@@ -12,6 +12,9 @@ export interface AudioProgress {
 export interface AudioResult {
 	blob: Blob;
 	warning: string | null;
+	/** Warning describes the SETTINGS, not the discarded encode — it must
+	 *  survive a keep-original revert ("target doesn't apply to WAV", AU-14). */
+	stickyWarning?: boolean;
 	outputFormat: AudioConversionSettings['outputFormat'];
 	/** Extension/mime differs from the source — disables the keep-original guard. */
 	formatChanged: boolean;
@@ -73,17 +76,22 @@ export async function convertAudio(
 		// for them (useTarget above). When that overshoots, say so instead of
 		// shipping a silently oversized "target" result (persisted target mode).
 		const losslessTargetIgnored = settings.mode === 'target' && lossless;
+		const targetIgnoredMsg =
+			losslessTargetIgnored && blob.size > targetBytes
+				? settings.outputFormat === 'wav'
+					? 'WAV is uncompressed — the target size doesn’t apply to WAV output'
+					: 'FLAC is lossless — the target size doesn’t apply to FLAC output'
+				: null;
 		const warning =
 			useTarget && blob.size > targetBytes
 				? targetNotReachableWarning(targetBytes, blob.size)
-				: losslessTargetIgnored && blob.size > targetBytes
-					? settings.outputFormat === 'wav'
-						? 'WAV is uncompressed — the target size doesn’t apply to WAV output'
-						: 'FLAC is lossless — the target size doesn’t apply to FLAC output'
-					: null;
+				: targetIgnoredMsg;
 		return {
 			blob,
 			warning,
+			// "Target doesn't apply" stays TRUE when keep-original reverts to the
+			// source bytes — the guard must not swallow it (AU-14 regression).
+			stickyWarning: warning !== null && warning === targetIgnoredMsg,
 			outputFormat: settings.outputFormat,
 			formatChanged: audioFormatChanged(file.name, settings.outputFormat)
 		};

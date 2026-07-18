@@ -833,6 +833,7 @@ export async function compressFiles(
 	): Promise<CompressedFile> => {
 		let blob: Blob;
 		let warning: string | null = null;
+		let stickyWarning = false;
 		let info: string | null = null;
 		let outName = file.name;
 		let formatChanged = false;
@@ -1111,6 +1112,7 @@ export async function compressFiles(
 			);
 			blob = out.blob;
 			warning = out.warning;
+			stickyWarning = out.stickyWarning ?? false;
 			formatChanged = out.formatChanged;
 			outName = replaceExtension(file.name, extMap[out.outputFormat]);
 		} else if (format === 'font') {
@@ -1158,10 +1160,12 @@ export async function compressFiles(
 			// ebook's/model's "N of M … recompressed". EXIF keeps its info —
 			// "No metadata found" relies on exactly this branch.
 			if (isImage || format === 'ebook' || format === 'model') info = null;
-			// A warning always narrates the DISCARDED encode ("first frame
+			// A warning usually narrates the DISCARDED encode ("first frame
 			// only", "smallest achievable is N KB") — on the untouched original
-			// those claims are false. Reverts ship warning-free.
-			warning = null;
+			// those claims are false. Reverts ship warning-free, EXCEPT sticky
+			// warnings that describe the settings, not the encode ("target size
+			// doesn't apply to WAV") — those stay true either way (AU-14).
+			if (!stickyWarning) warning = null;
 		}
 
 		const result: CompressedFile = {
