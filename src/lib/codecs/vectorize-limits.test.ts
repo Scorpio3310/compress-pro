@@ -28,4 +28,16 @@ describe('vectorizeTraceSize', () => {
 		expect(pole.width * pole.height).toBeLessThanOrEqual(VECTORIZE_MAX_PIXELS);
 		expect(pole.width).toBeGreaterThanOrEqual(1);
 	});
+
+	it("honors the user's max-dimension cap below the ceiling", () => {
+		const r = vectorizeTraceSize(4000, 3000, 1000);
+		expect([r.width, r.height]).toEqual([1000, 750]);
+		expect(r.scaled).toBe(true);
+	});
+
+	it('keeps the 2 MP ceiling as the hard bound over a huge user cap', () => {
+		const r = vectorizeTraceSize(9152, 6944, 8000);
+		expect(r.width * r.height).toBeLessThanOrEqual(2_000_000);
+		expect(r.scaled).toBe(true);
+	});
 });

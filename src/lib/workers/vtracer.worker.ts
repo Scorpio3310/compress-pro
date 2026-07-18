@@ -32,11 +32,11 @@ function getEngine(): Promise<unknown> {
 getEngine().catch(() => {});
 
 expose<WorkerContracts['vtracer']>({
-	vectorize: async ({ file, config }) => {
+	vectorize: async ({ file, config, maxDimension }) => {
 		await getEngine();
 		const bitmap = await createImageBitmap(file);
 		try {
-			const { width, height } = vectorizeTraceSize(bitmap.width, bitmap.height);
+			const { width, height } = vectorizeTraceSize(bitmap.width, bitmap.height, maxDimension);
 			const canvas = new OffscreenCanvas(width, height);
 			const ctx = canvas.getContext('2d');
 			if (!ctx) throw new Error('Could not decode the image for vectorization');

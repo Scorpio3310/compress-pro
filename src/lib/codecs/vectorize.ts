@@ -52,7 +52,11 @@ export async function vectorizeImage(
 	const svg = await callWorker(
 		'vtracer',
 		'vectorize',
-		{ file, config: vectorizeParams(settings.vectorMode, settings.vectorDetail) },
+		{
+			file,
+			config: vectorizeParams(settings.vectorMode, settings.vectorDetail),
+			maxDimension: settings.maxDimension
+		},
 		[],
 		undefined,
 		{ owner: signal }

@@ -121,6 +121,8 @@ export interface VectorizePayload {
 	/** Rides by structured-clone reference — decoded inside the worker. */
 	file: File;
 	config: VtracerConfig;
+	/** User's Advanced max-dimension cap — applied before the trace ceiling. */
+	maxDimension: number | null;
 }
 
 // --- Video (mediabunny + WebCodecs) ---
