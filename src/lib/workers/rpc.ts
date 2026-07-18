@@ -29,6 +29,10 @@ interface Pending {
 interface Instance {
 	worker: Worker;
 	pending: Map<number, Pending>;
+	/** Last time ANY message arrived from the worker — watchdogs measure real
+	 *  instance silence against this, so queue wait behind a healthy co-tenant
+	 *  never counts as a stall (F-59). */
+	lastActivity: number;
 	/** Reject everything in flight, drop the instance, kill the worker. */
 	fail: (error: Error) => void;
 }
@@ -101,10 +105,11 @@ function spawn(kind: WorkerKind, pool: Instance[]): Instance {
 		if (at >= 0) pool.splice(at, 1);
 		worker.terminate();
 	};
-	const instance: Instance = { worker, pending, fail };
+	const instance: Instance = { worker, pending, lastActivity: Date.now(), fail };
 
 	worker.onmessage = (event: MessageEvent<WorkerResponse>) => {
 		const message = event.data;
+		instance.lastActivity = Date.now();
 		const entry = pending.get(message.id);
 		if (!entry) return;
 		if ('progress' in message) {
@@ -272,8 +277,15 @@ export function callWorker<K extends WorkerKind, A extends keyof WorkerContracts
 		};
 		if (timeoutMs > 0) {
 			let timer: ReturnType<typeof setTimeout>;
-			const arm = () => {
+			const arm = (delay = timeoutMs) => {
 				timer = setTimeout(() => {
+					// Queue wait is not a stall: while the instance's ACTIVE job keeps
+					// talking, a queued call's window re-arms for the remainder (F-59).
+					const idle = Date.now() - instance.lastActivity;
+					if (idle < timeoutMs) {
+						arm(timeoutMs - idle);
+						return;
+					}
 					// Synchronous wasm can't be interrupted — kill the whole
 					// instance; the pool respawns a fresh one on the next call.
 					instance.fail(
@@ -283,7 +295,7 @@ export function callWorker<K extends WorkerKind, A extends keyof WorkerContracts
 								'too slow for its size; try a smaller file or a lower level'
 						)
 					);
-				}, timeoutMs);
+				}, delay);
 			};
 			entry.touchWatchdog = () => {
 				clearTimeout(timer);

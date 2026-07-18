@@ -359,3 +359,23 @@ it('an already-aborted owner is rejected at submit time — no worker spawned', 
 	await expect(call).rejects.toMatchObject({ name: 'CancelledError' });
 	expect(StubWorker.instances, 'no worker may spawn for a dead run').toHaveLength(0);
 });
+
+it('a queued call does not die while its co-tenant makes progress (F-59)', async () => {
+	// The svg pool is size 1, so the second call queues behind the first; its
+	// watchdog used to count pure queue wait and then fail() the instance,
+	// killing the healthy active job with the misleading "no progress" error.
+	const a = callSvg(10_000);
+	const b = callSvg(10_000);
+	const worker = StubWorker.instances[0];
+	for (let t = 0; t < 3; t++) {
+		await vi.advanceTimersByTimeAsync(5_000);
+		worker.onmessage?.({ data: { id: worker.posted[0].id, progress: { page: t } } });
+	}
+	// 15 s of co-tenant progress — b (10 s window) must still be pending.
+	worker.onmessage?.({ data: { id: worker.posted[0].id, ok: true, result: 'a' } });
+	await expect(a).resolves.toBe('a');
+	// b is now the active job and the worker goes truly silent → honest fire.
+	await vi.advanceTimersByTimeAsync(10_100);
+	await expect(b).rejects.toThrow(/no progress/);
+	expect(worker.terminated).toBe(true);
+});
