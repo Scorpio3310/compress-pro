@@ -51,8 +51,8 @@ limit — re-verify queued; full detail incl. failure scenarios + repro ideas in
 | F-32 | S3 | video-audio | MJPEG path silently ignores the fps cap yet still flags transformed=true (`src/lib/workers/video.worker.ts:413`) | FIXED | V-33/34 + unit | 39377a7 |
 | F-33 | S3 | video-audio | MJPEG with ≤24 kHz audio: conversion dies with raw 'mp4a.40.5 not supported' error (`src/lib/workers/video.worker.ts:382`) | FIXED | HE-AAC ladder unit + e2e | 39377a7 |
 | F-34 | S3 | video-audio | MJPEG → GIF throws misleading 'This browser can't decode this video — try Chrome' (`src/lib/workers/video.worker.ts:463`) | FIXED | V-35 e2e | 39377a7 |
-| F-35 | S3 | archives | Chain-unwrap keys on entry names, not outer format; deb branch drops sibling entries (`src/lib/codecs/sevenzip-args.ts:253`) | QUEUED | — | — |
-| F-36 | S3 | archives | No extracted-size guard: high-ratio archive (zip bomb) OOMs the tab mid-extract (`src/lib/workers/archive.worker.ts:305`) | QUEUED | — | — |
+| F-35 | S3 | archives | Chain-unwrap keys on entry names, not outer format; deb branch drops sibling entries (`src/lib/codecs/sevenzip-args.ts:253`) | FIXED | nextChainStep contract units + AR-16 e2e | 30f6085 |
+| F-36 | S3 | archives | No extracted-size guard: high-ratio archive (zip bomb) OOMs the tab mid-extract (`src/lib/workers/archive.worker.ts:305`) | FIXED | 2 GiB ceiling; AR-15 zip-bomb fixture refused pre-extract | 30f6085 |
 | F-37 | S3 | fonts | Same-format convert passthrough: corrupt WOFF/WOFF2/EOT reported as success (`src/lib/workers/font.worker.ts:213`) | FIXED | font.worker unit (4) + FT-15 e2e | 4dd6494 |
 | F-38 | S3 | fonts | woff2 wasm fetch failure hangs 10 min (init never settles), then misleading watchdog error (`src/lib/workers/font.worker.ts:59`) | FIXED | unit fail-fast + FT-01/02/09 green | 4dd6494 |
 | F-39 | S3 | fonts | WOFF2-packed font collection (ttcf flavor) errors with 'doesn't look like a valid font' (`src/lib/codecs/font-sniff.ts:41`) | FIXED | font-sniff ttcf tests | 4dd6494 |
@@ -65,7 +65,7 @@ limit — re-verify queued; full detail incl. failure scenarios + repro ideas in
 | F-46 | S5 | vectorize-raw-ocr | Vectorize has no size cap and ignores max-dimension — huge photos hang for minutes (`src/lib/codecs/vectorize.ts:52`) | FIXED | vectorize-limits unit (3) + VC-01 e2e; user maxDimension wiring = OPEN | 61e016f |
 | F-47 | S5 | video-audio | Video→GIF has no hard frame/dimension cap; long or 4K sources OOM, warning shows post-run (`src/lib/codecs/video.ts:247`) | FIXED | planGif unit (5) + V-36 e2e | 39377a7 |
 | F-48 | S5 | video-audio | Cancel during Conversion.init window is lost: guaranteed 5 s stall, then worker kill (`src/lib/workers/video.worker.ts:307`) | FIXED | job-registry unit (5) | 39377a7 |
-| F-49 | S5 | archives | 60-line tail ring loses password signal; partly-failed extract discards good entries (`src/lib/workers/archive.worker.ts:81`) | QUEUED | — | — |
+| F-49 | S5 | archives | 60-line tail ring loses password signal; partly-failed extract discards good entries (`src/lib/workers/archive.worker.ts:81`) | FIXED | latched signal recorder units + Z-12 mixed-encryption e2e | 30f6085 |
 | F-50 | S5 | archives | fflate fast paths buffer whole batch + output in main-thread RAM with no size gate (`src/lib/compress.ts:274`) | FIXED | FFLATE_FAST_PATH_MAX_BYTES=500MB routes big batches to worker; units | 229b597 |
 | F-51 | S5 | shared-infra | fflate plain-zip create buffers all inputs in RAM — multi-GB batch crashes the tab (`src/lib/compress.ts:280`) | FIXED | same gate covers create; worker createBundle handles plain zip | 229b597 |
 | F-52 | S6 | images | Keep-original guard clears info but not warning — kept original keeps false frame warning (`src/lib/compress.ts:1023`) | FIXED | guard nulls warning with info; unit + K-01 | 229b597 |
@@ -133,6 +133,22 @@ tar-gz↔zip, ttf↔woff, ttf↔woff2, woff↔woff2) whose title token SETS are 
   because the blob is typed `''` (compress.ts entryRow). Suggestion: magic-sniff common
   types for extension-less extracted entries (image sniffing already exists in
   file-visual.ts) and set blob type + display name accordingly.
+- **O-03 (feature wiring, RAW metadata):** "Keep metadata" on RAW inputs now shows an
+  honest "Metadata not kept …" note (F-25 fix). FULL preservation needs: LibRaw
+  metadata() → minimal EXIF TIFF in raw.ts, an optional `exifTiff` on PredecodedPixels
+  (protocol.ts), and the splice in image.ts (already in place for other paths). Small,
+  well-scoped follow-up.
+- **O-04 (copy polish):** with honest signed savings (F-64), CompareModal can render
+  "Saved −300 %" in green for grown files — consider a "Grew 300 %" phrasing/color
+  variant in CompareModal/SavingsSummary.
+- **O-05 (cancel granularity):** merge Cancel now bites at per-file progress ticks and
+  commit gates (F-43); threading the AbortSignal INTO pdf-tools' mergePdfs loop would
+  make it bite mid-copyPages of one huge member too.
+- **O-06 (legacy archives, names):** old RAR/LZH/ARJ/CAB with OEM-codepage entry names
+  still come out garbled through the 7zz worker (engine mangles them lossily before
+  MEMFS; -mcp rejected). Zip gets repaired from its own central directory (30f6085);
+  other formats would each need a minimal name+CRC header walker, or the js7z-tools
+  (7-Zip 25.01) upgrade already noted in memory. Content is correct either way.
 
 - **O-01 (SEO, editorial):** 10 reversed converter pairs share identical title token
   sets (e.g. "Convert TTF to WOFF2 …" vs "Convert WOFF2 to TTF …") — potential keyword
