@@ -252,6 +252,11 @@ export function callWorker<K extends WorkerKind, A extends keyof WorkerContracts
 	onProgress?: (progress: Spec<K, A>['progress']) => void,
 	opts?: { idleTimeoutMs?: number; owner?: AbortSignal; probe?: boolean }
 ): Promise<Spec<K, A>['result']> {
+	// A cancel that landed during the caller's pre-work (arrayBuffer reads,
+	// probes) must stick at submit time — otherwise this call would respawn a
+	// fresh worker into the pool abortAll just emptied and run to completion
+	// as if never cancelled (quality sweep F-39).
+	if (opts?.owner?.aborted) return Promise.reject(new CancelledError());
 	const instance = getInstance(kind);
 	const id = ++nextId;
 	const request: WorkerRequest = { id, action, payload };

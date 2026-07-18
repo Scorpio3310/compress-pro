@@ -346,3 +346,16 @@ it('a survived pool keeps serving after a kinds-scoped abort elsewhere', async (
 	await expect(second).resolves.toBe('<svg/>');
 	void pending; // settled by afterEach's abortAll
 });
+
+it('an already-aborted owner is rejected at submit time — no worker spawned', async () => {
+	// F-39: a cancel landing in a codec's pre-work window (arrayBuffer, probes)
+	// used to submit anyway — respawning a fresh worker into the pool abortAll
+	// just emptied, so the "cancelled" job ran to completion.
+	const controller = new AbortController();
+	controller.abort();
+	const call = callWorker('svg', 'optimize', SVG_PAYLOAD, [], undefined, {
+		owner: controller.signal
+	});
+	await expect(call).rejects.toMatchObject({ name: 'CancelledError' });
+	expect(StubWorker.instances, 'no worker may spawn for a dead run').toHaveLength(0);
+});
