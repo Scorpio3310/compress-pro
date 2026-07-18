@@ -5,16 +5,22 @@ import { expose } from './host';
 import {
 	ARCHIVE_OUTPUT_EXT,
 	ARCHIVE_OUTPUT_MIME,
+	EXTRACT_MAX_TOTAL_BYTES,
 	buildCreateArgs,
 	buildExtractArgs,
 	buildListArgs,
 	createListCounter,
 	createStages,
+	createTailRecorder,
+	extractTooLargeError,
 	isEntryLine,
 	mapSevenZipError,
 	nextChainStep,
-	sanitizeEntryName
+	outerTypeFromName,
+	sanitizeEntryName,
+	subItemsErrors
 } from '$lib/codecs/sevenzip-args';
+import { applyNameRepairs, zipLegacyNameMap } from '$lib/codecs/zip-name-repair';
 
 /**
  * Every operation is one or more short-lived 7zz CLI runs against MEMFS —
@@ -60,7 +66,10 @@ type SevenZipFactoryOptions = Parameters<typeof SevenZipFactory>[0] & {
 interface RunResult {
 	exit: number | null;
 	thrown: boolean;
-	/** Last stdout+stderr lines, newline-joined — input to mapSevenZipError. */
+	/** Bounded output excerpt for mapSevenZipError: the last 60 stdout+stderr
+	 *  lines PLUS latched early error/password signals — with -bb1, per-entry
+	 *  lines would otherwise evict a "Wrong password" printed near the start
+	 *  of a large mixed archive (createTailRecorder). */
 	tail: string;
 	/** Live module for reading outputs; dropped (GC'd) when the run ends. */
 	fs: SevenZipModule['FS'];
@@ -77,10 +86,9 @@ async function runSevenZip(
 	onLine?: (line: string) => void,
 	mounts?: { name: string; data: Blob }[]
 ): Promise<RunResult> {
-	const ring: string[] = [];
+	const recorder = createTailRecorder();
 	const push = (line: string) => {
-		ring.push(line);
-		if (ring.length > 60) ring.shift();
+		recorder.push(line);
 		onLine?.(line);
 	};
 	const wasmModule = await getWasmModule();
@@ -150,7 +158,7 @@ async function runSevenZip(
 			thrown = true;
 		}
 	}
-	return { exit, thrown, tail: ring.join('\n'), fs: sz.FS };
+	return { exit, thrown, tail: recorder.tail(), fs: sz.FS };
 }
 
 interface OutEntry {
@@ -283,11 +291,14 @@ async function extractAll(
 		const mounts = viaMount ? [{ name: current.name, data: current.source as Blob }] : undefined;
 		const inputsFor = () => (viaMount ? {} : { [current.name]: current.source as Uint8Array });
 
-		// Listing is best-effort: it feeds the entry-count fraction and nothing
-		// else, so a failure here (encrypted headers throw!) just means
-		// indeterminate progress until the extract itself reports the error.
-		// Counted per line — the run's `tail` ring is far too short for -slt.
+		// Listing is best-effort: it feeds the entry-count fraction, the outer
+		// archive type (chain keying) and the uncompressed total (bomb guard) —
+		// a failure here (encrypted headers throw!) just means indeterminate
+		// progress and no pre-measured guard until the extract itself reports
+		// the error. Counted per line — the `tail` ring is far too short for -slt.
 		let entryCount: number | null = null;
+		let outer: string | null = null;
+		let listedSize = 0;
 		try {
 			const counter = createListCounter();
 			const list = await runSevenZip(
@@ -296,10 +307,21 @@ async function extractAll(
 				counter.onLine,
 				mounts
 			);
-			if (!list.thrown) entryCount = counter.count();
+			if (!list.thrown) {
+				entryCount = counter.count();
+				outer = counter.archiveType();
+				listedSize = counter.totalSize();
+			}
 		} catch {
 			entryCount = null;
 		}
+		// Zip-bomb guard: refuse BEFORE extraction — a high-ratio archive
+		// expands into JS-heap MEMFS inside one uninterruptible callMain, and
+		// past ~2 GiB that is a dead tab, not a result.
+		if (listedSize > EXTRACT_MAX_TOTAL_BYTES) {
+			throw new Error(extractTooLargeError(listedSize));
+		}
+		outer ??= outerTypeFromName(current.name);
 
 		let done = 0;
 		const run = await runSevenZip(
@@ -315,7 +337,22 @@ async function extractAll(
 			},
 			mounts
 		);
-		throwIfFailed(run, password !== '');
+		const error = mapSevenZipError(run.exit, run.thrown, run.tail, password !== '');
+		if (error) {
+			// All-or-nothing on purpose: 7zz leaves partial/0-byte files for the
+			// entries that failed (wrong password, CRC damage), and telling good
+			// output from truncated garbage apart is not reliable — but when some
+			// entries DID extract, say so instead of silently discarding them.
+			// (-bb1 prints "- name" for failed entries too, so successes = done
+			// minus the closing summary's error count.)
+			const failed = subItemsErrors(run.tail);
+			const extracted = failed === null ? 0 : Math.max(0, done - failed);
+			throw new Error(
+				extracted > 0
+					? `${error} ${extracted === 1 ? '1 file' : `${extracted} files`} did extract, but a partly-failed run can't be trusted, so nothing was kept.`
+					: error
+			);
+		}
 
 		const entries = walkOut(run.fs, '/out', skipped);
 		if (entries.length === 0) {
@@ -328,16 +365,41 @@ async function extractAll(
 
 		const chain = nextChainStep(
 			entries.map((e) => ({ path: e.path, size: e.size })),
-			hop
+			hop,
+			outer
 		);
 		const inner = chain && entries.find((e) => e.path === chain.keep);
-		if (!chain || !inner) return { entries, note: withLinkNote(note, skipped.links) };
+		if (!chain || !inner) {
+			// Legacy zips: 7zz mangles non-UTF-8 entry names irrecoverably (lossy
+			// surrogate escapes, -mcp rejected) — re-label from the zip's own
+			// central directory. Zip is a bundling outer, so this is always hop 0
+			// with `current.source` still the user's archive.
+			if (outer === 'zip') await repairLegacyZipNames(current.source, entries);
+			return { entries, note: withLinkNote(note, skipped.links) };
+		}
 		note = chain.note ?? note;
 		progress({ fraction: null, detail: `unpacking ${inner.path.split('/').pop()}` });
 		current = {
 			name: sanitizeEntryName(inner.path.split('/').pop() ?? inner.path),
 			source: inner.bytes
 		};
+	}
+}
+
+/** Best-effort cp437 re-labeling via CRC+size against the zip's central
+ *  directory (see $lib/codecs/zip-name-repair) — the extracted CONTENT is
+ *  already correct, so a CD oddity must never fail the run. */
+async function repairLegacyZipNames(source: File | Uint8Array, entries: OutEntry[]): Promise<void> {
+	try {
+		const repairs =
+			source instanceof Blob
+				? await zipLegacyNameMap(source.size, async (start, end) => {
+						return new Uint8Array(await source.slice(start, end).arrayBuffer());
+					})
+				: await zipLegacyNameMap(source.length, async (start, end) => source.subarray(start, end));
+		if (repairs) applyNameRepairs(entries, repairs);
+	} catch {
+		// Names stay as the engine wrote them — never worse than before.
 	}
 }
 

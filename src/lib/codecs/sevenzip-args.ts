@@ -149,24 +149,41 @@ export function buildListArgs(archivePath: string, password: string): string[] {
  *  entry — parsing the tail after the fact only ever saw the "----------"
  *  separator on ~3-entry archives, so counting has to happen per line. One
  *  "Path = …" block per entry after the separator; folder blocks
- *  (Folder = + / Attributes = D…) don't count as files. */
+ *  (Folder = + / Attributes = D…) don't count as files. Alongside the count
+ *  it latches the OUTER archive type (the FIRST "Type = " header line —
+ *  deb/rpm listings print the auto-opened payload's type second) and sums
+ *  the uncompressed "Size = " fields of file entries (the zip-bomb guard). */
 export function createListCounter(): {
 	onLine: (line: string) => void;
 	/** File-only entry count; null when the separator never appeared (unparsed). */
 	count: () => number | null;
+	/** Lowercased 7zz type of the archive itself ('zip', 'gzip', 'ar', 'rar5'…). */
+	archiveType: () => string | null;
+	/** Sum of the known uncompressed entry sizes, files only (0 = unknown). */
+	totalSize: () => number;
 } {
 	let seenSeparator = false;
+	let type: string | null = null;
 	let files = 0;
+	let total = 0;
 	let inBlock = false;
 	let blockIsFolder = false;
+	let blockSize = 0;
 	const closeBlock = () => {
-		if (inBlock && !blockIsFolder) files++;
+		if (inBlock && !blockIsFolder) {
+			files++;
+			total += blockSize;
+		}
 		inBlock = false;
+		blockSize = 0;
 	};
 	return {
 		onLine(line: string) {
 			if (!seenSeparator) {
 				if (line.startsWith('----------')) seenSeparator = true;
+				else if (type === null && line.startsWith('Type = ')) {
+					type = line.slice('Type = '.length).trim().toLowerCase() || null;
+				}
 				return;
 			}
 			if (line.startsWith('Path = ')) {
@@ -175,12 +192,20 @@ export function createListCounter(): {
 				blockIsFolder = false;
 			} else if (inBlock && (/^Folder = \+/.test(line) || /^Attributes = D/.test(line))) {
 				blockIsFolder = true;
+			} else if (inBlock && line.startsWith('Size = ')) {
+				const parsed = parseInt(line.slice('Size = '.length), 10);
+				if (Number.isFinite(parsed) && parsed > 0) blockSize = parsed;
 			}
 		},
 		count(): number | null {
 			if (!seenSeparator) return null;
 			closeBlock();
 			return files;
+		},
+		archiveType: () => type,
+		totalSize(): number {
+			closeBlock();
+			return total;
 		}
 	};
 }
@@ -196,6 +221,70 @@ const PASSWORD_SIGNALS = [
 	'data error in encrypted file',
 	'enter password'
 ];
+
+/** Diagnostic lines worth keeping even after the ring scrolls past them. */
+function isSignalLine(line: string): boolean {
+	const lower = line.toLowerCase();
+	return (
+		PASSWORD_SIGNALS.some((s) => lower.includes(s)) ||
+		lower.includes('error:') ||
+		lower.includes('cannot open the file as archive') ||
+		lower.includes('is not archive') ||
+		lower.includes('not enough memory')
+	);
+}
+
+/**
+ * Bounded 7zz output recorder: a 60-line tail ring PLUS a latch for the first
+ * few error/password signal lines. With -bb1 every extracted entry prints a
+ * "- name" line, so in a mixed archive whose encrypted entries fail EARLY the
+ * plain entries that follow evict the "Wrong password" lines from a plain
+ * ring — and mapSevenZipError would fall back to a generic message. The
+ * latched signals are prepended to the tail so the mapper always sees them.
+ */
+export function createTailRecorder(): {
+	push: (line: string) => void;
+	tail: () => string;
+} {
+	const ring: string[] = [];
+	const signals: string[] = [];
+	return {
+		push(line: string) {
+			ring.push(line);
+			if (ring.length > 60) ring.shift();
+			if (signals.length < 20 && isSignalLine(line)) signals.push(line);
+		},
+		tail(): string {
+			// Signals still inside the ring would only repeat — keep them once.
+			const inRing = new Set(ring);
+			return [...signals.filter((s) => !inRing.has(s)), ...ring].join('\n');
+		}
+	};
+}
+
+/** Per-entry failure count from 7zz's closing "Sub items Errors: N" summary
+ *  (always within the last handful of lines, so the ring keeps it). Null when
+ *  the run reported no per-entry errors. */
+export function subItemsErrors(tail: string): number | null {
+	const match = /Sub items Errors: (\d+)/.exec(tail);
+	return match ? parseInt(match[1], 10) : null;
+}
+
+/** Ceiling on the TOTAL uncompressed size an extraction may produce. MEMFS
+ *  file contents live as JS-heap Uint8Arrays and the extracted set exists
+ *  ~twice transiently (worker copy → transferred main-thread Blob), so 2 GiB
+ *  here means ~4 GB of renderer peak — about what a tab survives. Enforced
+ *  from the list pass's Size sum; encrypted-header archives (list fails)
+ *  cannot be pre-measured and keep today's behavior. */
+export const EXTRACT_MAX_TOTAL_BYTES = 2 * 1024 ** 3;
+
+export function extractTooLargeError(totalBytes: number): string {
+	const gb = (n: number) => (n / 1024 ** 3).toFixed(1).replace(/\.0$/, '') + ' GB';
+	return (
+		`This archive expands to about ${gb(totalBytes)} — more than the ${gb(EXTRACT_MAX_TOTAL_BYTES)} ` +
+		`this browser-based tool can safely extract. Use a desktop archive tool for this one.`
+	);
+}
 
 /**
  * Maps a finished 7zz invocation to a user-facing error, or null on success.
@@ -242,6 +331,53 @@ export interface ExtractedEntry {
 	size: number;
 }
 
+/** Outer types that are single-stream WRAPPERS around one payload — the only
+ *  containers whose lone entry the user did not pack on purpose. Bundling
+ *  formats (zip/7z/rar/tar/iso/cab…) are deliberately absent: a zip holding
+ *  exactly one tar is a tar the user wants back, not a thing to explode. */
+const WRAPPER_OUTER_TYPES = new Set([
+	'gzip',
+	'bzip2',
+	'xz',
+	'z',
+	'zstd',
+	'lzma',
+	'rpm',
+	'deb',
+	'ar'
+]);
+
+/** Deb packages: 7zz opens them as 'ar' (or with the dedicated Deb handler);
+ *  either way the control members are the engine's/our deliberate skip. */
+const DEB_OUTER_TYPES = new Set(['deb', 'ar']);
+
+const DEB_NOTE = 'Unpacked the data.tar payload — Debian control files are skipped.';
+
+/** Fallback outer-type detection from the archive NAME, for the case where
+ *  the list pass could not run (encrypted headers throw). Mirrors the 7zz
+ *  `-slt` type strings that createListCounter latches. */
+export function outerTypeFromName(name: string): string | null {
+	const lower = name.toLowerCase();
+	if (/\.(gz|tgz|taz)$/.test(lower)) return 'gzip';
+	if (/\.(bz2|tbz2|tbz)$/.test(lower)) return 'bzip2';
+	if (/\.(xz|txz)$/.test(lower)) return 'xz';
+	if (/\.z$/.test(lower)) return 'z';
+	if (/\.(zst|tzst)$/.test(lower)) return 'zstd';
+	if (/\.lzma$/.test(lower)) return 'lzma';
+	if (/\.rpm$/.test(lower)) return 'rpm';
+	if (/\.deb$/.test(lower)) return 'deb';
+	if (/\.zip$/.test(lower)) return 'zip';
+	if (/\.7z$/.test(lower)) return '7z';
+	if (/\.rar$/.test(lower)) return 'rar';
+	if (/\.tar$/.test(lower)) return 'tar';
+	if (/\.cpio$/.test(lower)) return 'cpio';
+	if (/\.iso$/.test(lower)) return 'iso';
+	if (/\.cab$/.test(lower)) return 'cab';
+	if (/\.(lzh|lha)$/.test(lower)) return 'lzh';
+	if (/\.arj$/.test(lower)) return 'arj';
+	return null;
+}
+
 /**
  * Nested-payload chaining: after a pass, decide whether the result is itself
  * the archive the user actually wants opened. Covers .tar.gz/.tbz2/.txz
@@ -249,30 +385,39 @@ export interface ExtractedEntry {
  * deb (ar members: debian-binary + control.tar.* + data.tar.* — the files
  * live in data.tar.*). Returns the entry path to feed back through 7zz, or
  * null when the entries are the real result. `hops` caps runaway nesting.
+ *
+ * `outer` is what the archive of THIS pass actually was (createListCounter's
+ * latched `-slt` type, or outerTypeFromName when listing failed) — keying on
+ * it is load-bearing: entry names alone made a zip holding exactly one tar
+ * silently explode, and made any archive with a debian-binary lookalike drop
+ * its sibling entries. Unknown outer (null) never chains.
  */
 export function nextChainStep(
 	entries: ExtractedEntry[],
-	hops: number
+	hops: number,
+	outer: string | null
 ): { keep: string; note: string | null } | null {
-	if (hops >= 3 || entries.length === 0) return null;
+	if (hops >= 3 || entries.length === 0 || outer === null) return null;
 
-	// deb: ar unpack yields the debian-binary marker next to data.tar.*
-	const names = entries.map((e) => e.path.split('/').pop() ?? e.path);
-	if (names.includes('debian-binary')) {
-		const data = entries.find((e) => /(^|\/)data\.tar(\.\w+)?$/i.test(e.path));
-		if (data)
-			return {
-				keep: data.path,
-				note: 'Unpacked the data.tar payload — Debian control files are skipped.'
-			};
+	// deb: ar unpack yields the debian-binary marker next to data.tar.* —
+	// only a real deb/ar outer means those siblings are actual control files.
+	if (DEB_OUTER_TYPES.has(outer)) {
+		const names = entries.map((e) => e.path.split('/').pop() ?? e.path);
+		if (names.includes('debian-binary')) {
+			const data = entries.find((e) => /(^|\/)data\.tar(\.\w+)?$/i.test(e.path));
+			if (data) return { keep: data.path, note: DEB_NOTE };
+		}
 	}
 
-	if (entries.length !== 1) return null;
+	if (!WRAPPER_OUTER_TYPES.has(outer) || entries.length !== 1) return null;
 	const single = entries[0].path;
 	// Bare container from a decompression pass (x.tar.gz → x.tar, rpm → .cpio,
-	// disk.iso.Z → disk.iso) or a still-wrapped one (deb's data.tar.xz).
+	// disk.iso.Z → disk.iso) or a still-wrapped one (deb's data.tar.xz). When
+	// the Deb handler pre-unwrapped to data.tar the control members are gone
+	// already — say so.
 	if (/\.(tar|cpio|iso)$/i.test(single) || /\.(tar|cpio)\.(gz|bz2|xz|zst|lzma|z)$/i.test(single)) {
-		return { keep: single, note: null };
+		const isDebPayload = DEB_OUTER_TYPES.has(outer) && /(^|\/)data\.tar(\.\w+)?$/i.test(single);
+		return { keep: single, note: isDebPayload ? DEB_NOTE : null };
 	}
 	return null;
 }

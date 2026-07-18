@@ -17,7 +17,7 @@
 import { createHash } from 'node:crypto';
 import { gzipSync, zipSync, zlibSync } from 'fflate';
 import SevenZipFactory from '7z-wasm/7zz.es6.js';
-import { crc32 } from 'node:zlib';
+import { crc32, deflateRawSync } from 'node:zlib';
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -1402,6 +1402,113 @@ function tarUstar(entries) {
 	return Buffer.concat(blocks);
 }
 
+/** Like sevenZip() but captures stdout/stderr lines and never throws on a
+ *  nonzero exit — for gen-verifying fixtures whose POINT is a failing run
+ *  (wrong password, bomb listings). */
+async function sevenZipLines(args, inputs = {}) {
+	const lines = [];
+	const sz = await SevenZipFactory({
+		print: (l) => lines.push(l),
+		printErr: (l) => lines.push(l),
+		stdin: () => null
+	});
+	sz.FS.mkdir('/in');
+	sz.FS.mkdir('/out');
+	for (const [name, bytes] of Object.entries(inputs)) sz.FS.writeFile(`/in/${name}`, bytes);
+	sz.FS.chdir('/in');
+	let exit = null;
+	try {
+		exit = sz.callMain(args);
+	} catch {
+		exit = -1;
+	}
+	return { exit, lines };
+}
+
+/** Zip writer with FULL header control (raw name bytes, flags, method,
+ *  claimed uncompressed size, crc) — knobs neither fflate nor 7zz expose.
+ *  `data` holds the entry's stored bytes exactly as they should land in the
+ *  file (already deflated and/or ZipCrypto-wrapped by the caller). */
+function rawZip(entries) {
+	const locals = [];
+	const centrals = [];
+	let offset = 0;
+	for (const e of entries) {
+		const local = Buffer.alloc(30 + e.nameBytes.length + e.data.length);
+		local.writeUInt32LE(0x04034b50, 0);
+		local.writeUInt16LE(20, 4); // version needed
+		local.writeUInt16LE(e.flags, 6);
+		local.writeUInt16LE(e.method, 8);
+		local.writeUInt32LE(e.crc >>> 0, 14);
+		local.writeUInt32LE(e.data.length, 18);
+		local.writeUInt32LE(e.size, 22);
+		local.writeUInt16LE(e.nameBytes.length, 26);
+		e.nameBytes.copy(local, 30);
+		e.data.copy(local, 30 + e.nameBytes.length);
+		const central = Buffer.alloc(46 + e.nameBytes.length);
+		central.writeUInt32LE(0x02014b50, 0);
+		central.writeUInt16LE(20, 4); // version made by
+		central.writeUInt16LE(20, 6); // version needed
+		central.writeUInt16LE(e.flags, 8);
+		central.writeUInt16LE(e.method, 10);
+		central.writeUInt32LE(e.crc >>> 0, 16);
+		central.writeUInt32LE(e.data.length, 20);
+		central.writeUInt32LE(e.size, 24);
+		central.writeUInt16LE(e.nameBytes.length, 28);
+		central.writeUInt32LE(offset, 42);
+		e.nameBytes.copy(central, 46);
+		locals.push(local);
+		centrals.push(central);
+		offset += local.length;
+	}
+	const cd = Buffer.concat(centrals);
+	const eocd = Buffer.alloc(22);
+	eocd.writeUInt32LE(0x06054b50, 0);
+	eocd.writeUInt16LE(entries.length, 8);
+	eocd.writeUInt16LE(entries.length, 10);
+	eocd.writeUInt32LE(cd.length, 12);
+	eocd.writeUInt32LE(offset, 16);
+	return Buffer.concat([...locals, cd, eocd]);
+}
+
+/** PKZIP stream cipher (ZipCrypto) — the encryption every pre-AES Windows
+ *  archiver used, and the shape legacy cp437-named zips actually come in.
+ *  Deterministic: the 12-byte header is fixed bytes + the crc check byte. */
+function zipCryptoEncrypt(password, plain, crc) {
+	let k0 = 0x12345678,
+		k1 = 0x23456789,
+		k2 = 0x34567890;
+	const crcTab = [];
+	for (let n = 0; n < 256; n++) {
+		let c = n;
+		for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+		crcTab[n] = c >>> 0;
+	}
+	const crcByte = (state, b) => (crcTab[(state ^ b) & 0xff] ^ (state >>> 8)) >>> 0;
+	const update = (b) => {
+		k0 = crcByte(k0, b);
+		k1 = (k1 + (k0 & 0xff)) >>> 0;
+		k1 = (Math.imul(k1, 134775813) + 1) >>> 0;
+		k2 = crcByte(k2, k1 >>> 24);
+	};
+	const keystream = () => {
+		const t = (k2 | 2) & 0xffff;
+		return (Math.imul(t, t ^ 1) >> 8) & 0xff;
+	};
+	for (const ch of Buffer.from(password, 'latin1')) update(ch);
+	const header = Buffer.from([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, (crc >>> 24) & 0xff]);
+	const out = Buffer.alloc(12 + plain.length);
+	for (let i = 0; i < header.length; i++) {
+		out[i] = header[i] ^ keystream();
+		update(header[i]);
+	}
+	for (let i = 0; i < plain.length; i++) {
+		out[12 + i] = plain[i] ^ keystream();
+		update(plain[i]);
+	}
+	return out;
+}
+
 async function generateArchives() {
 	const enc = (s) => new TextEncoder().encode(s);
 	const CONTENTS = {
@@ -1615,6 +1722,198 @@ async function generateArchives() {
 		}
 		await write('links.tar.gz', Buffer.from(gzipSync(new Uint8Array(tar), { level: 6 })));
 		manifest['links.tar.gz'] = { files: ['target.txt', 'nested.txt'], links: 4 };
+	}
+
+	// 47. zip-bomb.zip — 40 REAL deflate entries of 64 MiB zeros each (~2.6 MB
+	// on disk, 2.5 GiB claimed) with the encryption bit set so the app routes
+	// it to the 7z worker (fflate would inflate it on the main thread). The
+	// extract path must refuse from the LIST pass's Size sum, before callMain
+	// balloons the JS heap.
+	{
+		const MB = 1024 * 1024;
+		const zeros = Buffer.alloc(64 * MB);
+		const deflated = deflateRawSync(zeros, { level: 9 });
+		const crc = crc32(zeros);
+		const bombEntries = [];
+		for (let i = 0; i < 40; i++) {
+			bombEntries.push({
+				nameBytes: Buffer.from(`zeros-${String(i).padStart(2, '0')}.bin`),
+				data: deflated,
+				flags: 1,
+				method: 8,
+				crc,
+				size: zeros.length
+			});
+		}
+		const bomb = rawZip(bombEntries);
+		if (bomb.length > 4 * MB) throw new Error(`zip-bomb.zip too big: ${bomb.length}`);
+		// gen-verify: the engine must LIST it cleanly (exit 0) with the full
+		// uncompressed sum visible — that sum is what the app's guard reads.
+		const { exit, lines } = await sevenZipLines(['l', '-slt', '-y', '-p', '--', '/in/bomb.zip'], {
+			'bomb.zip': new Uint8Array(bomb)
+		});
+		const sep = lines.findIndex((l) => l.startsWith('----------'));
+		const sum = lines
+			.slice(sep + 1)
+			.filter((l) => l.startsWith('Size = '))
+			.reduce((t, l) => t + (parseInt(l.slice(7), 10) || 0), 0);
+		if (exit !== 0 || sum !== 40 * zeros.length) {
+			throw new Error(`gen-verify failed: zip-bomb.zip list exit=${exit} sum=${sum}`);
+		}
+		await write('zip-bomb.zip', bomb);
+		manifest['zip-bomb.zip'] = { entries: 40, totalUncompressed: 40 * zeros.length };
+	}
+
+	// 48. bundle-cp437-locked.zip — the LEGACY shape end to end: cp437 name
+	// bytes (no UTF-8 flag) + ZipCrypto. Password-protected forces the 7zz
+	// worker path, whose C-locale build mangles the name irrecoverably — the
+	// app must re-label from the central directory (zip-name-repair).
+	{
+		const text = 'legacy locked zip fixture payload\n';
+		const plain = Buffer.from(text);
+		const crc = crc32(plain);
+		// 'Résumé.pdf' in cp437 (é = 0x82).
+		const nameBytes = Buffer.from([0x52, 0x82, 0x73, 0x75, 0x6d, 0x82, 0x2e, 0x70, 0x64, 0x66]);
+		const locked = rawZip([
+			{
+				nameBytes,
+				data: zipCryptoEncrypt('TEST', plain, crc),
+				flags: 1,
+				method: 0,
+				crc,
+				size: plain.length
+			}
+		]);
+		// gen-verify: no password → wrong-password failure; TEST → exact bytes.
+		const bad = await sevenZipLines(['x', '-y', '-p', '-o/out', '--', '/in/l.zip'], {
+			'l.zip': new Uint8Array(locked)
+		});
+		if (bad.exit === 0 || !bad.lines.some((l) => /wrong password/i.test(l))) {
+			throw new Error(`gen-verify failed: bundle-cp437-locked.zip opened without a password`);
+		}
+		const opened = await sevenZipEntries('l.zip', new Uint8Array(locked), 'TEST');
+		const sizes = Object.values(opened);
+		if (sizes.length !== 1 || sizes[0] !== plain.length) {
+			throw new Error(`gen-verify failed: bundle-cp437-locked.zip ${JSON.stringify(opened)}`);
+		}
+		await write('bundle-cp437-locked.zip', locked);
+		manifest['bundle-cp437-locked.zip'] = { displayName: 'Résumé.pdf', password: 'TEST', text };
+	}
+
+	// 49. bundle-utf8-aes.zip — modern non-ASCII names through the worker
+	// path: 7zz's own writer flags the name UTF-8 and AES-encrypts. The
+	// reader side must surface the name intact (verified: the engine passes
+	// valid UTF-8 through unmangled).
+	{
+		const utf8Name = 'Résumé-übər.txt';
+		const text = 'utf8 name through the aes worker path\n';
+		const aes = (
+			await sevenZip(
+				['a', '-tzip', '-mx5', '-pTEST', '-mem=AES256', '--', '/out/u.zip', utf8Name],
+				{
+					[utf8Name]: enc(text)
+				}
+			)
+		).FS.readFile('/out/u.zip');
+		// gen-verify: UTF-8 flag + encryption bit set, and the password opens it
+		// with the name intact.
+		const buf = Buffer.from(aes);
+		const eocd = buf.lastIndexOf(Buffer.from([0x50, 0x4b, 0x05, 0x06]));
+		const flags = buf.readUInt16LE(buf.readUInt32LE(eocd + 16) + 8);
+		if (!(flags & 0x800) || !(flags & 1)) {
+			throw new Error(`gen-verify failed: bundle-utf8-aes.zip flags=${flags.toString(16)}`);
+		}
+		const openedAes = await sevenZipEntries('u.zip', aes, 'TEST');
+		if (!Object.keys(openedAes).some((p) => p.endsWith(utf8Name))) {
+			throw new Error(`gen-verify failed: bundle-utf8-aes.zip names ${Object.keys(openedAes)}`);
+		}
+		await write('bundle-utf8-aes.zip', Buffer.from(aes));
+		manifest['bundle-utf8-aes.zip'] = { entries: [utf8Name], password: 'TEST', text };
+	}
+
+	// 50. bundle-mixed-enc.zip — 3 ZipCrypto-locked entries FIRST, then 70
+	// plain ones: extracting without a password prints "Wrong password" early
+	// and then 70+ per-entry lines — the exact shape that evicted the signal
+	// from a plain 60-line tail ring (the app must latch it).
+	{
+		const mixed = [];
+		for (let i = 0; i < 3; i++) {
+			const secret = Buffer.from(`mixed-enc locked entry ${i}\n`);
+			const crc = crc32(secret);
+			mixed.push({
+				nameBytes: Buffer.from(`locked-${i}.txt`),
+				data: zipCryptoEncrypt('TEST', secret, crc),
+				flags: 1,
+				method: 0,
+				crc,
+				size: secret.length
+			});
+		}
+		for (let i = 0; i < 70; i++) {
+			const data = Buffer.from(`plain entry ${i}\n`);
+			mixed.push({
+				nameBytes: Buffer.from(`plain-${String(i).padStart(2, '0')}.txt`),
+				data,
+				flags: 0,
+				method: 0,
+				crc: crc32(data),
+				size: data.length
+			});
+		}
+		const zip = rawZip(mixed);
+		// gen-verify: passwordless extract fails WITH the signal, the signal
+		// sits outside a plain last-60 ring (the regression this fixture
+		// exists to catch), and the right password opens everything.
+		const noPw = await sevenZipLines(
+			['x', '-y', '-bb1', '-bsp0', '-p', '-o/out', '--', '/in/m.zip'],
+			{
+				'm.zip': new Uint8Array(zip)
+			}
+		);
+		const hasSignal = noPw.lines.some((l) => /wrong password/i.test(l));
+		const ringHasSignal = noPw.lines.slice(-60).some((l) => /wrong password/i.test(l));
+		if (noPw.exit === 0 || !hasSignal || ringHasSignal) {
+			throw new Error(
+				`gen-verify failed: bundle-mixed-enc.zip exit=${noPw.exit} signal=${hasSignal} inRing=${ringHasSignal}`
+			);
+		}
+		const openedMixed = await sevenZipEntries('m.zip', new Uint8Array(zip), 'TEST');
+		if (Object.keys(openedMixed).length !== 73) {
+			throw new Error(
+				`gen-verify failed: bundle-mixed-enc.zip TEST opened ${Object.keys(openedMixed).length}/73`
+			);
+		}
+		await write('bundle-mixed-enc.zip', zip);
+		manifest['bundle-mixed-enc.zip'] = { locked: 3, plain: 70, password: 'TEST' };
+	}
+
+	// 51. bundle-tar-inside-aes.zip — a password zip holding EXACTLY ONE tar.
+	// The old entry-name chain guess exploded it into the tar's files (and
+	// flipped behavior on entry count); keyed on the outer type (zip =
+	// bundling, not a wrapper) it must come back as backup.tar itself.
+	// Password → the worker path, where the chain rule actually runs.
+	{
+		const innerTar = (
+			await sevenZip(['a', '-ttar', '--', '/out/backup.tar', ...TOP], CONTENTS)
+		).FS.readFile('/out/backup.tar');
+		const zipped = (
+			await sevenZip(
+				['a', '-tzip', '-mx1', '-pTEST', '-mem=AES256', '--', '/out/t.zip', 'backup.tar'],
+				{ 'backup.tar': innerTar }
+			)
+		).FS.readFile('/out/t.zip');
+		const openedZip = await sevenZipEntries('t.zip', zipped, 'TEST');
+		if (JSON.stringify(Object.keys(openedZip)) !== JSON.stringify(['backup.tar'])) {
+			throw new Error(
+				`gen-verify failed: bundle-tar-inside-aes.zip members ${Object.keys(openedZip)}`
+			);
+		}
+		await write('bundle-tar-inside-aes.zip', Buffer.from(zipped));
+		manifest['bundle-tar-inside-aes.zip'] = {
+			entries: ['backup.tar'],
+			password: 'TEST',
+			tarEntries: BASENAMES
+		};
 	}
 }
 

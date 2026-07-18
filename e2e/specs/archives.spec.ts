@@ -361,6 +361,48 @@ test('AR-13: /extract-rar landing extracts a RAR end-to-end @smoke', async ({ pa
 	}
 });
 
+test('AR-15: zip bomb is refused up front with the limit named', async ({ page }) => {
+	// ~2.6 MB on disk, 2.5 GiB claimed — extracting would balloon the JS heap
+	// inside one uninterruptible callMain and kill the tab. The list pass sees
+	// the uncompressed total, so the app must refuse BEFORE extracting, with
+	// an error that names both the archive's size and the limit.
+	await gotoTab(page, 'zip');
+	await setOp(page, 'Extract');
+	await upload(page, fx('zip-bomb.zip'));
+	await compress(page, { expectError: true, timeout: 120_000 });
+	const banner = page.getByTestId('error-banner');
+	await expect(banner).toContainText(/expands to about 2\.5 GB/);
+	await expect(banner).toContainText(/2 GB/);
+});
+
+test('AR-16: a zip holding exactly one tar yields the tar, not its exploded files', async ({
+	page
+}) => {
+	// The old chain rule keyed on the entry NAME: one .tar entry → silently
+	// fed back through 7zz, flattening the user's backup into loose rows with
+	// no way to download backup.tar itself. Keyed on the OUTER type (zip =
+	// bundling), the tar must come back as-is. Password → worker path, where
+	// the chain rule runs (passwordless zips take fflate, which never chained).
+	const meta = fxMeta<{ entries: string[]; password: string; tarEntries: string[] }>(
+		'bundle-tar-inside-aes.zip'
+	);
+	await gotoTab(page, 'zip');
+	await setOp(page, 'Extract');
+	await upload(page, fx('bundle-tar-inside-aes.zip'));
+	await passwordField(page).fill(meta.password);
+	await compress(page, { timeout: 120_000 });
+	// 1 upload row + exactly ONE result row: backup.tar.
+	await expect(rows(page)).toHaveCount(2);
+	const art = await downloadRow(page, 'backup.tar');
+	// The download IS the tar — its own listing still holds the real files.
+	const inner = await sevenZipEntries(art.bytes, 'backup.tar');
+	expect(
+		Object.keys(inner)
+			.map((p) => p.split('/').pop())
+			.sort()
+	).toEqual([...meta.tarEntries].sort());
+});
+
 for (const { path, h1 } of [
 	{ path: '/extract-7z', h1: 'Extract 7Z archives.' },
 	{ path: '/extract-tar-gz', h1: 'Extract TAR.GZ tarballs.' },

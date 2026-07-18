@@ -4,15 +4,20 @@ import {
 	ARCHIVE_IDLE_FLOOR_MS,
 	archiveIdleTimeoutMs,
 	CONVERT_EXPANSION_FACTOR,
+	EXTRACT_MAX_TOTAL_BYTES,
 	buildCreateArgs,
 	buildExtractArgs,
 	buildListArgs,
 	createListCounter,
 	createStages,
+	createTailRecorder,
+	extractTooLargeError,
 	isEntryLine,
 	mapSevenZipError,
 	nextChainStep,
-	sanitizeEntryName
+	outerTypeFromName,
+	sanitizeEntryName,
+	subItemsErrors
 } from './sevenzip-args';
 
 describe('createStages', () => {
@@ -154,6 +159,117 @@ describe('createListCounter', () => {
 		}
 		expect(feed(lines).count()).toBe(40);
 	});
+
+	it('latches the OUTER archive type from the header block, normalized', () => {
+		expect(feed(listing).archiveType()).toBe('7z');
+		// deb/rpm listings print the outer type FIRST, then the auto-opened
+		// nested payload's type — the first one is the container's identity.
+		const deb = feed([
+			'Listing archive: /in/sample.deb',
+			'--',
+			'Path = /in/sample.deb',
+			'Type = Ar',
+			'--',
+			'Path = data.tar.gz',
+			'Type = gzip',
+			'----------',
+			'Path = data.tar',
+			'Size = 10240'
+		]);
+		expect(deb.archiveType()).toBe('ar');
+	});
+
+	it('returns null archive type when no Type line appeared', () => {
+		expect(feed(['Listing archive: x', 'ERROR: oops']).archiveType()).toBeNull();
+	});
+
+	it('never reads a Type line from an entry block as the outer type', () => {
+		const c = feed(['----------', 'Path = weird.bin', 'Type = zip', 'Size = 5']);
+		expect(c.archiveType()).toBeNull();
+	});
+
+	it('sums uncompressed entry sizes — files only, header block excluded', () => {
+		// The header block's "Physical Size" must not count; folder blocks and
+		// their Size lines must not count either.
+		const c = feed([
+			'Path = /in/a.7z',
+			'Physical Size = 189',
+			'Size = 999999',
+			'----------',
+			'Path = docs',
+			'Size = 0',
+			'Folder = +',
+			'',
+			'Path = docs/readme.txt',
+			'Size = 20',
+			'',
+			'Path = image.png',
+			'Size = 4096'
+		]);
+		expect(c.totalSize()).toBe(20 + 4096);
+	});
+
+	it('counts a folder Size even when the folder marker comes after it', () => {
+		// -slt field order is not fixed: Size can precede Attributes = D.
+		const c = feed(['----------', 'Path = dir', 'Size = 123', 'Attributes = D drwxr-xr-x']);
+		expect(c.totalSize()).toBe(0);
+	});
+
+	it('tolerates blank or missing Size fields', () => {
+		const c = feed(['----------', 'Path = a.txt', 'Size = ', '', 'Path = b.txt']);
+		expect(c.totalSize()).toBe(0);
+		expect(c.count()).toBe(2);
+	});
+});
+
+describe('extract size ceiling', () => {
+	it('is 2 GiB — the renderer heap can hold roughly double that transiently', () => {
+		expect(EXTRACT_MAX_TOTAL_BYTES).toBe(2 * 1024 ** 3);
+	});
+
+	it('names both the archive total and the limit, honestly', () => {
+		const message = extractTooLargeError(5.5 * 1024 ** 3);
+		expect(message).toContain('5.5 GB');
+		expect(message).toContain('2 GB');
+		expect(message).toMatch(/desktop/i);
+	});
+});
+
+describe('createTailRecorder', () => {
+	it('keeps early password signals that thousands of entry lines would evict', () => {
+		// The mixed-encryption shape: 3 encrypted entries fail FIRST, then
+		// hundreds of clean "- name" lines scroll the 60-line ring past them.
+		const recorder = createTailRecorder();
+		recorder.push('Extracting archive: /in/m.zip');
+		for (let i = 0; i < 3; i++) recorder.push(`ERROR: Wrong password : locked-${i}.bin`);
+		for (let i = 0; i < 500; i++) recorder.push(`- plain-${i}.txt`);
+		recorder.push('Sub items Errors: 3');
+		const tail = recorder.tail();
+		expect(tail).toContain('Wrong password');
+		expect(mapSevenZipError(2, false, tail, false)).toMatch(/password-protected/);
+		expect(mapSevenZipError(2, false, tail, true)).toMatch(/^Wrong password/);
+	});
+
+	it('stays bounded when the run spews thousands of error lines', () => {
+		const recorder = createTailRecorder();
+		for (let i = 0; i < 5000; i++) recorder.push(`ERROR: CRC Failed : file-${i}.bin`);
+		expect(recorder.tail().length).toBeLessThan(10_000);
+	});
+
+	it('behaves like the plain ring for ordinary output', () => {
+		const recorder = createTailRecorder();
+		for (let i = 0; i < 100; i++) recorder.push(`- file-${i}.txt`);
+		const lines = recorder.tail().split('\n');
+		expect(lines.length).toBe(60);
+		expect(lines.at(-1)).toBe('- file-99.txt');
+	});
+});
+
+describe('subItemsErrors', () => {
+	it('reads the per-entry failure count from the closing summary', () => {
+		expect(subItemsErrors('- a.txt\n- b.txt\nSub items Errors: 3\n')).toBe(3);
+		expect(subItemsErrors('Everything is Ok')).toBeNull();
+	});
 });
 
 describe('mapSevenZipError', () => {
@@ -200,38 +316,105 @@ describe('mapSevenZipError', () => {
 });
 
 describe('nextChainStep', () => {
-	it('chains a lone tar/cpio/iso container from a decompression pass', () => {
-		expect(nextChainStep([{ path: 'x.tar', size: 10 }], 0)?.keep).toBe('x.tar');
-		expect(nextChainStep([{ path: 'pkg-1.0.cpio', size: 10 }], 1)?.keep).toBe('pkg-1.0.cpio');
-		expect(nextChainStep([{ path: 'disk.iso', size: 10 }], 0)?.keep).toBe('disk.iso');
-		expect(nextChainStep([{ path: 'data.tar.xz', size: 10 }], 0)?.keep).toBe('data.tar.xz');
+	it('chains a lone tar/cpio/iso container out of a single-stream WRAPPER', () => {
+		expect(nextChainStep([{ path: 'x.tar', size: 10 }], 0, 'gzip')?.keep).toBe('x.tar');
+		expect(nextChainStep([{ path: 'x.tar', size: 10 }], 0, 'bzip2')?.keep).toBe('x.tar');
+		expect(nextChainStep([{ path: 'pkg-1.0.cpio', size: 10 }], 1, 'rpm')?.keep).toBe(
+			'pkg-1.0.cpio'
+		);
+		expect(nextChainStep([{ path: 'disk.iso', size: 10 }], 0, 'z')?.keep).toBe('disk.iso');
+		expect(nextChainStep([{ path: 'data.tar.xz', size: 10 }], 0, 'ar')?.keep).toBe('data.tar.xz');
 	});
 
-	it('picks the data.tar payload out of a deb and says so', () => {
-		const step = nextChainStep(
-			[
-				{ path: 'debian-binary', size: 4 },
-				{ path: 'control.tar.gz', size: 100 },
-				{ path: 'data.tar.xz', size: 900 }
-			],
-			0
-		);
-		expect(step?.keep).toBe('data.tar.xz');
+	it('never unwraps a container out of a BUNDLING outer — the entry IS the result', () => {
+		// A zip holding exactly backup.tar: the user wants backup.tar as a row,
+		// not its exploded contents (the old entry-name guess flipped on count).
+		expect(nextChainStep([{ path: 'backup.tar', size: 10 }], 0, 'zip')).toBeNull();
+		expect(nextChainStep([{ path: 'backup.tar', size: 10 }], 0, '7z')).toBeNull();
+		expect(nextChainStep([{ path: 'backup.tar', size: 10 }], 0, 'rar5')).toBeNull();
+		expect(nextChainStep([{ path: 'disk.iso', size: 10 }], 0, 'tar')).toBeNull();
+	});
+
+	it('stays put when the outer type is unknown — honesty over guessing', () => {
+		expect(nextChainStep([{ path: 'x.tar', size: 10 }], 0, null)).toBeNull();
+	});
+
+	it('picks the data.tar payload out of a real deb (ar members) and says so', () => {
+		const entries = [
+			{ path: 'debian-binary', size: 4 },
+			{ path: 'control.tar.gz', size: 100 },
+			{ path: 'data.tar.xz', size: 900 }
+		];
+		for (const outer of ['ar', 'deb']) {
+			const step = nextChainStep(entries, 0, outer);
+			expect(step?.keep).toBe('data.tar.xz');
+			expect(step?.note).toMatch(/control files/);
+		}
+	});
+
+	it('notes the skipped control files when the Deb handler pre-unwraps to data.tar', () => {
+		// 7zz auto-descends a .deb to its (already gunzipped) data.tar — the
+		// engine has silently dropped debian-binary/control.tar by then, so the
+		// note must say so here too.
+		const step = nextChainStep([{ path: 'data.tar', size: 10240 }], 0, 'ar');
+		expect(step?.keep).toBe('data.tar');
 		expect(step?.note).toMatch(/control files/);
 	});
 
+	it('keeps deb-lookalike entries intact inside a zip (siblings preserved)', () => {
+		// Someone zipped an unpacked-deb working directory: notes.txt and
+		// control.tar.gz are real files the user must get back.
+		expect(
+			nextChainStep(
+				[
+					{ path: 'debian-binary', size: 4 },
+					{ path: 'control.tar.gz', size: 100 },
+					{ path: 'data.tar.gz', size: 900 },
+					{ path: 'notes.txt', size: 12 }
+				],
+				0,
+				'zip'
+			)
+		).toBeNull();
+	});
+
 	it('stops on real results, multiple entries and the hop cap', () => {
-		expect(nextChainStep([{ path: 'photo.jpg', size: 10 }], 0)).toBeNull();
+		expect(nextChainStep([{ path: 'photo.jpg', size: 10 }], 0, 'gzip')).toBeNull();
 		expect(
 			nextChainStep(
 				[
 					{ path: 'a.txt', size: 1 },
 					{ path: 'b.txt', size: 2 }
 				],
-				0
+				0,
+				'gzip'
 			)
 		).toBeNull();
-		expect(nextChainStep([{ path: 'x.tar', size: 10 }], 3)).toBeNull();
+		expect(nextChainStep([{ path: 'x.tar', size: 10 }], 3, 'gzip')).toBeNull();
+	});
+});
+
+describe('outerTypeFromName', () => {
+	it('maps wrapper extensions for the list-pass-failed fallback', () => {
+		expect(outerTypeFromName('backup.tar.gz')).toBe('gzip');
+		expect(outerTypeFromName('backup.tgz')).toBe('gzip');
+		expect(outerTypeFromName('backup.tar.bz2')).toBe('bzip2');
+		expect(outerTypeFromName('backup.txz')).toBe('xz');
+		expect(outerTypeFromName('disk.iso.Z')).toBe('z');
+		expect(outerTypeFromName('pkg.rpm')).toBe('rpm');
+		expect(outerTypeFromName('pkg.deb')).toBe('deb');
+		expect(outerTypeFromName('data.tar.zst')).toBe('zstd');
+	});
+
+	it('maps bundling extensions so they can be told apart from wrappers', () => {
+		expect(outerTypeFromName('bundle.zip')).toBe('zip');
+		expect(outerTypeFromName('bundle.7z')).toBe('7z');
+		expect(outerTypeFromName('backup.tar')).toBe('tar');
+	});
+
+	it('returns null for unknown extensions', () => {
+		expect(outerTypeFromName('mystery.bin')).toBeNull();
+		expect(outerTypeFromName('no-extension')).toBeNull();
 	});
 });
 

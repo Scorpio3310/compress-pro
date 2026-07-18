@@ -161,3 +161,57 @@ test('Z-09: legacy cp437 name decodes to its real characters', async ({ page }) 
 	expect(art.name).toBe(meta.displayName);
 	expect(art.bytes.toString('utf8')).toBe(meta.text);
 });
+
+test('Z-10: locked legacy cp437 zip — the WORKER path repairs the mangled name', async ({
+	page
+}) => {
+	// Z-09 covers the fflate fast path; a password forces 7zz, whose C-locale
+	// build garbles unflagged cp437 names irrecoverably before they reach the
+	// filesystem — the app must re-label from the zip's own central directory.
+	const meta = fxMeta<{ displayName: string; password: string; text: string }>(
+		'bundle-cp437-locked.zip'
+	);
+	await gotoTab(page, 'zip');
+	await setZipOp(page, 'Extract');
+	await upload(page, fx('bundle-cp437-locked.zip'));
+	await compress(page, { expectError: true, timeout: 120_000 });
+	await expect(page.getByTestId('error-banner')).toContainText(/password/i);
+
+	await page.locator('#archive-password').fill(meta.password);
+	await compress(page, { timeout: 120_000 });
+	await expect(rowByName(page, meta.displayName)).toBeVisible();
+	const art = await downloadRow(page, meta.displayName);
+	expect(art.name).toBe(meta.displayName);
+	expect(art.bytes.toString('utf8')).toBe(meta.text);
+});
+
+test('Z-11: AES zip with a UTF-8 name survives the worker path intact', async ({ page }) => {
+	// Modern archivers flag names UTF-8 — the engine passes those through
+	// unmangled even in its C-locale build; this pins that down.
+	const meta = fxMeta<{ entries: string[]; password: string; text: string }>('bundle-utf8-aes.zip');
+	await gotoTab(page, 'zip');
+	await setZipOp(page, 'Extract');
+	await upload(page, fx('bundle-utf8-aes.zip'));
+	await page.locator('#archive-password').fill(meta.password);
+	await compress(page, { timeout: 120_000 });
+	await expect(rowByName(page, meta.entries[0])).toBeVisible();
+	const art = await downloadRow(page, meta.entries[0]);
+	expect(art.name).toBe(meta.entries[0]);
+	expect(art.bytes.toString('utf8')).toBe(meta.text);
+});
+
+test('Z-12: mixed-encryption zip still reads as a password problem, honestly all-or-nothing', async ({
+	page
+}) => {
+	// 3 locked entries fail FIRST, then 70 plain per-entry lines scroll past —
+	// the password signal must survive the output ring (latched, not evicted)
+	// instead of degrading to a generic 'Archive operation failed'; and the
+	// discarded good entries must be owned up to, not silently swallowed.
+	await gotoTab(page, 'zip');
+	await setZipOp(page, 'Extract');
+	await upload(page, fx('bundle-mixed-enc.zip'));
+	await compress(page, { expectError: true, timeout: 120_000 });
+	const banner = page.getByTestId('error-banner');
+	await expect(banner).toContainText(/password/i);
+	await expect(banner).toContainText(/did extract.*nothing was kept/i);
+});
