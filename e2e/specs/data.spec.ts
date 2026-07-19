@@ -4,7 +4,6 @@
  * side rides SheetJS, data side the `yaml` parser; outputs are verified in
  * Node with the SAME engines.
  */
-import { readFileSync } from 'node:fs';
 import { expect, fx, test } from '../fixtures';
 import { compress, downloadRow, gotoPath, upload } from '../helpers';
 import { unzip, xlsxInfo } from '../verify';

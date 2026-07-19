@@ -1,12 +1,14 @@
 # Goal spec: Full-app quality sweep — correctness, edge cases, performance, UX, SEO
 
 ## Mission
+
 Systematically audit and harden the entire compress.pro app: all ~139 tools, the shared
 infrastructure, the UI/UX layer, and the SEO/agent-facing surface. Find correctness bugs,
 unhandled edge cases, performance problems, UX rough spots, and SEO irregularities — and
 **fix every confirmed finding**, each covered by a regression test or automated check.
 
 ## Before you start
+
 - Check `git status`. If the working tree contains uncommitted work from a previous
   batch, commit it first (logically grouped commits) so the sweep starts clean and
   every fix is attributable.
@@ -16,6 +18,7 @@ unhandled edge cases, performance problems, UX rough spots, and SEO irregulariti
   Do not re-break things they warn about.
 
 ## Scope
+
 1. **Every tool family**: images (incl. RAW, JXL, PSD, AVIF, vectorize), PDF (compress,
    qpdf protect/unlock, PDF/A, grayscale, OCR), video/audio (incl. MJPEG, FLAC/OPUS/AAC),
    archives (all 14 formats), ebooks (EPUB/CBZ/CBR), fonts, subtitles, 3D models.
@@ -32,9 +35,11 @@ unhandled edge cases, performance problems, UX rough spots, and SEO irregulariti
    output checks.
 
 ## Real-file validation track
+
 Enumerate `tests/fixtures/real/` **recursively at run time** and build the file × tool
 matrix from what is actually there. Notes on the current contents (non-exhaustive —
 re-scan, don't trust this list):
+
 - Subdirectories contain extracted 3D-model sets (OBJ/FBX/3DS/MTL/BLEND + texture
   images) — include those files in the matrix individually; textures are also valid
   image-tool inputs.
@@ -49,6 +54,7 @@ For every (file, applicable tool) pair, run compression at each quality level th
 offers plus every advertised conversion, through the actual app in Playwright (follow
 the pattern of `e2e/specs/real-pdf-reaa.spec.ts`). Then validate the output **for real,
 not just "no exception"**:
+
 - **Decode it back**: every output must successfully decode/parse in its target format.
 - **Visual check — actually look at it**: rasterize before/after (images, PDF pages,
   extracted video frames, text rendered in the output font, SVG renders) into a scratch
@@ -71,7 +77,9 @@ not just "no exception"**:
   (see keep-original guard) counts as a finding to investigate.
 
 ## Method — verified loops, family by family
+
 For each area:
+
 1. Read the codec, its worker path, and its controls component; identify edge-case and
    correctness risks.
 2. Attack it with hostile inputs: 0-byte files, truncated/corrupt files, huge files
@@ -91,9 +99,11 @@ without explanation) > crash or misleading error > SEO errors visible to crawler
 performance > polish.
 
 ## SEO & agent-surface track
+
 Build the site (`pnpm build`) and audit the **prerendered output**, not just the source.
 Write a crawler/validator script (keep it in `scripts/`) that walks every generated page
 and asserts invariants, so the checks are repeatable:
+
 - **Uniqueness**: every page has a unique `<title>` and meta description; flag
   duplicates and near-duplicates (keyword cannibalization between similar tools).
 - **Correctness**: canonical URLs correct and self-referencing; no page accidentally
@@ -113,10 +123,11 @@ and asserts invariants, so the checks are repeatable:
 - **Content honesty**: claims in SEO copy (format support, size limits, "works offline",
   privacy claims) must match what the code actually does — flag any drift as a
   correctness finding, not just an SEO one.
-Fix everything confirmed; where a fix is editorial judgment (rewording copy), log it
-as OPEN with a concrete suggestion instead.
+  Fix everything confirmed; where a fix is editorial judgment (rewording copy), log it
+  as OPEN with a concrete suggestion instead.
 
 ## Performance track
+
 - Run `pnpm bench:memory` before starting (baseline) and after significant changes;
   investigate regressions and standout memory hogs across all 3 browsers.
 - Time the real-file matrix runs — flag tools that are anomalously slow for their
@@ -126,6 +137,7 @@ as OPEN with a concrete suggestion instead.
   path needs explicit justification in the findings log.
 
 ## Definition of done — per finding
+
 - Test fails before the fix, passes after (for SEO findings: the validator script
   catches it before, passes after).
 - `pnpm test` green; affected e2e specs green on chromium, firefox, and webkit.
@@ -134,6 +146,7 @@ as OPEN with a concrete suggestion instead.
 - No bundle-budget regression; no new console errors.
 
 ## Constraints
+
 - Client-side only — no telemetry, no network calls during processing. Privacy is the
   product; never weaken it.
 - Keep-original guard semantics are intentional (outputs ≥ input return the original) —
@@ -145,6 +158,7 @@ as OPEN with a concrete suggestion instead.
   log it as OPEN with a recommendation instead of guessing.
 
 ## Final report
+
 Commit `docs/quality-sweep-2026-07.md` at the end with: a findings table (severity,
 area, status, covering test, commit), the full real-file matrix (file × tool × level →
 result), perf/memory before-vs-after numbers, SEO validator results (before/after),

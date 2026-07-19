@@ -38,8 +38,8 @@
 		/>
 		<p class="mt-2 hint text-faint">
 			{#if settings.to === 'pdf'}
-				JPEG pages are embedded into the PDF byte-for-byte and PNG pages pixel-exact — quality
-				only applies to WebP/GIF pages, which need one re-encode to JPEG.
+				JPEG pages are embedded into the PDF byte-for-byte and PNG pages pixel-exact — quality only
+				applies to WebP/GIF pages, which need one re-encode to JPEG.
 			{:else if settings.quality === 100}
 				Pages that would grow stay untouched — at 100 this is effectively a lossless repack.
 			{:else}

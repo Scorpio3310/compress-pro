@@ -8,9 +8,9 @@ describe('sniffImage', () => {
 	it('recognizes jpg/png/webp by magic, not name', () => {
 		expect(sniffImage(bytes(0xff, 0xd8, 0xff, 0xe0))).toBe('jpg');
 		expect(sniffImage(bytes(0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1))).toBe('png');
-		expect(
-			sniffImage(bytes(0x52, 0x49, 0x46, 0x46, 0, 0, 0, 0, 0x57, 0x45, 0x42, 0x50))
-		).toBe('webp');
+		expect(sniffImage(bytes(0x52, 0x49, 0x46, 0x46, 0, 0, 0, 0, 0x57, 0x45, 0x42, 0x50))).toBe(
+			'webp'
+		);
 	});
 
 	it('rejects gif, svg text, truncated headers and empties', () => {
@@ -19,9 +19,9 @@ describe('sniffImage', () => {
 		expect(sniffImage(bytes(0xff, 0xd8))).toBe(null);
 		expect(sniffImage(bytes())).toBe(null);
 		// RIFF that is not WEBP (e.g. WAV) must not match
-		expect(
-			sniffImage(bytes(0x52, 0x49, 0x46, 0x46, 0, 0, 0, 0, 0x57, 0x41, 0x56, 0x45))
-		).toBe(null);
+		expect(sniffImage(bytes(0x52, 0x49, 0x46, 0x46, 0, 0, 0, 0, 0x57, 0x41, 0x56, 0x45))).toBe(
+			null
+		);
 	});
 });
 

@@ -1015,7 +1015,9 @@ export const BODIES: Record<string, SeoBody> = {
 			},
 			{
 				q: 'Is my data uploaded?',
-				a: 'No. The conversion runs entirely in your browser — the server only delivers this page. Spreadsheets full of names, prices or personal data never leave your device.' + PRIVACY_PROOF
+				a:
+					'No. The conversion runs entirely in your browser — the server only delivers this page. Spreadsheets full of names, prices or personal data never leave your device.' +
+					PRIVACY_PROOF
 			}
 		]
 	},
@@ -1051,7 +1053,9 @@ export const BODIES: Record<string, SeoBody> = {
 			},
 			{
 				q: 'Is my spreadsheet uploaded?',
-				a: 'No. The whole conversion runs in your browser — the server only delivers this page. Financials, client lists, inventories: none of it leaves your device.' + PRIVACY_PROOF
+				a:
+					'No. The whole conversion runs in your browser — the server only delivers this page. Financials, client lists, inventories: none of it leaves your device.' +
+					PRIVACY_PROOF
 			}
 		]
 	},
@@ -1087,7 +1091,9 @@ export const BODIES: Record<string, SeoBody> = {
 			},
 			{
 				q: 'Is my data uploaded?',
-				a: 'No. The conversion is plain parsing that runs entirely in your browser — the server only delivers this page. API keys or secrets inside your configs never leave your device.' + PRIVACY_PROOF
+				a:
+					'No. The conversion is plain parsing that runs entirely in your browser — the server only delivers this page. API keys or secrets inside your configs never leave your device.' +
+					PRIVACY_PROOF
 			}
 		]
 	},
@@ -1123,7 +1129,9 @@ export const BODIES: Record<string, SeoBody> = {
 			},
 			{
 				q: 'Is my data uploaded?',
-				a: 'No. The conversion is plain parsing that runs entirely in your browser — the server only delivers this page. Kubernetes secrets and CI configs never leave your device.' + PRIVACY_PROOF
+				a:
+					'No. The conversion is plain parsing that runs entirely in your browser — the server only delivers this page. Kubernetes secrets and CI configs never leave your device.' +
+					PRIVACY_PROOF
 			}
 		]
 	},
@@ -1165,7 +1173,9 @@ export const BODIES: Record<string, SeoBody> = {
 			},
 			{
 				q: 'Is my model uploaded?',
-				a: 'No. The whole pipeline — parsing, compression, texture re-encoding — runs in your browser. The server only delivers this page; your asset never leaves your device.' + PRIVACY_PROOF
+				a:
+					'No. The whole pipeline — parsing, compression, texture re-encoding — runs in your browser. The server only delivers this page; your asset never leaves your device.' +
+					PRIVACY_PROOF
 			}
 		]
 	},

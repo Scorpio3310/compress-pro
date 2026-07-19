@@ -6,7 +6,8 @@ import ts from 'typescript-eslint';
 import svelteConfig from './svelte.config.js';
 
 export default ts.config(
-	{ ignores: ['.svelte-kit/', '.wrangler/', 'build/', 'test-results/'] },
+	// static/tesseract/ is vendored tesseract.js build output — never linted.
+	{ ignores: ['.svelte-kit/', '.wrangler/', 'build/', 'test-results/', 'static/tesseract/'] },
 	js.configs.recommended,
 	...ts.configs.recommended,
 	...svelte.configs.recommended,

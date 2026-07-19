@@ -388,7 +388,8 @@ if (vids.length > 0) {
 				source: new BufferSource(new Uint8Array(input)),
 				formats: ALL_FORMATS
 			});
-			const videoTrackDuration = await (await inputParsed.getPrimaryVideoTrack())!.computeDuration();
+			const videoTrackDuration =
+				await (await inputParsed.getPrimaryVideoTrack())!.computeDuration();
 			expect(
 				Math.abs(outInfo.durationSec - videoTrackDuration),
 				'video-track duration preserved'

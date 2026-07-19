@@ -192,10 +192,13 @@ async function xlsxToCsv(bytes: Uint8Array, settings: DataSettings): Promise<Dat
 		const message = error instanceof Error ? error.message : '';
 		if (/password/i.test(message)) {
 			throw new Error(
-				'This spreadsheet is password-protected — remove the password in Excel first'
+				'This spreadsheet is password-protected — remove the password in Excel first',
+				{ cause: error }
 			);
 		}
-		throw new Error('This ZIP archive is not a spreadsheet — try the archive converter instead');
+		throw new Error('This ZIP archive is not a spreadsheet — try the archive converter instead', {
+			cause: error
+		});
 	}
 	const first = wb.SheetNames[0];
 	const ws = wb.Sheets[first];
@@ -243,7 +246,8 @@ async function jsonToYaml(text: string): Promise<DataResult> {
 		value = JSON.parse(text);
 	} catch (error) {
 		throw new Error(
-			`This file is not valid JSON — ${error instanceof Error ? error.message : 'parse failed'}`
+			`This file is not valid JSON — ${error instanceof Error ? error.message : 'parse failed'}`,
+			{ cause: error }
 		);
 	}
 	const YAML = await import('yaml');

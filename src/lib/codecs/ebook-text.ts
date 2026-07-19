@@ -92,7 +92,6 @@ const BLOCK = new Set([
 	'DD',
 	'PRE'
 ]);
-const HEADING = /^H[1-6]$/;
 const SKIP = new Set(['SCRIPT', 'STYLE', 'TEMPLATE', 'NOSCRIPT']);
 
 /**

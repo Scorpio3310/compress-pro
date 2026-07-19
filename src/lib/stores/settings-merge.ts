@@ -359,7 +359,11 @@ export function mergeStoredSettings(target: SettingsMap, stored: unknown): void 
 	}
 	if (typeof s.data === 'object' && s.data !== null) {
 		const o = s.data as Record<string, unknown>;
-		target.data.csvDelimiter = oneOf(o.csvDelimiter, [',', ';', 'tab'] as const, target.data.csvDelimiter);
+		target.data.csvDelimiter = oneOf(
+			o.csvDelimiter,
+			[',', ';', 'tab'] as const,
+			target.data.csvDelimiter
+		);
 		target.data.jsonIndent = oneOf(o.jsonIndent, [2, 0] as const, target.data.jsonIndent);
 	}
 }

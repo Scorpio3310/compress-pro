@@ -96,7 +96,13 @@
 		/>
 	</div>
 	<div>
-		<Slider id="vector-detail" label="Detail" bind:value={settings.vectorDetail} min={0} max={100} />
+		<Slider
+			id="vector-detail"
+			label="Detail"
+			bind:value={settings.vectorDetail}
+			min={0}
+			max={100}
+		/>
 		<p class="mt-2 hint text-faint">
 			{settings.vectorMode === 'bw'
 				? 'Black & white stencil — filled outlines, ideal for logos and cut files.'

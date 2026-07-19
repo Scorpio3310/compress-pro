@@ -108,7 +108,6 @@
 			</p>
 		</div>
 	{/if}
-
 {:else}
 	<p class="text-xs text-faint">
 		Every file inside the archive becomes its own row — download them individually or all at once.

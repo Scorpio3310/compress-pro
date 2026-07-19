@@ -37,7 +37,6 @@ const ASCII = 2;
 const SHORT = 3;
 const LONG = 4;
 const RATIONAL = 5;
-const TYPE_BYTES: Record<number, number> = { 1: 1, [ASCII]: 1, [SHORT]: 2, [LONG]: 4, [RATIONAL]: 8 };
 
 interface Field {
 	tag: number;
@@ -107,9 +106,7 @@ function serialize(ifd0: Field[], exif: Field[], gps: Field[]): Uint8Array {
 	const pointerCount = (exif.length ? 1 : 0) + (gps.length ? 1 : 0);
 	const ifd0Bytes = 2 + (ifd0.length + pointerCount) * 12 + 4;
 	const exifOffset = exif.length ? ifd0Offset + ifd0Bytes : 0;
-	const gpsOffset = gps.length
-		? ifd0Offset + ifd0Bytes + (exif.length ? ifdSize(exif) : 0)
-		: 0;
+	const gpsOffset = gps.length ? ifd0Offset + ifd0Bytes + (exif.length ? ifdSize(exif) : 0) : 0;
 	let dataOffset =
 		ifd0Offset + ifd0Bytes + (exif.length ? ifdSize(exif) : 0) + (gps.length ? ifdSize(gps) : 0);
 

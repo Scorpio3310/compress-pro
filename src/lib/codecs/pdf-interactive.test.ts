@@ -154,7 +154,16 @@ describe('encrypted inputs (F-12)', () => {
 				'/in.pdf',
 				plain
 			);
-			qpdf.callMain(['--warning-exit-0', '--encrypt', '', 'owner-pw', '256', '--', '/in.pdf', '/out.pdf']);
+			qpdf.callMain([
+				'--warning-exit-0',
+				'--encrypt',
+				'',
+				'owner-pw',
+				'256',
+				'--',
+				'/in.pdf',
+				'/out.pdf'
+			]);
 			encrypted = qpdf.FS.readFile('/out.pdf');
 		} finally {
 			console.log = origLog;

@@ -31,7 +31,8 @@ export interface Entry {
  *  full of .jpg files that are really PNGs, and the entry NAME must never
  *  change (opf hrefs / reader page order reference it). */
 export function sniffImage(bytes: Uint8Array): 'jpg' | 'png' | 'webp' | null {
-	if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return 'jpg';
+	if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff)
+		return 'jpg';
 	if (
 		bytes.length >= 8 &&
 		bytes[0] === 0x89 &&
@@ -153,7 +154,10 @@ export async function readArchive(
 		},
 		signal
 	);
-	return { entries: out.entries.map((e) => ({ name: e.path, bytes: new Uint8Array(e.bytes) })), wasZip };
+	return {
+		entries: out.entries.map((e) => ({ name: e.path, bytes: new Uint8Array(e.bytes) })),
+		wasZip
+	};
 }
 
 async function buildZip(
@@ -193,7 +197,9 @@ function buildZipStreamed(
 		});
 		for (const e of ordered) {
 			const stream =
-				e.level === 0 ? new fflate.ZipPassThrough(e.name) : new fflate.ZipDeflate(e.name, { level: 6 });
+				e.level === 0
+					? new fflate.ZipPassThrough(e.name)
+					: new fflate.ZipDeflate(e.name, { level: 6 });
 			zip.add(stream);
 			stream.push(e.bytes, true);
 		}
@@ -278,7 +284,10 @@ export async function compressEbook(
 	// --- Rebuild (0.9 → 1.0) ---
 	onProgress(0.9, null);
 	const isStored = (e: Entry) =>
-		sniffImage(e.bytes) !== null || sniffGif(e.bytes) || e.bytes.length === 0 || e.name.endsWith('/');
+		sniffImage(e.bytes) !== null ||
+		sniffGif(e.bytes) ||
+		e.bytes.length === 0 ||
+		e.name.endsWith('/');
 	const ordered = entries.map((e) => ({
 		name: e.name,
 		bytes: e.bytes,
@@ -294,7 +303,11 @@ export async function compressEbook(
 	const zipped = await buildZip(ordered);
 	signal?.throwIfAborted();
 
-	const currentExt = /\.epub$/i.test(file.name) ? '.epub' : /\.cbz$/i.test(file.name) ? '.cbz' : null;
+	const currentExt = /\.epub$/i.test(file.name)
+		? '.epub'
+		: /\.cbz$/i.test(file.name)
+			? '.cbz'
+			: null;
 	const outExt = isEpub ? ('.epub' as const) : ('.cbz' as const);
 	const isCbr = !isEpub && currentExt !== '.cbz';
 	return {

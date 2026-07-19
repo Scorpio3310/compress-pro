@@ -159,7 +159,11 @@ const PAGES = [
 		'Variable → static',
 		'Pin the axes, ship one static font. Locally.'
 	],
-	['og/compress-avif.jpg', 'Compress AVIF.', 'The tightest format, tuned tighter — on your device.'],
+	[
+		'og/compress-avif.jpg',
+		'Compress AVIF.',
+		'The tightest format, tuned tighter — on your device.'
+	],
 	['og/jpg-to-avif.jpg', 'JPG → AVIF', 'Up to half the bytes, same picture. Local.'],
 	['og/png-to-avif.jpg', 'PNG → AVIF', 'Graphics shrink, transparency stays.'],
 	['og/webp-to-avif.jpg', 'WebP → AVIF', 'One generation newer, one size smaller.'],
@@ -178,7 +182,11 @@ const PAGES = [
 	['og/create-tar-bz2.jpg', 'Create TAR.BZ2.', 'Tighter than gzip — built in your browser.'],
 	['og/create-tar-xz.jpg', 'Create TAR.XZ.', 'The hardest-squeezing tarball. On-device.'],
 	['og/extract-z.jpg', 'Extract .Z.', 'Unix compress, opened without unix.'],
-	['og/remove-audio-from-video.jpg', 'Remove audio.', 'The picture stays, the sound goes. Locally.'],
+	[
+		'og/remove-audio-from-video.jpg',
+		'Remove audio.',
+		'The picture stays, the sound goes. Locally.'
+	],
 	['og/png-to-svg.jpg', 'PNG → SVG', 'Pixels become paths — vectorized locally.'],
 	['og/jpg-to-svg.jpg', 'JPG → SVG', 'Logos traced into real vectors. On-device.'],
 	['og/raw-to-jpg.jpg', 'RAW → JPG', 'CR2, NEF, ARW & DNG — developed locally.'],

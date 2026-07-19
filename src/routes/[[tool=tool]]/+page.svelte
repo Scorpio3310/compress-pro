@@ -224,13 +224,13 @@
 				? 'application/pdf,.pdf'
 				: 'image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp'
 			: (conv?.accept ??
-				(isHome
-					? ''
-					: activeTab === 'pdf' && pdfOp === 'fromImages'
-						? IMAGE_ACCEPT
-						: activeTab === 'zip' && zipOp === 'create'
-							? ''
-							: undefined))
+					(isHome
+						? ''
+						: activeTab === 'pdf' && pdfOp === 'fromImages'
+							? IMAGE_ACCEPT
+							: activeTab === 'zip' && zipOp === 'create'
+								? ''
+								: undefined))
 	);
 	let effectiveAccept = $derived(dropzoneAccept ?? TAB_ACCEPT[activeTab]);
 
@@ -766,8 +766,7 @@
 		// only after load settled and the DOM updated, so the preset is current.
 		// Format hubs aren't converters, but their detail may still carry a
 		// reset preset (the ebook hub clears a persisted txt/pdf output).
-		const preset =
-			data.converter?.preset ?? (data.entry as { preset?: ConverterPreset }).preset;
+		const preset = data.converter?.preset ?? (data.entry as { preset?: ConverterPreset }).preset;
 		if (!preset) return;
 		// "Identical to the user clicking" also means obeying the busy freeze
 		// every click-surface has (inert settings, opsDisabled, gated intake):

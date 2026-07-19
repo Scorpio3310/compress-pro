@@ -1027,7 +1027,9 @@ export const BODIES: Record<string, SeoBody> = {
 			},
 			{
 				q: 'Are my subtitle files uploaded?',
-				a: 'No. The conversion is plain text processing that runs entirely in your browser — the server only delivers this page.' + PRIVACY_PROOF
+				a:
+					'No. The conversion is plain text processing that runs entirely in your browser — the server only delivers this page.' +
+					PRIVACY_PROOF
 			}
 		]
 	},
@@ -1063,7 +1065,9 @@ export const BODIES: Record<string, SeoBody> = {
 			},
 			{
 				q: 'Is anything uploaded?',
-				a: 'No. The conversion is plain text processing that runs entirely in your browser — the server only delivers this page.' + PRIVACY_PROOF
+				a:
+					'No. The conversion is plain text processing that runs entirely in your browser — the server only delivers this page.' +
+					PRIVACY_PROOF
 			}
 		]
 	},
@@ -1099,7 +1103,9 @@ export const BODIES: Record<string, SeoBody> = {
 			},
 			{
 				q: 'Are my files uploaded?',
-				a: 'No. The conversion is plain text processing that runs entirely in your browser — the server only delivers this page.' + PRIVACY_PROOF
+				a:
+					'No. The conversion is plain text processing that runs entirely in your browser — the server only delivers this page.' +
+					PRIVACY_PROOF
 			}
 		]
 	}

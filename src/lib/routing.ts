@@ -247,7 +247,11 @@ export const RAW_EXTENSIONS = new Set(['cr2', 'nef', 'arw', 'dng', 'raf', 'rw2',
 /** RAW must be detected UP FRONT, never sniffed: CR2/NEF/ARW/DNG carry TIFF
  *  magic bytes, so byte-sniffing would misroute them to the TIFF decoder. */
 export function isRawFile(name: string, mime: string): boolean {
-	if (/^image\/x-(adobe-dng|canon-cr2|nikon-nef|sony-arw|fuji-raf|panasonic-rw2|olympus-orf)$/.test(mime)) {
+	if (
+		/^image\/x-(adobe-dng|canon-cr2|nikon-nef|sony-arw|fuji-raf|panasonic-rw2|olympus-orf)$/.test(
+			mime
+		)
+	) {
 		return true;
 	}
 	const dot = name.lastIndexOf('.');

@@ -560,48 +560,13 @@
 			},
 			"sheet": {
 				"rows": [
-					[
-						"Peak",
-						"Country",
-						"Elevation_m",
-						"First_ascent"
-					],
-					[
-						"Triglav",
-						"Slovenia",
-						"2864",
-						"1778"
-					],
-					[
-						"Mont Blanc",
-						"France",
-						"4808",
-						"1786"
-					],
-					[
-						"Matterhorn",
-						"Switzerland",
-						"4478",
-						"1865"
-					],
-					[
-						"Grossglockner",
-						"Austria",
-						"3798",
-						"1800"
-					],
-					[
-						"Monte Rosa",
-						"Switzerland",
-						"4634",
-						"1855"
-					],
-					[
-						"Säntis",
-						"Switzerland",
-						"2502",
-						"1846"
-					]
+					["Peak", "Country", "Elevation_m", "First_ascent"],
+					["Triglav", "Slovenia", "2864", "1778"],
+					["Mont Blanc", "France", "4808", "1786"],
+					["Matterhorn", "Switzerland", "4478", "1865"],
+					["Grossglockner", "Austria", "3798", "1800"],
+					["Monte Rosa", "Switzerland", "4634", "1855"],
+					["Säntis", "Switzerland", "2502", "1846"]
 				]
 			}
 		}

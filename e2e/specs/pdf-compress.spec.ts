@@ -241,10 +241,7 @@ test('P-30: filled form values stay visible and links survive compression', asyn
 	);
 
 	// Honesty: the flatten is surfaced to the user as a row note/warning.
-	expect(
-		run.warnings.join(' '),
-		'flatten surfaced to the user'
-	).toMatch(/form/i);
+	expect(run.warnings.join(' '), 'flatten surfaced to the user').toMatch(/form/i);
 
 	rec.record({
 		id: 'P-30',

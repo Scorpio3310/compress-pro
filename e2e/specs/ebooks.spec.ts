@@ -8,7 +8,14 @@
  */
 import { readFileSync } from 'node:fs';
 import { expect, fx, test } from '../fixtures';
-import { compress, downloadRow, gotoPath, rasterizePdfInPage, setEbookQuality, upload } from '../helpers';
+import {
+	compress,
+	downloadRow,
+	gotoPath,
+	rasterizePdfInPage,
+	setEbookQuality,
+	upload
+} from '../helpers';
 import {
 	imageMeta,
 	jpegSosOffset,
@@ -50,11 +57,20 @@ test('EB-01: /compress-epub recompresses the images, keeps everything else @smok
 	expect(Object.keys(out).sort()).toEqual(Object.keys(src).sort());
 	expect(Buffer.from(out['mimetype']).toString()).toBe('application/epub+zip');
 	// text/structure byte-identical
-	for (const name of ['META-INF/container.xml', 'OEBPS/content.opf', 'OEBPS/nav.xhtml', 'OEBPS/chapter1.xhtml']) {
+	for (const name of [
+		'META-INF/container.xml',
+		'OEBPS/content.opf',
+		'OEBPS/nav.xhtml',
+		'OEBPS/chapter1.xhtml'
+	]) {
 		expect(Buffer.compare(Buffer.from(out[name]), Buffer.from(src[name])), name).toBe(0);
 	}
 	// images: smaller, same format, same dims; png keeps alpha
-	for (const name of ['OEBPS/images/photo1.jpg', 'OEBPS/images/photo2.jpg', 'OEBPS/images/diagram.png']) {
+	for (const name of [
+		'OEBPS/images/photo1.jpg',
+		'OEBPS/images/photo2.jpg',
+		'OEBPS/images/diagram.png'
+	]) {
 		expect(out[name].length, name).toBeLessThan(src[name].length);
 	}
 	const jpg = await imageMeta(Buffer.from(out['OEBPS/images/photo1.jpg']));
@@ -100,7 +116,9 @@ test('EB-03: /compress-cbz shrinks pages, preserves names, order and metadata', 
 	expect((await imageMeta(Buffer.from(out['page05.webp']))).format).toBe('webp');
 	// gif + metadata pass through byte-identical
 	expect(Buffer.compare(Buffer.from(out['page06.gif']), Buffer.from(src['page06.gif']))).toBe(0);
-	expect(Buffer.compare(Buffer.from(out['ComicInfo.xml']), Buffer.from(src['ComicInfo.xml']))).toBe(0);
+	expect(Buffer.compare(Buffer.from(out['ComicInfo.xml']), Buffer.from(src['ComicInfo.xml']))).toBe(
+		0
+	);
 	await expect(page.getByTestId('row-info')).toContainText('5 of 5 pages recompressed');
 });
 

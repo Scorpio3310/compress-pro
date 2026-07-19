@@ -5,3 +5,6 @@ node_modules/
 pnpm-lock.yaml
 pnpm-workspace.yaml
 *.pdf
+# Vendored tesseract.js artifacts (see docs in ocr integration) — upstream
+# build output, never hand-edited; formatting them is pure diff noise.
+static/tesseract/

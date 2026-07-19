@@ -91,7 +91,9 @@
 		<SegmentedControl
 			fit
 			items={textureDims}
-			selected={settings.textureMaxDimension === null ? 'off' : String(settings.textureMaxDimension)}
+			selected={settings.textureMaxDimension === null
+				? 'off'
+				: String(settings.textureMaxDimension)}
 			onselect={(id) => (settings.textureMaxDimension = id === 'off' ? null : Number(id))}
 		/>
 	</div>

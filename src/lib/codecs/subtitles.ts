@@ -236,6 +236,7 @@ function escapeVttText(text: string): string {
 		.replace(/&(?![a-zA-Z]{2,8};|#\d{1,7};|#x[0-9a-fA-F]{1,6};)/g, '&amp;')
 		.replace(/</g, '&lt;')
 		.replace(/>/g, '&gt;');
+	// eslint-disable-next-line no-control-regex -- NUL sentinels mark the protected spans above
 	return escaped.replace(/\u0000(\d+)\u0000/g, (_, i) => keep[Number(i)]);
 }
 

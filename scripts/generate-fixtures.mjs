@@ -1416,7 +1416,7 @@ async function sevenZipLines(args, inputs = {}) {
 	sz.FS.mkdir('/out');
 	for (const [name, bytes] of Object.entries(inputs)) sz.FS.writeFile(`/in/${name}`, bytes);
 	sz.FS.chdir('/in');
-	let exit = null;
+	let exit;
 	try {
 		exit = sz.callMain(args);
 	} catch {

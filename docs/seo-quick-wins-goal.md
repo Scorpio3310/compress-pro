@@ -1,6 +1,7 @@
 # Goal spec: 4 SEO quick-win pages — protect-zip/7z + delete/extract-pages-from-pdf
 
 ## Mission
+
 Ship four new tool landing pages whose engines are **already fully implemented and
 tested**: `/protect-zip`, `/protect-7z` (password-protected archive creation) and
 `/delete-pages-from-pdf`, `/extract-pages-from-pdf` (the existing PDF `pages` op,
@@ -9,9 +10,10 @@ landing/preset tests — **no codec, worker, or controls code should change** (t
 tiny preset-plumbing exceptions are called out explicitly below).
 
 All file:line references below were verified on 2026-07-19. Line numbers drift —
-re-locate with grep before editing; the *facts* were confirmed in code.
+re-locate with grep before editing; the _facts_ were confirmed in code.
 
 ## Before you start
+
 - `git status` must be clean; commit any leftovers first.
 - Read the project memory files (Claude memory dir) — especially the SEO registration
   checklist (seo.ts + seo-detail + seo-body + svelte.config entries + generate-og +
@@ -25,12 +27,13 @@ re-locate with grep before editing; the *facts* were confirmed in code.
 ## A) /protect-zip + /protect-7z
 
 ### Verified: the encryption engine is 100 % shipped — do NOT rebuild it
+
 - `src/lib/codecs/archive-tools.ts:35-36` — the create op already sends
   `settings.password` + `settings.encryptNames` to the worker. (Convert/extract use
-  the password only to decrypt the *source*; converted output is intentionally
+  the password only to decrypt the _source_; converted output is intentionally
   unencrypted — do not "fix" that.)
 - `src/lib/components/controls/ArchiveControls.svelte:45-47` — `canEncrypt = op ===
-  'create' && (zip || 7z)`; password input with Show/Hide eye-toggle at L122-142;
+'create' && (zip || 7z)`; password input with Show/Hide eye-toggle at L122-142;
   `encryptNames` ("hide file names") checkbox, 7z-only, at L146-151.
 - `src/lib/codecs/sevenzip-args.ts:114-134` — `-p<password>` gated to zip/7z;
   zip → `-mem=AES256`; 7z + encryptNames → `-mhe=on`.
@@ -41,6 +44,7 @@ re-locate with grep before editing; the *facts* were confirmed in code.
   creation through the UI (`zipEntryEncrypted`, e2e/verify.ts:691-705).
 
 ### Tasks
+
 1. `src/lib/seo.ts` TOOLS: two entries, `format: 'zip'`, paths `/protect-zip` and
    `/protect-7z` (no `-to-`, so they land in TOOLS — mirror `create-7z` at
    seo.ts:1093-1099). label/feature/h1 e.g. "Protect ZIP" / "Password-protect a ZIP" /
@@ -75,6 +79,7 @@ re-locate with grep before editing; the *facts* were confirmed in code.
 ## B) /delete-pages-from-pdf + /extract-pages-from-pdf
 
 ### Verified: the pages op is fully shipped — do NOT rebuild it
+
 - `src/lib/codecs/pdf-tools.ts:81-112` — `extractPages(file, range, 'keep'|'remove')`
   (remove inverts via `complementPages`; empty selection → honest error). Dispatch at
   `compress.ts:641-644`; output name `-pages.pdf`.
@@ -87,6 +92,7 @@ re-locate with grep before editing; the *facts* were confirmed in code.
   landing; matrix has a `split @1-2` cell. Helpers `setPageRange`/`setPageMode` exist.
 
 ### Tasks
+
 1. `src/lib/seo.ts` (~L140-153): extend the `pdf-op` ConverterPreset arm with
    `pageMode?: 'keep' | 'remove'`.
 2. `src/routes/[[tool=tool]]/+page.svelte` (afterNavigate, ~L671-672): after
@@ -116,6 +122,7 @@ re-locate with grep before editing; the *facts* were confirmed in code.
 8. **No changes** to pdf-tools.ts, PdfControls.svelte, pdf-range.ts, or types.ts.
 
 ## Shared finish line
+
 - `e2e/specs/agent-ready.spec.ts:118` — `.toHaveLength(147)` → **151**.
 - Gates, all green before done:
   1. `pnpm test` (unit) and `pnpm check` (svelte-check 0 errors).
@@ -130,11 +137,13 @@ re-locate with grep before editing; the *facts* were confirmed in code.
 - Update the memory index with a one-line note when done (new page count 151).
 
 ## Constraints
+
 - Client-side only; never weaken privacy claims — copy must match what the code does.
 - Do not modify `tests/fixtures/real/`.
 - No style-only refactors; touch only what the tasks require.
 
 ## Explicitly OUT of scope (decided 2026-07-19 — do not drift into these)
+
 - **txt-to-epub** (~16h) and **json-to-csv / csv-to-json** (~15h): both verified
   feasible with full designs (chapter detection + OCF build reusing ebook.ts buildZip;
   DataSettings.to + SheetJS/hand-rolled RFC-4180 split). Parked deliberately — a

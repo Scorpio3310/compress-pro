@@ -646,7 +646,8 @@ chunk(bySize(epubs), 4).forEach((files, i) => {
  *  comics — the PDF page count must match what the app actually embeds). */
 function sniffPage(b: Uint8Array): 'jpg' | 'png' | 'webp' | 'gif' | null {
 	if (b.length > 2 && b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) return 'jpg';
-	if (b.length > 3 && b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47) return 'png';
+	if (b.length > 3 && b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47)
+		return 'png';
 	if (
 		b.length > 11 &&
 		b[0] === 0x52 &&
@@ -659,7 +660,8 @@ function sniffPage(b: Uint8Array): 'jpg' | 'png' | 'webp' | 'gif' | null {
 		b[11] === 0x50
 	)
 		return 'webp';
-	if (b.length > 3 && b[0] === 0x47 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x38) return 'gif';
+	if (b.length > 3 && b[0] === 0x47 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x38)
+		return 'gif';
 	return null;
 }
 

@@ -23,14 +23,15 @@ Status: `FIXED` (commit + covering test) · `OPEN` (needs human decision) · `IN
 
 ## Findings
 
-| # | Sev | Area | Finding | Status | Test | Commit |
-|---|-----|------|---------|--------|------|--------|
-| F-01 | S6 (test-infra) | e2e helpers | `openAdvanced()` raced the lazily-imported settings card (`loadControls` in +page): probing `advanced-toggle` via `count()` before the dynamic import mounted silently no-opped, leaving later switch clicks stuck against the collapsed `inert` panel. Baseline `test:e2e:quick` was red: 8/381 failing under workers=4 (HE-02, IMG-12, KM-06, S-04, S-05, V-07, V-08, V-24) — all in toggle/advanced flows; each passed in isolation. Diagnosed via CDP (`Network.requestWillBeSent` initiator + MutationObserver instrumentation). Fix: wait for new `data-testid="settings-panel"` before deciding the tab has no disclosure. | FIXED | quick suite 381/381 green after fix (was 8 fail → 2 residual-flake → 0 across three runs); race deterministically repro'd via instrumented spec before fix | 3481522 |
-| F-03 | S1 | pdf compress/grayscale/pdfa | The gs wasm engine drops EVERY annotation on rewrite (measured: even bare pdfwrite args and `-dPreserveAnnots=true`): filled AcroForm values (sample2.pdf: "Man"/"150"/"Red" → empty) AND hyperlinks silently vanished. Caught by VISUAL inspection of the matrix raster (SSIM 0.9957 missed it). Two-layer root cause: engine strips annots; and pdf-lib `updateFieldAppearances` only regenerates DIRTY fields, so externally-filled forms flattened to empty boxes. Fix: `pdf-interactive.ts` — byte-scan (+bounded /ObjStm probe), re-set every field to its own value (marks dirty), regenerate appearances, flatten pre-gs; collect /Link annots (URI + GoTo) and transplant post-gs; flatten surfaced as row warning. Applied to compress (level+target), grayscale, pdfa. | FIXED | P-30 e2e (red→green) + 6 unit tests (pdf-interactive.test.ts) + visual re-check of matrix raster | d2a86a7 |
-| F-04 | S6 (test-infra) | matrix harness | Archive extract cells failed as "3/6 entries" on every macOS-made zip/rar + all bz2 — triage proved ZERO app data loss: the app intentionally hides `__MACOSX/._*`/dot-file noise (extractableEntry rule), and Chromium appends ".txt" to extension-less single-entry downloads, breaking name-keyed comparison. Comparator now mirrors the app's row rule and byte-compares the 1:1 case. Sidebar polish idea logged as O-02. | FIXED | matrix extract cells green (sample-2.zip/bz2, sample-5.rar) | (with harness commits) |
-| F-02 | S6 (dev-only) | dev server | During e2e runs a stray full reload sometimes fires from `@vite/client` (`pageReload` debouncer; CDP initiator stack captured; no HMR/full-reload message logged server- or client-side). Dev-only — production never runs the vite client. Resets page state mid-test when it lands; not reproducible on an idle page (25 s watch) nor in a standalone scripted flow. | OPEN (monitoring) | n/a — will re-flag if it recurs in matrix runs | — |
+| #    | Sev             | Area                        | Finding                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | Status            | Test                                                                                                                                                       | Commit                 |
+| ---- | --------------- | --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------- |
+| F-01 | S6 (test-infra) | e2e helpers                 | `openAdvanced()` raced the lazily-imported settings card (`loadControls` in +page): probing `advanced-toggle` via `count()` before the dynamic import mounted silently no-opped, leaving later switch clicks stuck against the collapsed `inert` panel. Baseline `test:e2e:quick` was red: 8/381 failing under workers=4 (HE-02, IMG-12, KM-06, S-04, S-05, V-07, V-08, V-24) — all in toggle/advanced flows; each passed in isolation. Diagnosed via CDP (`Network.requestWillBeSent` initiator + MutationObserver instrumentation). Fix: wait for new `data-testid="settings-panel"` before deciding the tab has no disclosure.                                                                                                                                                 | FIXED             | quick suite 381/381 green after fix (was 8 fail → 2 residual-flake → 0 across three runs); race deterministically repro'd via instrumented spec before fix | 3481522                |
+| F-03 | S1              | pdf compress/grayscale/pdfa | The gs wasm engine drops EVERY annotation on rewrite (measured: even bare pdfwrite args and `-dPreserveAnnots=true`): filled AcroForm values (sample2.pdf: "Man"/"150"/"Red" → empty) AND hyperlinks silently vanished. Caught by VISUAL inspection of the matrix raster (SSIM 0.9957 missed it). Two-layer root cause: engine strips annots; and pdf-lib `updateFieldAppearances` only regenerates DIRTY fields, so externally-filled forms flattened to empty boxes. Fix: `pdf-interactive.ts` — byte-scan (+bounded /ObjStm probe), re-set every field to its own value (marks dirty), regenerate appearances, flatten pre-gs; collect /Link annots (URI + GoTo) and transplant post-gs; flatten surfaced as row warning. Applied to compress (level+target), grayscale, pdfa. | FIXED             | P-30 e2e (red→green) + 6 unit tests (pdf-interactive.test.ts) + visual re-check of matrix raster                                                           | d2a86a7                |
+| F-04 | S6 (test-infra) | matrix harness              | Archive extract cells failed as "3/6 entries" on every macOS-made zip/rar + all bz2 — triage proved ZERO app data loss: the app intentionally hides `__MACOSX/._*`/dot-file noise (extractableEntry rule), and Chromium appends ".txt" to extension-less single-entry downloads, breaking name-keyed comparison. Comparator now mirrors the app's row rule and byte-compares the 1:1 case. Sidebar polish idea logged as O-02.                                                                                                                                                                                                                                                                                                                                                    | FIXED             | matrix extract cells green (sample-2.zip/bz2, sample-5.rar)                                                                                                | (with harness commits) |
+| F-02 | S6 (dev-only)   | dev server                  | During e2e runs a stray full reload sometimes fires from `@vite/client` (`pageReload` debouncer; CDP initiator stack captured; no HMR/full-reload message logged server- or client-side). Dev-only — production never runs the vite client. Resets page state mid-test when it lands; not reproducible on an idle page (25 s watch) nor in a standalone scripted flow.                                                                                                                                                                                                                                                                                                                                                                                                            | OPEN (monitoring) | n/a — will re-flag if it recurs in matrix runs                                                                                                             | —                      |
 
 ### Audit round 1 (workflow: 9 finders + adversarial verify, 2026-07-18 evening)
+
 64 raw findings → **51 confirmed** (1 refuted, 12 verifications hit the session usage
 limit — re-verify queued; full detail incl. failure scenarios + repro ideas in
 `test-results/audit-r1.json`). All queued below; fixes land one commit each.
@@ -108,6 +109,7 @@ limit — re-verify queued; full detail incl. failure scenarios + repro ideas in
 | F-66 | S6 | ui-layer | Removing a failed file's row leaves its stale error banner and red tab badge behind (`+page.svelte:507`) | FIXED | E-11 e2e banner/badge cleanup | 270323b |
 | F-67 | S6 | ui-layer | Busy-tab refusal message names internal tab ids ('zip', 'subtitle'), not UI labels (`+page.svelte:701`) | FIXED | tab-ui units: real labels | 270323b |
 | F-68 | S6 | ui-layer | Tab-title progress tracks first compressing tab in object order, not the watched one (`+page.svelte:260`) | FIXED | pickTitleRun units | 270323b |
+
 ## Real-file matrix
 
 Generated by `scripts/matrix-report.mjs` from `test-results/matrix/cells/`.
@@ -123,6 +125,7 @@ refuted F-73 (compositor artifact). PDF/fonts/docs/models families visually clea
 ## Performance
 
 ### Before/after summary (Phase 6)
+
 After-state (2026-07-19, same 16-scenario bench): no regressions beyond run noise;
 several peaks improved (MEM-02 chromium 197→158 MB, MEM-03 4K video 652→356 MB,
 MEM-05 iso 368→188 MB, MEM-06 cancel settled 744→−61 MB). MEM-01 gs run +2.3 s from
@@ -132,6 +135,7 @@ Matrix `durationMs` doubles as the per-tool timing source; the one anomaly it ca
 (oxipng minutes-long grind past 12 MP) is fixed (F-69).
 
 ### Memory bench baseline (before sweep)
+
 2026-07-18, 16 passed / 2 skipped, 10.5 min — full table in `docs/memory-bench.md`
 (this run = the before-state). Highlights: MEM-01 gs 406 MB PDF chromium peak Δ 762 MB
 (leak signal 34 MB); MEM-04 AVIF batch chromium peak Δ 1299 MB and **settled Δ 528 MB**
@@ -139,6 +143,7 @@ Matrix `durationMs` doubles as the per-tool timing source; the one anomaly it ca
 MEM-06 cancel returns the gs wasm heap on all 3 browsers.
 
 ### Bundle gate
+
 Baseline at sweep start (2026-07-18, post-expansion commits): initial JS 232,886 raw /
 **83,753 gz** (budget 92,000), route node 2: 77,827 raw (budget 86,000). Note: init grew
 from the pre-expansion 79.6 KB gz baseline by ~4.1 KB — attributable to wiring 22 new
@@ -148,6 +153,7 @@ whether any of that belongs off the init path.
 ## SEO validator
 
 ### Before
+
 2026-07-18, `node scripts/validate-seo.mjs` over `.svelte-kit/cloudflare/` (147 html,
 145 md twins, 144 registry slugs): **0 errors, 10 warnings, exit 0**. All 13 check
 classes proven non-vacuous against seeded violations. The 10 warnings are reversed
@@ -156,6 +162,7 @@ tar-gz↔zip, ttf↔woff, ttf↔woff2, woff↔woff2) whose title token SETS are 
 (strings distinct and direction-correct) → logged as OPEN item O-01.
 
 ### After
+
 (populated at the end)
 
 ## OPEN items — resolution round (2026-07-19)
@@ -171,12 +178,12 @@ Six of the eight went to FIXED in one pass; two stay OPEN by decision.
   committed `photo-payload.gz` fixture.
 - **O-03 — FIXED (4a3e721):** RAW keep-metadata is real — `raw.metadata()` in the
   decode transaction, new `exif-build.ts` writes a bare LE TIFF (IFD0 + Exif sub-IFD
-  + GPS IFD, Orientation always 1 — pixels leave LibRaw pre-rotated), spliced by the
-  existing exif-copy path; the TIFF never travels to the worker. Honest note remains
-  only for RAWs that expose no readable EXIF. Covered by exif-build.test (round-trip
-  through the app's own TiffReader), the flipped image.test, and KM-09 on a real
-  Canon DNG (make/model/ISO read back, orientation 1). `readExifSummary` gained
-  iso/exposureTime/fNumber/focalLength.
+  - GPS IFD, Orientation always 1 — pixels leave LibRaw pre-rotated), spliced by the
+    existing exif-copy path; the TIFF never travels to the worker. Honest note remains
+    only for RAWs that expose no readable EXIF. Covered by exif-build.test (round-trip
+    through the app's own TiffReader), the flipped image.test, and KM-09 on a real
+    Canon DNG (make/model/ISO read back, orientation 1). `readExifSummary` gained
+    iso/exposureTime/fNumber/focalLength.
 - **O-04 — FIXED (abf974d):** CompareModal shows "Grew N%" in warn color for grown
   files (was green "Saved −N%"); FileList/SavingsSummary were already honest.
   Asserted in K-02.

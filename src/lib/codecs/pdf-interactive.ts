@@ -130,9 +130,8 @@ type PdfLibForm = import('pdf-lib').PDFForm;
  *  appearances only for dirty fields. Per-field try/catch: one exotic field
  *  must not cost the rest their values. */
 async function markAllFieldsDirty(form: PdfLibForm): Promise<void> {
-	const { PDFCheckBox, PDFDropdown, PDFOptionList, PDFRadioGroup, PDFTextField } = await import(
-		'pdf-lib'
-	);
+	const { PDFCheckBox, PDFDropdown, PDFOptionList, PDFRadioGroup, PDFTextField } =
+		await import('pdf-lib');
 	for (const field of form.getFields()) {
 		try {
 			if (field instanceof PDFTextField) field.setText(field.getText());
@@ -225,10 +224,7 @@ type PdfLibModule = typeof import('pdf-lib');
  *  /Dests dictionary and the PDF 1.2+ /Names → /Dests name tree (Kids/Names
  *  walked recursively). Values may be the dest array directly or a {D: array}
  *  wrapper — both normalized here. */
-function makeNamedDestResolver(
-	doc: PdfLibDoc,
-	libs: PdfLibModule
-): (name: string) => unknown {
+function makeNamedDestResolver(doc: PdfLibDoc, libs: PdfLibModule): (name: string) => unknown {
 	const { PDFArray, PDFDict, PDFName, PDFHexString, PDFString } = libs;
 	let map: Map<string, unknown> | null = null;
 	const build = (): Map<string, unknown> => {

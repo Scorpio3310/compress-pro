@@ -501,7 +501,7 @@ for (const check of CREATE_SETS) {
 		const inBytes = looseParts.reduce((sum, p) => sum + p.bytes, 0);
 		const fileId = looseParts.map((p) => p.rel).join('+');
 		const elapsed = timer();
-		let problems: string[] = [];
+		let problems: string[];
 		try {
 			await gotoPath(page, check.path);
 			await upload(page, ...looseParts.map((p) => p.abs));
