@@ -1,27 +1,16 @@
 <script lang="ts">
 	import type { OcrSettings } from '$lib/types';
 	import { OCR_LANGUAGES } from '$lib/types';
-	import SegmentedControl from './SegmentedControl.svelte';
 
 	interface Props {
 		settings: OcrSettings;
 	}
 
+	// The op itself (Extract text | Searchable PDF) lives in the tab rail —
+	// it swaps the accepted inputs, so it must be visible before upload.
 	let { settings = $bindable() }: Props = $props();
-
-	const ops = [
-		{ id: 'toText', label: 'Extract text' },
-		{ id: 'toPdf', label: 'Searchable PDF' }
-	];
 </script>
 
-<div class="panel-span">
-	<SegmentedControl
-		items={ops}
-		selected={settings.op}
-		onselect={(id) => (settings.op = id as OcrSettings['op'])}
-	/>
-</div>
 <div>
 	<label for="ocr-language" class="microlabel mb-2.5 block text-muted">Document language</label>
 	<select

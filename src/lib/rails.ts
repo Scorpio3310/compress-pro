@@ -1,4 +1,4 @@
-import type { FontOp, PdfOp, ZipSettings } from './types';
+import type { FontOp, OcrSettings, PdfOp, ZipSettings } from './types';
 
 /** One item of a secondary op rail. `id` doubles as the e2e hook
  *  (`button[data-seg="<id>"]`) and `label` as the exact accessible name —
@@ -45,4 +45,8 @@ export const ZIP_OPS: { id: ZipSettings['op']; label: string }[] = [
 export const FONT_OPS: { id: FontOp; label: string }[] = [
 	{ id: 'convert', label: 'Convert' },
 	{ id: 'subset', label: 'Subset' }
+];
+export const OCR_OPS: { id: OcrSettings['op']; label: string }[] = [
+	{ id: 'toText', label: 'Extract text' },
+	{ id: 'toPdf', label: 'Searchable PDF' }
 ];

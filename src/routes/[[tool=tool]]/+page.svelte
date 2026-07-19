@@ -5,6 +5,7 @@
 		UploadedFile,
 		CompressedFile,
 		TabState,
+		OcrSettings,
 		PdfOp,
 		ProgressInfo,
 		ZipSettings
@@ -20,7 +21,7 @@
 	import { fontMeta, probeFont, removeFontMeta } from '$lib/font-meta.svelte';
 	import { estimateAudioBytes, estimateVideoBytes } from '$lib/video-estimate';
 	import * as actionLabels from '$lib/action-labels';
-	import { FONT_OPS, PDF_OPS, ZIP_OPS, type Rail } from '$lib/rails';
+	import { FONT_OPS, OCR_OPS, PDF_OPS, ZIP_OPS, type Rail } from '$lib/rails';
 	import Tabs, { type TabBadgeStatus } from '$lib/components/Tabs.svelte';
 	import FileUpload from '$lib/components/FileUpload.svelte';
 	import CompressButton from '$lib/components/controls/CompressButton.svelte';
@@ -35,6 +36,7 @@
 	import { pathFor, type ConverterPreset } from '$lib/seo';
 	import { busyTabsMessage, pickTitleRun } from '$lib/tab-ui';
 	import { page } from '$app/state';
+	import { browser } from '$app/environment';
 	import { goto, afterNavigate } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { fade } from 'svelte/transition';
@@ -133,6 +135,14 @@
 					value: fontOp,
 					onselect: (id) => handleFontOpChange(id as FontOp)
 				};
+			case 'ocr':
+				return {
+					group: 'ocr',
+					label: 'OCR tool',
+					items: OCR_OPS,
+					value: ocrOp,
+					onselect: (id) => handleOcrOpChange(id as OcrSettings['op'])
+				};
 			default:
 				return null;
 		}
@@ -143,21 +153,32 @@
 	// visitor never has to pick a tab. Tool pages keep converter semantics.
 	let isHome = $derived(!page.params.tool);
 
+	// The OCR op governing intake. Live settings win; during SSR the settings
+	// store holds defaults, so fall back to the page's own preset — /ocr-pdf
+	// must prerender its PDF intake, not the default image one.
+	const ocrOp = $derived.by<OcrSettings['op']>(() => {
+		if (browser) return settings.ocr.op;
+		const preset = conv?.preset;
+		return preset?.kind === 'ocr' ? preset.op : settings.ocr.op;
+	});
+
 	// undefined = FileUpload falls back to the tab default (keeps its "JPG
 	// files" subject wording); effectiveAccept is what actually governs drops.
+	// OCR sits AHEAD of conv?.accept: its accept follows the live op, and a
+	// rail flip on /ocr-pdf (whose converter pins a PDF accept) must win.
 	let dropzoneAccept = $derived(
-		conv?.accept ??
-			(isHome
-				? ''
-				: activeTab === 'pdf' && pdfOp === 'fromImages'
-					? IMAGE_ACCEPT
-					: activeTab === 'zip' && zipOp === 'create'
-						? ''
-						: activeTab === 'ocr'
-							? settings.ocr.op === 'toPdf'
-								? 'application/pdf,.pdf'
-								: 'image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp'
-							: undefined)
+		activeTab === 'ocr'
+			? ocrOp === 'toPdf'
+				? 'application/pdf,.pdf'
+				: 'image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp'
+			: (conv?.accept ??
+				(isHome
+					? ''
+					: activeTab === 'pdf' && pdfOp === 'fromImages'
+						? IMAGE_ACCEPT
+						: activeTab === 'zip' && zipOp === 'create'
+							? ''
+							: undefined))
 	);
 	let effectiveAccept = $derived(dropzoneAccept ?? TAB_ACCEPT[activeTab]);
 
@@ -620,6 +641,17 @@
 		settings.font.op = op;
 	}
 
+	function handleOcrOpChange(op: OcrSettings['op']) {
+		if (op === settings.ocr.op) return;
+		const state = tabStates.ocr;
+		clearResults(state);
+		state.error = null;
+		// toText reads images, toPdf reads PDFs — parked files never survive the flip.
+		for (const f of state.files) URL.revokeObjectURL(f.objectUrl);
+		state.files = [];
+		settings.ocr.op = op;
+	}
+
 	// Converter landing pages preset the tool. afterNavigate fires on hydration
 	// ('enter') and on every client navigation while this shared component stays
 	// mounted — once per navigation, so manual changes afterwards are never
@@ -710,7 +742,7 @@
 			// Other pdf ops never touch pageMode.
 			if (preset.op === 'pages') settings.pdf.pageMode = preset.pageMode ?? 'keep';
 		} else if (preset.kind === 'ocr') {
-			settings.ocr.op = preset.op;
+			handleOcrOpChange(preset.op);
 		} else if (preset.kind === 'subtitle') {
 			settings.subtitle.to = preset.to;
 		} else if (preset.kind === 'ebook') {
@@ -967,17 +999,17 @@
 			onforeign={(files, parkedAny) => routeIncomingFiles(files, { navigate: !parkedAny })}
 			routePicks={isHome}
 			universalNote={isHome}
-			subject={conv?.dropSubject ??
-				(isHome
-					? currentState.files.length > 0
-						? 'files'
-						: 'any files'
-					: activeTab === 'exif'
-						? 'photos'
-						: activeTab === 'ocr'
-							? settings.ocr.op === 'toPdf'
-								? 'PDFs'
-								: 'images'
+			subject={activeTab === 'ocr'
+				? ocrOp === 'toPdf'
+					? 'PDF files'
+					: 'images'
+				: (conv?.dropSubject ??
+					(isHome
+						? currentState.files.length > 0
+							? 'files'
+							: 'any files'
+						: activeTab === 'exif'
+							? 'photos'
 							: activeTab === 'subtitle'
 								? 'subtitle files'
 								: activeTab === 'ebook'
@@ -990,7 +1022,7 @@
 												? zipOp === 'create'
 													? 'files'
 													: 'archives'
-												: undefined)}
+												: undefined))}
 			compact={currentState.files.length > 0}
 			disabled={currentState.isCompressing}
 		/>
