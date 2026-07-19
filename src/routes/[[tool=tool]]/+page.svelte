@@ -975,6 +975,7 @@
 					{totalOriginalSize}
 					{estimatedSize}
 					{fontAxes}
+					ebookFileNames={tabStates.ebook.files.map((f) => f.name)}
 				/>
 			</div>
 		{/if}

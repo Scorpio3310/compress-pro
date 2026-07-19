@@ -1,5 +1,5 @@
 /**
- * EB-01…14: the ebook tab — EPUB/CBZ/CBR image recompression, plus the
+ * EB-01…16: the ebook tab — EPUB/CBZ/CBR image recompression, plus the
  * converter outputs: EPUB → TXT (spine-ordered text extraction) and CBZ/CBR →
  * PDF (pages embedded losslessly). The container is rebuilt as a ZIP
  * (mimetype-first/stored for EPUB), raster images inside re-encode in their
@@ -268,12 +268,38 @@ test('EB-12: /cbr-to-pdf refuses an image-free archive with an honest error', as
 	await expect(page.getByTestId('compress-cta')).toBeEnabled();
 });
 
-test('EB-13: a comic dropped on /epub-to-txt is redirected, not mangled', async ({ page }) => {
+test('EB-13: a comic dropped on /epub-to-txt hides TXT and falls back to compress', async ({
+	page
+}) => {
+	// TXT can't succeed for a comic — the segment hides and the preset
+	// selection snaps VISIBLY to Compress instead of dead-ending on run.
 	await gotoPath(page, '/epub-to-txt');
 	await upload(page, fx('sample.cbz'));
-	const run = await compress(page, { expectError: true });
-	expect(run.error).toMatch(/cbz-to-pdf/);
-	await expect(page.getByTestId('compress-cta')).toBeEnabled();
+	await expect(page.getByRole('button', { name: 'Compress', exact: true })).toHaveAttribute(
+		'aria-pressed',
+		'true'
+	);
+	await expect(page.getByRole('button', { name: 'To TXT', exact: true })).toHaveCount(0);
+	await expect(page.getByTestId('compress-cta')).toHaveText('Compress 1 file');
+	await compress(page, { timeout: 120_000 });
+	expect((await downloadRow(page)).name).toBe('sample.cbz');
+});
+
+test('EB-16: an EPUB dropped on /cbz-to-pdf hides PDF and falls back to compress', async ({
+	page
+}) => {
+	await gotoPath(page, '/cbz-to-pdf');
+	await upload(page, fx('sample.epub'));
+	await expect(page.getByRole('button', { name: 'Compress', exact: true })).toHaveAttribute(
+		'aria-pressed',
+		'true'
+	);
+	await expect(page.getByRole('button', { name: 'To PDF', exact: true })).toHaveCount(0);
+	// TXT stays offered — it CAN act on an EPUB.
+	await expect(page.getByRole('button', { name: 'To TXT', exact: true })).toBeVisible();
+	await expect(page.getByTestId('compress-cta')).toHaveText('Compress 1 file');
+	await compress(page, { timeout: 120_000 });
+	expect((await downloadRow(page)).name).toBe('sample.epub');
 });
 
 test('EB-15: a persisted txt/pdf output does not leak into compress pages', async ({ page }) => {

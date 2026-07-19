@@ -5,15 +5,35 @@
 
 	interface Props {
 		settings: EbookSettings;
+		/** Names of the tab's uploaded files — the output segments only show
+		 *  when the batch holds a file they can act on. */
+		fileNames?: string[];
 	}
 
-	let { settings = $bindable() }: Props = $props();
+	let { settings = $bindable(), fileNames = [] }: Props = $props();
 
-	const outputs = [
+	// TXT reads EPUBs, PDF lays out comics — a segment that can't succeed for
+	// ANY uploaded file is hidden rather than left to error on run. Mixed
+	// batches keep both (per-file guards in compress.ts stay the arbiter, and
+	// also cover renamed/mislabeled files this extension check can't see).
+	const hasEpub = $derived(fileNames.some((n) => /\.epub$/i.test(n)));
+	const hasComic = $derived(fileNames.some((n) => /\.(cbz|cbr)$/i.test(n)));
+	const showTxt = $derived(!hasComic || hasEpub);
+	const showPdf = $derived(!hasEpub || hasComic);
+	const outputs = $derived([
 		{ id: 'auto', label: 'Compress' },
-		{ id: 'txt', label: 'To TXT' },
-		{ id: 'pdf', label: 'To PDF' }
-	];
+		...(showTxt ? [{ id: 'txt', label: 'To TXT' }] : []),
+		...(showPdf ? [{ id: 'pdf', label: 'To PDF' }] : [])
+	]);
+
+	$effect(() => {
+		// A selection whose segment just vanished (persisted `to`, or the batch
+		// changed under it) snaps VISIBLY back to compress — never a hidden
+		// state the CTA doesn't reflect.
+		if ((settings.to === 'txt' && !showTxt) || (settings.to === 'pdf' && !showPdf)) {
+			settings.to = 'auto';
+		}
+	});
 
 	const dimensions = [
 		{ id: 'off', label: 'Off' },
