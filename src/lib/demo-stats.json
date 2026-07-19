@@ -706,5 +706,39 @@
 			"url": "https://www.magnific.com/free-photo/landscape-seiser-alm-near-langkofel-group-mountains-sunlight-italy_12304873.htm",
 			"source": "Magnific"
 		}
+	},
+	"merge": {
+		"tool": "/merge-pdf",
+		"engine": "pdf-lib",
+		"outputFormat": "pdf",
+		"input": {
+			"name": "demo-brief-a.pdf",
+			"pages": 3
+		},
+		"originalBytes": 3284,
+		"compressedBytes": 2518,
+		"savingsPercent": 23,
+		"display": {
+			"before": "",
+			"after": "",
+			"width": 0,
+			"height": 0,
+			"shows": "file",
+			"merge": {
+				"files": [
+					{
+						"name": "demo-brief-a.pdf",
+						"pages": 3,
+						"bytes": 1834
+					},
+					{
+						"name": "demo-brief-b.pdf",
+						"pages": 2,
+						"bytes": 1450
+					}
+				],
+				"pages": 5
+			}
+		}
 	}
 }

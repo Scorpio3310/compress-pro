@@ -286,9 +286,10 @@ test('LP-16: the before/after demo renders where honest and nowhere else', async
 		await gotoPath(page, path);
 		await expect(page.locator('[aria-label="Image comparison slider"]')).toBeVisible();
 	}
-	// /merge-pdf and /compress-mov run the same engine families but have no
-	// demo of their own.
+	// /merge-pdf renders the file-table demo (no slider — nothing visual to
+	// compare); /compress-mov runs the same engine family but has no demo.
 	await gotoPath(page, '/merge-pdf');
+	await expect(page.locator('[data-demo-merge]')).toBeVisible();
 	await expect(page.locator('[aria-label="Image comparison slider"]')).toHaveCount(0);
 	await gotoPath(page, '/compress-mov');
 	await expect(page.locator('[aria-label="Image comparison slider"]')).toHaveCount(0);

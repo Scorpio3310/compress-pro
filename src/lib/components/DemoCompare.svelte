@@ -70,11 +70,11 @@
 	const beforeSrc = $derived(stats && assetUrl(stats.display.before));
 	const afterSrc = $derived(stats && assetUrl(stats.display.after));
 
-	// Kinds that render without a display-asset pair: archive/subtitle/data are
-	// tables and text panels straight from the manifest; ocr anchors on the
-	// scan alone — its "after" side is the recognized text.
+	// Kinds that render without a display-asset pair: archive/subtitle/data/
+	// merge are tables and text panels straight from the manifest; ocr anchors
+	// on the scan alone — its "after" side is the recognized text.
 	const hasDisplay = $derived(
-		kind === 'archive' || kind === 'subtitle' || kind === 'data'
+		kind === 'archive' || kind === 'subtitle' || kind === 'data' || kind === 'merge'
 			? true
 			: kind === 'ocr'
 				? !!beforeSrc
@@ -156,6 +156,18 @@
 				{ label: 'Format', value: 'CSV → XLSX', emphasize: true }
 			];
 		}
+		if (kind === 'merge' && stats.display.merge) {
+			const m = stats.display.merge;
+			return [
+				{ label: 'Files', value: `${m.files.length} → 1`, emphasize: true },
+				{
+					label: 'Pages',
+					value: `${m.files.map((f) => f.pages).join(' + ')} → ${m.pages}`,
+					emphasize: false
+				},
+				{ label: 'Size', value: formatBytes(stats.compressedBytes), emphasize: false }
+			];
+		}
 		// webp-to-jpg trades bytes for compatibility — a −% card would show 0
 		// (savingsPercent clamps); the format flip IS the story.
 		if (kind === 'webp-to-jpg') {
@@ -231,6 +243,18 @@
 					beforeAlt: `Detail crop of the original ${s.input.megapixels}-megapixel HEIC photo of colorful sewing thread spools, at 100% zoom`,
 					afterAlt: `The same detail after conversion to JPG at quality ${s.quality} — visually near-identical`
 				};
+			case 'merge': {
+				const m = s.display.merge;
+				const parts = m?.files.map((f) => f.pages).join(' and ') ?? '';
+				return {
+					creditPrefix: '',
+					toolName: 'Merge PDF',
+					lede: `these two documents — ${parts} pages — went through the`,
+					body: `tool and came out as one ${m?.pages}-page PDF, assembled by pdf-lib on your device. Pages are copied structurally — nothing is re-encoded, so text and images stay byte-identical to their sources. The upload order is the page order; drop your own files in and the table above is exactly what you'll see.`,
+					beforeAlt: '',
+					afterAlt: ''
+				};
+			}
 			case 'png-to-webp':
 				return {
 					creditPrefix: 'Artwork by',
@@ -475,6 +499,38 @@
 					0123456789 — “fjord” &amp; ligatures.
 				</p>
 			</div>
+		{:else if kind === 'merge'}
+			<!-- File table — the demo is the page math, no display assets. -->
+			{#if stats.display.merge}
+				{@const m = stats.display.merge}
+				<div class="{hero ? 'mt-6 ' : ''}overflow-x-auto rounded-xl" data-demo-merge>
+					<table class="w-full bg-card text-left text-[13px] leading-relaxed tabular-nums">
+						<thead>
+							<tr class="microlabel border-b border-line text-faint">
+								<th class="px-4 py-2.5 font-medium">File</th>
+								<th class="px-4 py-2.5 text-right font-medium">Pages</th>
+								<th class="px-4 py-2.5 text-right font-medium">Size</th>
+							</tr>
+						</thead>
+						<tbody class="divide-y divide-line">
+							{#each m.files as file (file.name)}
+								<tr>
+									<td class="px-4 py-2 font-medium text-ink">{file.name}</td>
+									<td class="px-4 py-2 text-right">{file.pages}</td>
+									<td class="px-4 py-2 text-right">{formatBytes(file.bytes)}</td>
+								</tr>
+							{/each}
+							<tr>
+								<td class="px-4 py-2 font-semibold text-ink">merged.pdf</td>
+								<td class="px-4 py-2 text-right font-semibold text-ink">{m.pages}</td>
+								<td class="px-4 py-2 text-right font-semibold text-ink">
+									{formatBytes(stats.compressedBytes)}
+								</td>
+							</tr>
+						</tbody>
+					</table>
+				</div>
+			{/if}
 		{:else if kind === 'archive'}
 			<!-- Folder manifest — every entry is a committed fixture of this repo. -->
 			{#if stats.display.archive}

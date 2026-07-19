@@ -276,6 +276,7 @@ describe('engine copy', () => {
 			'/compress-gif': 'gif',
 			'/compress-svg': 'svg',
 			'/compress-pdf': 'pdf',
+			'/merge-pdf': 'merge',
 			'/compress-video': 'video',
 			'/compress-mp4': 'video',
 			'/compress-audio': 'audio',

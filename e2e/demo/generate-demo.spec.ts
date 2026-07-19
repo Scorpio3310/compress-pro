@@ -65,7 +65,8 @@ const KIND_ORDER: DemoKind[] = [
 	'png-to-webp',
 	'jpg-to-webp',
 	'webp-to-jpg',
-	'resize'
+	'resize',
+	'merge'
 ];
 
 // Authored demo inputs (subtitle/data) — deterministic bytes written into the
@@ -109,6 +110,39 @@ writeFileSync(
 		''
 	].join('\n')
 );
+
+// Authored merge fixtures — two deterministic pdf-lib briefs (fixed dates so
+// regeneration writes identical bytes; SRT/CSV authored-fixture precedent, no
+// credit line). pdf-lib is async, so they're built in a beforeAll rather than
+// at module scope; workers: 1 keeps that ordering trivial.
+const MERGE_FIXTURE_A = join(REAL, 'demo-brief-a.pdf');
+const MERGE_FIXTURE_B = join(REAL, 'demo-brief-b.pdf');
+test.beforeAll(async () => {
+	const FIXED_DATE = new Date('2026-01-01T00:00:00Z');
+	const author = async (path: string, title: string, pageLines: string[][]) => {
+		const doc = await PDFDocument.create();
+		doc.setTitle(title);
+		doc.setCreationDate(FIXED_DATE);
+		doc.setModificationDate(FIXED_DATE);
+		const font = await doc.embedFont('Helvetica');
+		for (const [i, lines] of pageLines.entries()) {
+			const page = doc.addPage([612, 792]);
+			page.drawText(title, { x: 72, y: 720, size: 20, font });
+			lines.forEach((line, li) => page.drawText(line, { x: 72, y: 670 - li * 22, size: 12, font }));
+			page.drawText(`Page ${i + 1} of ${pageLines.length}`, { x: 72, y: 60, size: 10, font });
+		}
+		writeFileSync(path, await doc.save());
+	};
+	await author(MERGE_FIXTURE_A, 'Project brief — Part A', [
+		['Scope and goals of the demonstration project.', 'Three pages, merged ahead of part B.'],
+		['Timeline and the milestones agreed for the pilot.', 'Delivery is staged over two quarters.'],
+		['Budget summary and the responsible contacts.', 'All figures are placeholders by design.']
+	]);
+	await author(MERGE_FIXTURE_B, 'Project brief — Part B', [
+		['Appendix: measurement methodology for the pilot.', 'Two pages, appended after part A.'],
+		['Sign-off sheet and revision history.', 'This page ends the combined document.']
+	]);
+});
 
 // q85 = keeps a real photo's noise under budget without denoising; 4:2:0
 // matches the app's own JPEG output subsampling. Applied to BOTH sides.
@@ -206,6 +240,8 @@ interface RenderOut {
 	};
 	/** ebook: which archive entry the display pair was derived from. */
 	entryName?: string;
+	/** merge: the uploaded documents + the merged output's page count. */
+	merge?: { files: { name: string; pages: number; bytes: number }[]; pages: number };
 }
 
 interface DemoJob {
@@ -342,6 +378,34 @@ function cropRender(crop: Crop, fmt: 'jpeg' | 'webp' | 'png') {
 			height: crop.height,
 			shows: 'crop',
 			crop
+		};
+	};
+}
+
+/** merge-pdf: no display assets — the demo is the file table + page math.
+ *  Verifies the merged output holds exactly the sum of the inputs' pages
+ *  (archive's manifest-only precedent). */
+function mergeManifestRender(fixtures: string[]) {
+	return async (_input: Buffer, output: Buffer): Promise<RenderOut> => {
+		const files = [];
+		let pagesTotal = 0;
+		for (const f of fixtures) {
+			const bytes = readFileSync(f);
+			const pages = (await PDFDocument.load(bytes)).getPageCount();
+			files.push({ name: basename(f), pages, bytes: bytes.length });
+			pagesTotal += pages;
+		}
+		const merged = await PDFDocument.load(output);
+		expect(merged.getPageCount(), 'merged page count must equal the inputs’ sum').toBe(pagesTotal);
+		return {
+			before: Buffer.alloc(0),
+			after: Buffer.alloc(0),
+			ext: 'jpg',
+			noAssets: true,
+			width: 0,
+			height: 0,
+			shows: 'file',
+			merge: { files, pages: pagesTotal }
 		};
 	};
 }
@@ -1161,6 +1225,26 @@ const JOBS: DemoJob[] = [
 		render: resizeCropRender({ left: 320, top: 160, width: 1024, height: 768 }, 1920)
 	},
 	{
+		kind: 'merge',
+		page: '/merge-pdf',
+		fixture: MERGE_FIXTURE_A,
+		fixtures: [MERGE_FIXTURE_A, MERGE_FIXTURE_B],
+		download: 'combined',
+		engine: 'pdf-lib',
+		outputFormat: 'pdf',
+		// The merged file ≈ the sum of its parts — the story is 2 files → 1
+		// document, not bytes (subtitle/data precedent).
+		growthOk: true,
+		budgetBytes: 0,
+		// The landing preset arms the merge op; upload order IS the page order.
+		drive: async () => {},
+		sniff: expectPdf,
+		render: mergeManifestRender([MERGE_FIXTURE_A, MERGE_FIXTURE_B]),
+		describeInput: async (input) => ({
+			pages: (await PDFDocument.load(input)).getPageCount()
+		})
+	},
+	{
 		kind: 'gif',
 		page: '/compress-gif',
 		fixture: join(REAL, 'wikimedia-muybridge-cat.gif'),
@@ -1710,7 +1794,8 @@ for (const job of JOBS) {
 				...(out.subtitle ? { subtitle: out.subtitle } : {}),
 				...(out.sheet ? { sheet: out.sheet } : {}),
 				...(out.model ? { model: out.model } : {}),
-				...(out.entryName ? { entryName: out.entryName } : {})
+				...(out.entryName ? { entryName: out.entryName } : {}),
+				...(out.merge ? { merge: out.merge } : {})
 			},
 			...(job.credit ? { credit: job.credit } : {})
 		});

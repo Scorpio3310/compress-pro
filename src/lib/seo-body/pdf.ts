@@ -548,6 +548,12 @@ export const BODIES: Record<string, SeoBody> = {
 				]
 			},
 			{
+				heading: 'Under the hood',
+				paragraphs: [
+					'Merging runs on pdf-lib — pages are copied structurally from each source into the new document, never rasterized or re-encoded, which is why the merge is fast and the quality question does not even arise. The whole assembly happens in your browser’s memory.'
+				]
+			},
+			{
 				heading: 'Typical uses',
 				table: {
 					columns: ['Task', 'How'],

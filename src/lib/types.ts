@@ -58,7 +58,8 @@ export type DemoKind =
 	| 'png-to-webp'
 	| 'jpg-to-webp'
 	| 'webp-to-jpg'
-	| 'resize';
+	| 'resize'
+	| 'merge';
 
 export interface DemoCredit {
 	author: string;
@@ -178,6 +179,9 @@ export interface DemoStats {
 		/** ebook/model: which archive entry (ebook) or rendered view (model) the
 		 *  display pair was derived from. */
 		entryName?: string;
+		/** merge: the uploaded documents (each a committed fixture) and the
+		 *  merged output's total page count — the demo is this table, no assets. */
+		merge?: { files: { name: string; pages: number; bytes: number }[]; pages: number };
 	};
 	credit?: DemoCredit;
 }

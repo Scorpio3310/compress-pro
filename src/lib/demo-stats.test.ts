@@ -70,14 +70,16 @@ const SPEC: Record<
 	'jpg-to-webp': { assetExt: 'webp', budget: 240_000, mcuAligned: true },
 	'webp-to-jpg': { assetExt: 'jpg', budget: 240_000, mcuAligned: true },
 	// The crop is cut from re-rastered (fitted) content — no MCU phase to keep.
-	resize: { assetExt: 'webp', budget: 240_000, mcuAligned: false }
+	resize: { assetExt: 'webp', budget: 240_000, mcuAligned: false },
+	// No display assets — the file table + page math straight from the manifest.
+	merge: { assetExt: 'jpg', budget: 0, mcuAligned: false }
 };
 const KINDS = Object.keys(SPEC) as DemoKind[];
 
 // The output is legitimately bigger (WEBVTT header, XLSX container; a 22 MP
-// JPG re-encode of a lossy WebP) — these demos tell structure/compatibility
-// stories; the size tile shows both real numbers.
-const GROWTH_OK = new Set<DemoKind>(['subtitle', 'data', 'webp-to-jpg']);
+// JPG re-encode of a lossy WebP; a merged PDF ≈ the sum of its parts) — these
+// demos tell structure/compatibility stories; the tiles show real numbers.
+const GROWTH_OK = new Set<DemoKind>(['subtitle', 'data', 'webp-to-jpg', 'merge']);
 // Descriptor-less inputs: containers/models the sharp default can't describe.
 const DESCRIPTORLESS = new Set<DemoKind>(['font', 'subtitle', 'data', 'ebook', 'model']);
 
@@ -90,7 +92,9 @@ const SOURCE_NAMES = KINDS.flatMap((kind) => {
 	// carries-every-kind test is what fails then, not this module's load.
 	const s = ALL[kind];
 	if (!s) return [];
-	return kind === 'archive' ? s.display.archive!.entries.map((e) => e.name) : [s.input.name];
+	if (kind === 'archive') return s.display.archive!.entries.map((e) => e.name);
+	if (kind === 'merge') return s.display.merge!.files.map((f) => f.name);
+	return [s.input.name];
 });
 const HAVE_FIXTURES = SOURCE_NAMES.every((n) => existsSync(join(FIXTURES, n)));
 if (!HAVE_FIXTURES)
@@ -130,6 +134,21 @@ describe('demo stats manifest', () => {
 			expect(sum).toBe(s.originalBytes);
 			return;
 		}
+		if (kind === 'merge') {
+			// Two authored fixtures — sizes sum to the original, pages to the total.
+			const files = s.display.merge!.files;
+			expect(files.length).toBeGreaterThanOrEqual(2);
+			let sum = 0;
+			for (const f of files) {
+				const size = statSync(join(FIXTURES, f.name)).size;
+				expect(size, f.name).toBe(f.bytes);
+				expect(f.pages, f.name).toBeGreaterThanOrEqual(1);
+				sum += size;
+			}
+			expect(sum).toBe(s.originalBytes);
+			expect(s.display.merge!.pages).toBe(files.reduce((n, f) => n + f.pages, 0));
+			return;
+		}
 		expect(statSync(join(FIXTURES, s.input.name)).size).toBe(s.originalBytes);
 		// Raster kinds carry dimensions; pdf carries a page count; audio a
 		// duration; font is just a file.
@@ -146,7 +165,7 @@ describe('demo stats manifest', () => {
 
 	it.each(KINDS)('%s: ships both display assets within budget and format', (kind) => {
 		const s = ALL[kind];
-		if (kind === 'archive' || kind === 'subtitle' || kind === 'data') {
+		if (kind === 'archive' || kind === 'subtitle' || kind === 'data' || kind === 'merge') {
 			// Numbers/text-only demos — deliberately no display files.
 			expect(s.display.before).toBe('');
 			expect(s.display.after).toBe('');
@@ -226,9 +245,9 @@ describe('demo stats manifest', () => {
 	});
 
 	it.each(KINDS)('%s: display geometry is sane', (kind) => {
-		// Dimensionless demos: audio (players), font (specimen), archive
-		// (table), subtitle/data (text panels straight from the manifest).
-		if (kind === 'audio' || kind === 'font' || kind === 'archive') return;
+		// Dimensionless demos: audio (players), font (specimen), archive/merge
+		// (tables), subtitle/data (text panels straight from the manifest).
+		if (kind === 'audio' || kind === 'font' || kind === 'archive' || kind === 'merge') return;
 		if (kind === 'subtitle' || kind === 'data') return;
 		const s = ALL[kind];
 		expect(s.display.width).toBeGreaterThan(0);
@@ -449,6 +468,18 @@ describe('demo stats manifest', () => {
 		expect(ALL.resize.maxDimension).toBe(1920);
 		expect(ALL.resize.outputFormat).toBe('jpg');
 		expect(ALL.resize.formatChanged ?? false).toBe(false);
+	});
+
+	it('merge: two files, one document, honest page math', () => {
+		const s = ALL.merge;
+		expect(s.outputFormat).toBe('pdf');
+		const m = s.display.merge;
+		expect(m, 'merge needs its file table').toBeDefined();
+		expect(m!.files.length).toBe(2);
+		expect(m!.pages).toBe(m!.files.reduce((n, f) => n + f.pages, 0));
+		// The merged output ≈ the sum of its parts — never smaller than the
+		// largest input (a "compression" claim here would be a lie).
+		expect(s.compressedBytes).toBeGreaterThanOrEqual(Math.max(...m!.files.map((f) => f.bytes)));
 	});
 
 	it.each(KINDS)('%s: engine names appear in the page’s Under the hood copy', (kind) => {

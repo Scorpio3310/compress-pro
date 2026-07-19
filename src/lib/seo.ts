@@ -983,7 +983,8 @@ export const TOOLS: ConverterLite[] = [
 		path: '/merge-pdf',
 		label: 'Merge PDF',
 		feature: 'Merge PDFs into one document',
-		h1: 'Merge PDF files.'
+		h1: 'Merge PDF files.',
+		demo: 'merge'
 	},
 	{
 		format: 'pdf',
