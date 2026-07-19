@@ -580,12 +580,11 @@ export async function runPdfTool(
 			let blob = await tools.mergePdfs(
 				files.map((f) => f.file),
 				(done, total, detail) => {
-					// mergePdfs (pdf-lib, main thread) takes no signal — this
-					// per-file tick is the only Cancel seam the merge has, so gate
-					// it here; otherwise a cancelled run grinds on and commits.
-					signal?.throwIfAborted();
 					spread.report(mergeShare * (done / total), detail ? `merging ${detail}` : null);
-				}
+				},
+				// The signal also bites INSIDE mergePdfs, between copy chunks —
+				// a cancelled run no longer grinds through a huge member (O-05).
+				signal
 			);
 			signal?.throwIfAborted();
 			let warning: string | null = null;

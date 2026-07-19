@@ -57,22 +57,37 @@ async function openPdfjsDoc(file: File) {
 	}
 }
 
-export async function mergePdfs(files: File[], onProgress?: ToolProgress): Promise<Blob> {
+/** Pages copied per copyPages call — one 400-page member would otherwise be a
+ *  single atomic await that Cancel cannot interrupt (O-05). */
+const MERGE_COPY_CHUNK = 25;
+
+export async function mergePdfs(
+	files: File[],
+	onProgress?: ToolProgress,
+	signal?: AbortSignal
+): Promise<Blob> {
 	const { PDFDocument } = await import('pdf-lib');
 	const out = await PDFDocument.create();
 	for (let i = 0; i < files.length; i++) {
+		signal?.throwIfAborted();
 		onProgress?.(i, files.length + 1, files[i].name);
 		const src = await loadPdf(files[i]);
 		try {
-			const pages = await out.copyPages(src, src.getPageIndices());
-			for (const page of pages) out.addPage(page);
+			const indices = src.getPageIndices();
+			for (let at = 0; at < indices.length; at += MERGE_COPY_CHUNK) {
+				signal?.throwIfAborted();
+				const pages = await out.copyPages(src, indices.slice(at, at + MERGE_COPY_CHUNK));
+				for (const page of pages) out.addPage(page);
+			}
 		} catch (error) {
+			if (signal?.aborted) throw error;
 			throw new Error(
 				`${files[i].name}: ${error instanceof Error ? error.message : 'copy failed'} — if the file is encrypted, run Compress on it first (that rewrites it without encryption), then merge`,
 				{ cause: error }
 			);
 		}
 	}
+	signal?.throwIfAborted();
 	onProgress?.(files.length, files.length + 1, 'saving');
 	const bytes = await out.save();
 	return new Blob([bytes as BlobPart], { type: 'application/pdf' });

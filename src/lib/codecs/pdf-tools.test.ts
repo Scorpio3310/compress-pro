@@ -93,6 +93,50 @@ describe('encrypted inputs fail fast instead of shipping ciphertext', () => {
 	});
 });
 
+// ------------------------------------------------ merge cancel seam (O-05)
+
+describe('mergePdfs honors its AbortSignal', () => {
+	async function pdfFile(name: string, pages = 1): Promise<File> {
+		const { PDFDocument } = await import('pdf-lib');
+		const doc = await PDFDocument.create();
+		for (let i = 0; i < pages; i++) doc.addPage([200, 200]);
+		return new File([(await doc.save()) as BlobPart], name, { type: 'application/pdf' });
+	}
+
+	it('a pre-aborted signal stops the merge before any work', async () => {
+		const a = await pdfFile('a.pdf');
+		const controller = new AbortController();
+		controller.abort();
+		const ticks: string[] = [];
+		await expect(
+			mergePdfs([a, a], (_d, _t, detail) => void ticks.push(detail), controller.signal)
+		).rejects.toThrow();
+		expect(ticks).toEqual([]);
+	});
+
+	it('an abort mid-run stops before the next file and never reaches saving', async () => {
+		const [a, b, c] = await Promise.all([
+			pdfFile('a.pdf'),
+			pdfFile('b.pdf', 60), // 60 pages → several copy chunks under the abort
+			pdfFile('c.pdf')
+		]);
+		const controller = new AbortController();
+		const ticks: string[] = [];
+		await expect(
+			mergePdfs(
+				[a, b, c],
+				(_d, _t, detail) => {
+					ticks.push(detail);
+					if (detail === 'b.pdf') controller.abort();
+				},
+				controller.signal
+			)
+		).rejects.toThrow();
+		expect(ticks).not.toContain('c.pdf');
+		expect(ticks).not.toContain('saving');
+	});
+});
+
 // ------------------------------------------------------- pdf.js load path
 
 function passwordException(): Error {
