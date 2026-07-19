@@ -41,3 +41,16 @@
 # edit — a day of caching saves repeat social-crawler fetches.
 /og/*
   Cache-Control: public, max-age=86400
+
+# Markdown twins and the llms corpora are agent surface, not search surface:
+# they duplicate the HTML pages' copy word for word, so noindex keeps them out
+# of the SERPs while agents (which fetch, not rank) are unaffected. The rules
+# engine merges every matching block, so these stack on top of /*.
+/*.md
+  X-Robots-Tag: noindex
+
+/llms.txt
+  X-Robots-Tag: noindex
+
+/llms-full.txt
+  X-Robots-Tag: noindex

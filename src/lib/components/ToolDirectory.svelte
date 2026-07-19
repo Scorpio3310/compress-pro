@@ -6,13 +6,14 @@
 
 	// Home-only tool directory: curated featured rows up front, the full list
 	// collapsed behind a toggle. The collapsed list stays MOUNTED (grid-rows
-	// collapse, not {#if}) so all 144 links land in the prerendered HTML.
+	// collapse, not {#if}) so every tool link lands in the prerendered HTML.
 	// TOOL_GROUPS (shared with the footer columns) feeds both lists, keeping
 	// their grouping in sync.
 	const ALL_TOOL_ENTRIES = [...FORMATS, ...CONVERTERS, ...TOOLS];
 	// The expanded list carries only the tools NOT already shown as featured
 	// rows above — no duplicate links, and the repeated group headings read as
-	// continuation instead of repetition. All 144 stay in the DOM: 17 + 127.
+	// continuation instead of repetition. Featured plus expanded cover every
+	// tool, and all of them stay in the DOM.
 	const DIRECTORY_GROUPS = TOOL_GROUPS.map(({ title, formats }) => ({
 		title,
 		entries: ALL_TOOL_ENTRIES.filter(

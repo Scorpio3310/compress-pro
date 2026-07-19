@@ -10,7 +10,7 @@ import { seoBodyFor } from '$lib/seo-body';
 import { seoDetailFor } from '$lib/seo-detail';
 
 /**
- * All 94 tool pages share this one route node, so per-page code splitting can
+ * Every tool page shares this one route node, so per-page code splitting can
  * only happen here: the page's head/meta + intake detail (title/tagline/
  * preset…), its long-form copy (intro/guide/faq — together 3/4 of the old
  * every-page seo chunk), the homepage directory and the before/after demo

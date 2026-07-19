@@ -30,14 +30,16 @@
 
 	const webApplication = $derived({
 		'@type': 'WebApplication',
-		name: SITE_NAME,
+		// Tool pages name the tool itself (same display form the breadcrumb and
+		// featured ItemList use); the brand stays on the homepage's WebSite node.
+		name: entry.path === '/' ? SITE_NAME : entry.h1.replace(/\.$/, ''),
 		url: canonical,
 		description: entry.description,
 		inLanguage: 'en',
 		applicationCategory: 'UtilitiesApplication',
 		operatingSystem: 'Any',
 		browserRequirements: 'Requires JavaScript and WebAssembly',
-		offers: { '@type': 'Offer', price: '0', priceCurrency: 'EUR' },
+		offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
 		author: {
 			'@type': 'Person',
 			name: 'Nik Klemenc',
@@ -124,6 +126,7 @@
 	<meta name="twitter:title" content={entry.title} />
 	<meta name="twitter:description" content={entry.description} />
 	<meta name="twitter:image" content={ogImage} />
+	<meta name="twitter:image:alt" content={entry.title} />
 	<!-- eslint-disable-next-line svelte/no-at-html-tags -- JSON.stringify output with `<` escaped -->
 	{@html `<script type="application/ld+json">${jsonLd}</scr` + `ipt>`}
 </svelte:head>

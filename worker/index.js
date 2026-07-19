@@ -80,6 +80,11 @@ export default {
 							...SECURITY_HEADERS,
 							'Content-Type': 'text/markdown; charset=utf-8',
 							Vary: 'Accept',
+							// Same noindex the static .md twins get from _headers — the
+							// markdown body must never outrank its own HTML page. Kept out
+							// of SECURITY_HEADERS deliberately: those hit every response,
+							// and noindex on HTML would deindex the site.
+							'X-Robots-Tag': 'noindex',
 							'x-markdown-tokens': String(estimateTokens(body))
 						}
 					});

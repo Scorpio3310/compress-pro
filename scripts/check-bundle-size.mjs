@@ -1,7 +1,7 @@
 /**
  * Bundle-size budget gate (CI, after `pnpm build`).
  *
- * Every one of the ~94 tool pages shares route node 2 and the same initial
+ * Every tool page shares route node 2 and the same initial
  * modulepreload set, so a single accidental *static* import (a codec wrapper, a
  * settings panel, mediabunny, a seo-body group…) silently adds its weight to
  * every page at once. This turns that class of regression into a hard failure.

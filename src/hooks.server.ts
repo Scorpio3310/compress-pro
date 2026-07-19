@@ -57,6 +57,9 @@ export const handle: Handle = async ({ event, resolve }) => {
 					...SECURITY_HEADERS,
 					'Content-Type': 'text/markdown; charset=utf-8',
 					Vary: 'Accept',
+					// Mirrors worker/index.js and the _headers /*.md block. Never move
+					// this into SECURITY_HEADERS — those hit every response, HTML included.
+					'X-Robots-Tag': 'noindex',
 					'x-markdown-tokens': String(Math.ceil(md.length / 4))
 				}
 			});
