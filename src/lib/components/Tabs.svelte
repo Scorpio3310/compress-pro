@@ -1,6 +1,7 @@
 <script module lang="ts">
-	import type { FileFormat, FontOp, PdfOp, ZipSettings } from '$lib/types';
+	import type { FileFormat } from '$lib/types';
 	import { IMAGE_FORMATS } from '$lib/types';
+	import type { Rail } from '$lib/rails';
 
 	// The Images rail = the raster pipeline tabs plus SVG (a UI grouping, not a
 	// pipeline family — SVG has its own worker/settings).
@@ -11,40 +12,12 @@
 		return (IMAGE_TABS as readonly string[]).includes(f);
 	}
 
-	type RailGroup = 'images' | 'pdf' | 'zip' | 'font';
-
-	function groupOf(f: FileFormat): RailGroup | null {
-		return isImageTab(f) ? 'images' : f === 'pdf' || f === 'zip' || f === 'font' ? f : null;
-	}
+	/** What the rail track renders: the Images format links, or one op group. */
+	type ShownRail = { kind: 'images' } | { kind: 'ops'; rail: Rail };
 
 	/** Per-tab compression state, shown as a colored count badge (traffic-light):
 	 *  pending = warn, running = spinner+% (info), done = ok, error = danger. */
 	export type TabBadgeStatus = 'pending' | 'running' | 'done' | 'error';
-
-	const PDF_OPS: { id: PdfOp; label: string }[] = [
-		{ id: 'compress', label: 'Compress' },
-		{ id: 'merge', label: 'Merge' },
-		{ id: 'pages', label: 'Pages' },
-		{ id: 'toImages', label: 'To images' },
-		{ id: 'fromImages', label: 'From images' },
-		{ id: 'unlock', label: 'Unlock' },
-		{ id: 'protect', label: 'Protect' },
-		{ id: 'rotate', label: 'Rotate' },
-		{ id: 'watermark', label: 'Watermark' },
-		{ id: 'pageNumbers', label: 'Numbers' },
-		{ id: 'toText', label: 'To text' },
-		{ id: 'grayscale', label: 'Grayscale' },
-		{ id: 'toPdfa', label: 'PDF/A' }
-	];
-	const ZIP_OPS: { id: ZipSettings['op']; label: string }[] = [
-		{ id: 'create', label: 'Create' },
-		{ id: 'extract', label: 'Extract' },
-		{ id: 'convert', label: 'Convert' }
-	];
-	const FONT_OPS: { id: FontOp; label: string }[] = [
-		{ id: 'convert', label: 'Convert' },
-		{ id: 'subset', label: 'Subset' }
-	];
 
 	// Where the Images pill points when the active tab isn't an image format.
 	// Module scope: the shared page component never remounts across tab routes,
@@ -71,12 +44,8 @@
 		progress?: Partial<Record<FileFormat, number | null>>;
 		/** Per-tab compression state — colors the count badge. */
 		status?: Partial<Record<FileFormat, TabBadgeStatus | null>>;
-		pdfOp: PdfOp;
-		zipOp: ZipSettings['op'];
-		fontOp: FontOp;
-		onpdfop: (op: PdfOp) => void;
-		onzipop: (op: ZipSettings['op']) => void;
-		onfontop: (op: FontOp) => void;
+		/** The active tab's op rail (null = no rail; Images is derived here). */
+		rail?: Rail | null;
 		/** Freeze the op rail while a job runs (op changes clear results). */
 		opsDisabled?: boolean;
 	}
@@ -86,12 +55,7 @@
 		counts = {},
 		progress = {},
 		status = {},
-		pdfOp,
-		zipOp,
-		fontOp,
-		onpdfop,
-		onzipop,
-		onfontop,
+		rail = null,
 		opsDisabled = false
 	}: Props = $props();
 
@@ -150,28 +114,23 @@
 	});
 
 	// Sticky rail content: on tabs without a rail (video/audio/exif) the LAST
-	// group's items stay mounted (inert) so the close animation has something
+	// shown content stays mounted (inert) so the close animation has something
 	// to collapse over. The latch only matters client-side (effects don't run
-	// during SSR) — prerendered pages derive the group straight from the route.
-	let lastRailGroup = $state<RailGroup | null>(null);
-	const railGroup = $derived(groupOf(activeTab) ?? lastRailGroup ?? 'images');
+	// during SSR) — prerendered pages derive the content straight from the route.
+	const liveShown = $derived<ShownRail | null>(
+		imagesActive ? { kind: 'images' } : rail ? { kind: 'ops', rail } : null
+	);
+	let lastShown = $state<ShownRail | null>(null);
 	$effect(() => {
-		const g = groupOf(activeTab);
-		if (g) lastRailGroup = g;
+		if (liveShown) lastShown = liveShown;
 	});
-	const railOpen = $derived(groupOf(activeTab) !== null);
+	const shown = $derived(liveShown ?? lastShown ?? { kind: 'images' as const });
+	const railOpen = $derived(liveShown !== null);
+	const shownKey = $derived(shown.kind === 'images' ? 'images' : shown.rail.group);
 	// Only op groups freeze while compressing — image chips are tab links.
-	const opsFrozen = $derived(opsDisabled && railGroup !== 'images');
+	const opsFrozen = $derived(opsDisabled && shown.kind !== 'images');
 	const railKey = $derived(
-		railGroup === 'pdf'
-			? pdfOp
-			: railGroup === 'zip'
-				? zipOp
-				: railGroup === 'font'
-					? fontOp
-					: isImageTab(activeTab)
-						? activeTab
-						: lastImage
+		shown.kind === 'ops' ? shown.rail.value : isImageTab(activeTab) ? activeTab : lastImage
 	);
 </script>
 
@@ -304,12 +263,12 @@
 		{@render chevrons(() => primaryNav, 'top-2 h-9 bg-card')}
 	</div>
 
-	<!-- Second row: a quiet gray rail. Image tabs → format links; pdf/zip → op
-	     buttons (their file/result-clearing side effects live in +page's
-	     handlers); other tabs → collapsed. Content is sticky (railGroup) so
-	     closing has something to animate over; {#key} remounts the track on
-	     group swaps (instant, same height — both variants share the same cell
-	     metrics) and re-inits the thumb.
+	<!-- Second row: a quiet gray rail. Image tabs → format links; op groups →
+	     buttons off the rail descriptor (their file/result-clearing side
+	     effects live in +page's handlers); other tabs → collapsed. Content is
+	     sticky (lastShown) so closing has something to animate over; {#key}
+	     remounts the track on group swaps (instant, same height — both variants
+	     share the same cell metrics) and re-inits the thumb.
 	     Note for e2e: the LAST rail group's items stay mounted (hidden, inert)
 	     on video/audio/exif tabs — only interact with rail items while their
 	     owning tab is active. -->
@@ -325,7 +284,7 @@
 				: 'opacity-0'}"
 		>
 			<div class="px-2 sm:px-2.5">
-				{#key railGroup}
+				{#key shownKey}
 					<div
 						class="relative w-fit max-w-full transition-opacity duration-300 {opsFrozen
 							? 'pointer-events-none opacity-50'
@@ -334,15 +293,9 @@
 						inert={opsFrozen}
 					>
 						<svelte:element
-							this={railGroup === 'images' ? 'nav' : 'div'}
-							role={railGroup === 'images' ? undefined : 'group'}
-							aria-label={railGroup === 'images'
-								? 'Image format'
-								: railGroup === 'pdf'
-									? 'PDF tool'
-									: railGroup === 'font'
-										? 'Font tool'
-										: 'ZIP mode'}
+							this={shown.kind === 'images' ? 'nav' : 'div'}
+							role={shown.kind === 'images' ? undefined : 'group'}
+							aria-label={shown.kind === 'images' ? 'Image format' : shown.rail.label}
 							bind:this={railTrack}
 							class="relative flex w-fit max-w-full items-stretch gap-1 overflow-x-auto rounded-full bg-card-2 p-1 scrollbar-none"
 							{@attach slideIndicator(() => railKey)}
@@ -354,7 +307,7 @@
 								aria-hidden="true"
 								class="absolute inset-y-1 left-0 w-0 rounded-full bg-card opacity-0"
 							></span>
-							{#if railGroup === 'images'}
+							{#if shown.kind === 'images'}
 								{#each imageTabs as tab (tab.id)}
 									{@const active = activeTab === tab.id}
 									<a
@@ -371,17 +324,10 @@
 										{@render badge(counts[tab.id] ?? 0, progress[tab.id] ?? null, status[tab.id])}
 									</a>
 								{/each}
-							{:else if railGroup === 'pdf'}
-								{#each PDF_OPS as o (o.id)}
-									{@render opButton(o.id, o.label, pdfOp === o.id, () => onpdfop(o.id))}
-								{/each}
-							{:else if railGroup === 'font'}
-								{#each FONT_OPS as o (o.id)}
-									{@render opButton(o.id, o.label, fontOp === o.id, () => onfontop(o.id))}
-								{/each}
 							{:else}
-								{#each ZIP_OPS as o (o.id)}
-									{@render opButton(o.id, o.label, zipOp === o.id, () => onzipop(o.id))}
+								{@const ops = shown.rail}
+								{#each ops.items as o (o.id)}
+									{@render opButton(o.id, o.label, ops.value === o.id, () => ops.onselect(o.id))}
 								{/each}
 							{/if}
 						</svelte:element>

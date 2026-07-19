@@ -20,6 +20,7 @@
 	import { fontMeta, probeFont, removeFontMeta } from '$lib/font-meta.svelte';
 	import { estimateAudioBytes, estimateVideoBytes } from '$lib/video-estimate';
 	import * as actionLabels from '$lib/action-labels';
+	import { FONT_OPS, PDF_OPS, ZIP_OPS, type Rail } from '$lib/rails';
 	import Tabs, { type TabBadgeStatus } from '$lib/components/Tabs.svelte';
 	import FileUpload from '$lib/components/FileUpload.svelte';
 	import CompressButton from '$lib/components/controls/CompressButton.svelte';
@@ -102,6 +103,40 @@
 	let pdfOp = $derived(settings.pdf.op);
 	let zipOp = $derived(settings.zip.op);
 	let fontOp = $derived(settings.font.op);
+
+	// The active tab's secondary op rail. Image tabs return null — their rail
+	// is format links, derived inside Tabs. Item ids/labels are e2e contracts
+	// (see rails.ts); the click side effects live in the handle*Change handlers.
+	const rail = $derived.by<Rail | null>(() => {
+		switch (activeTab) {
+			case 'pdf':
+				return {
+					group: 'pdf',
+					label: 'PDF tool',
+					items: PDF_OPS,
+					value: pdfOp,
+					onselect: (id) => handlePdfOpChange(id as PdfOp)
+				};
+			case 'zip':
+				return {
+					group: 'zip',
+					label: 'ZIP mode',
+					items: ZIP_OPS,
+					value: zipOp,
+					onselect: (id) => handleZipOpChange(id as ZipSettings['op'])
+				};
+			case 'font':
+				return {
+					group: 'font',
+					label: 'Font tool',
+					items: FONT_OPS,
+					value: fontOp,
+					onselect: (id) => handleFontOpChange(id as FontOp)
+				};
+			default:
+				return null;
+		}
+	});
 
 	// `/` is the universal intake: it takes any file, parks what belongs on its
 	// default tab and routes everything else to the right tool — a first-time
@@ -920,12 +955,7 @@
 			counts={tabCounts}
 			progress={tabProgress}
 			status={tabStatus}
-			{pdfOp}
-			{zipOp}
-			{fontOp}
-			onpdfop={handlePdfOpChange}
-			onzipop={handleZipOpChange}
-			onfontop={handleFontOpChange}
+			{rail}
 			opsDisabled={currentState.isCompressing}
 		/>
 
