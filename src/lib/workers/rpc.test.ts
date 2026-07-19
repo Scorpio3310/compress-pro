@@ -375,7 +375,10 @@ it('a queued call does not die while its co-tenant makes progress (F-59)', async
 	worker.onmessage?.({ data: { id: worker.posted[0].id, ok: true, result: 'a' } });
 	await expect(a).resolves.toBe('a');
 	// b is now the active job and the worker goes truly silent → honest fire.
+	// Attach the rejection handler BEFORE the timer tick that fires it, or the
+	// rejection is unhandled for one tick and vitest reports it as an error.
+	const bFires = expect(b).rejects.toThrow(/no progress/);
 	await vi.advanceTimersByTimeAsync(10_100);
-	await expect(b).rejects.toThrow(/no progress/);
+	await bFires;
 	expect(worker.terminated).toBe(true);
 });
