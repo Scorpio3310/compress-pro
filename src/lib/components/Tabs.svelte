@@ -181,7 +181,9 @@
      sibling track's data-scroll says that side has more content. Deliberately
      out of the a11y tree (aria-hidden + tabindex=-1): pills are Tab-reachable
      and focus scrolls them into view natively. No data-seg/role names, so e2e
-     queries can never match these. -->
+     queries can never match these. The prevented mousedown keeps a CLICK from
+     focusing the button (tabindex=-1 only covers Tab) — a focused descendant
+     under aria-hidden trips Chrome's assistive-tech block. -->
 {#snippet chevrons(track: () => HTMLElement | undefined, cls: string)}
 	<button
 		type="button"
@@ -189,6 +191,7 @@
 		aria-hidden="true"
 		data-chev="left"
 		class="absolute left-1 w-8 items-center justify-center rounded-full text-muted hover:text-ink {cls}"
+		onmousedown={(e) => e.preventDefault()}
 		onclick={() => nudge(track(), -1)}
 	>
 		<Icon name="chevron-left" class="size-4" />
@@ -199,6 +202,7 @@
 		aria-hidden="true"
 		data-chev="right"
 		class="absolute right-1 w-8 items-center justify-center rounded-full text-muted hover:text-ink {cls}"
+		onmousedown={(e) => e.preventDefault()}
 		onclick={() => nudge(track(), 1)}
 	>
 		<Icon name="chevron-right" class="size-4" />
