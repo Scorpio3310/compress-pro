@@ -13,6 +13,11 @@ function pill(page: import('@playwright/test').Page, name: string) {
 	return page.getByRole('button', { name, exact: true });
 }
 
+/** Keep/Remove segment inside the settings card — the CTA shares its label. */
+function modeSegment(page: import('@playwright/test').Page, name: string) {
+	return page.getByTestId('settings-panel').getByRole('button', { name, exact: true });
+}
+
 test('LP-01: /merge-pdf presets Merge and combines two PDFs @smoke', async ({ page }) => {
 	await gotoPath(page, '/merge-pdf');
 	await expect(page).toHaveTitle(/Merge PDF Files/);
@@ -30,6 +35,31 @@ test('LP-02: /split-pdf presets the Pages op with the range input ready', async 
 	await expect(pill(page, 'Pages')).toHaveAttribute('aria-pressed', 'true');
 	await upload(page, fx('pages-12.pdf'));
 	await expect(page.locator('#page-range')).toBeVisible();
+});
+
+test('LP-18: /extract-pages-from-pdf lands on Pages in Keep mode', async ({ page }) => {
+	await gotoPath(page, '/extract-pages-from-pdf');
+	await expect(page.locator('h1')).toHaveText('Extract pages from a PDF.');
+	await expect(pill(page, 'Pages')).toHaveAttribute('aria-pressed', 'true');
+	await upload(page, fx('pages-12.pdf'));
+	// scoped: the CTA is also named after the mode ("Extract pages")
+	await expect(modeSegment(page, 'Keep pages')).toHaveAttribute('aria-pressed', 'true');
+	await expect(page.locator('#page-range')).toBeVisible();
+});
+
+test('LP-19: /delete-pages-from-pdf lands on Remove; /split-pdf resets to Keep', async ({
+	page
+}) => {
+	await gotoPath(page, '/delete-pages-from-pdf');
+	await expect(page.locator('h1')).toHaveText('Delete pages from a PDF.');
+	await expect(pill(page, 'Pages')).toHaveAttribute('aria-pressed', 'true');
+	await upload(page, fx('pages-12.pdf'));
+	await expect(modeSegment(page, 'Remove pages')).toHaveAttribute('aria-pressed', 'true');
+	// Leak-guard (EB-15 discipline): the persisted 'remove' must not follow the
+	// user onto /split-pdf, whose framing is Extract-first.
+	await gotoPath(page, '/split-pdf');
+	await upload(page, fx('pages-12.pdf'));
+	await expect(modeSegment(page, 'Keep pages')).toHaveAttribute('aria-pressed', 'true');
 });
 
 test('LP-03: /compress-mp4 scopes the dropzone to MP4 on the video tab', async ({ page }) => {

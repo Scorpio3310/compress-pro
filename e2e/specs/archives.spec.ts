@@ -327,7 +327,21 @@ for (const { path, op, h1, pill, file } of [
 	},
 	{ path: '/gzip-files', op: 'Create', h1: 'Gzip files.', pill: 'GZ', file: fx('notes.txt') },
 	{ path: '/bzip2-files', op: 'Create', h1: 'Bzip2 files.', pill: 'BZ2', file: fx('notes.txt') },
-	{ path: '/xz-files', op: 'Create', h1: 'XZ-compress files.', pill: 'XZ', file: fx('notes.txt') }
+	{ path: '/xz-files', op: 'Create', h1: 'XZ-compress files.', pill: 'XZ', file: fx('notes.txt') },
+	{
+		path: '/protect-zip',
+		op: 'Create',
+		h1: 'Password-protect ZIP files.',
+		pill: 'ZIP',
+		file: fx('notes.txt')
+	},
+	{
+		path: '/protect-7z',
+		op: 'Create',
+		h1: 'Password-protect 7Z archives.',
+		pill: '7Z',
+		file: fx('notes.txt')
+	}
 ] as const) {
 	test(`AR-12 landing ${path} presets ${op}/${pill}`, async ({ page }) => {
 		await gotoPath(page, path);
@@ -359,6 +373,34 @@ test('AR-13: /extract-rar landing extracts a RAR end-to-end @smoke', async ({ pa
 	for (const entry of ARCHIVE_FIXTURES['sample-v5.rar'].entries) {
 		await expect(rowByName(page, entry).first()).toBeVisible();
 	}
+});
+
+test('AR-17: /protect-zip landing builds an AES-256 zip end-to-end', async ({ page }) => {
+	// The protect pages preset the same create op as /zip-files — their point is
+	// that the password field is front and center and the output really encrypts.
+	await gotoPath(page, '/protect-zip');
+	await upload(page, fx('notes.txt'));
+	await expect(passwordField(page)).toBeVisible();
+	await passwordField(page).fill('TEST');
+	await compress(page, { timeout: 120_000 });
+	const art = await downloadCombined(page);
+	expect(zipEntryEncrypted(art.bytes), 'encryption flag set').toBe(true);
+	const entries = await sevenZipEntries(art.bytes, art.name, 'TEST');
+	expect(Buffer.from(entries['notes.txt']).equals(readFileSync(fx('notes.txt')))).toBe(true);
+});
+
+test('AR-18: /protect-7z with hidden names yields a header-encrypted 7z', async ({ page }) => {
+	// First UI coverage of -mhe: without the password even LISTING must fail.
+	await gotoPath(page, '/protect-7z');
+	await upload(page, fx('notes.txt'));
+	await passwordField(page).fill('TEST');
+	await page.getByRole('checkbox', { name: /hide file names/i }).check();
+	await compress(page, { timeout: 120_000 });
+	const art = await downloadCombined(page);
+	expect(art.name.endsWith('.7z')).toBe(true);
+	await expect(sevenZipEntries(art.bytes, art.name), 'list without password').rejects.toThrow();
+	const entries = await sevenZipEntries(art.bytes, art.name, 'TEST');
+	expect(Buffer.from(entries['notes.txt']).equals(readFileSync(fx('notes.txt')))).toBe(true);
 });
 
 test('AR-15: zip bomb is refused up front with the limit named', async ({ page }) => {
