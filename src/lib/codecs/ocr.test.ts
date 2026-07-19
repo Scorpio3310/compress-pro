@@ -1,5 +1,3 @@
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { mapWordToPdf, ocrPdf, type OcrWord } from './ocr';
 
@@ -73,12 +71,52 @@ describe('mapWordToPdf', () => {
 
 describe('ocrPdf', () => {
 	it('refuses an owner-locked (encrypted) PDF up front with an unlock hint', async () => {
-		// The fixture opens fine in pdf.js (empty user password) but pdf-lib
-		// cannot decrypt it — without a guard the output PDF comes out
-		// corrupt/unreadable after a full (wasted) recognition pass.
-		const bytes = readFileSync(
-			join(__dirname, '../../../tests/fixtures/generated/scan-text-locked.pdf')
+		// Owner-locked (empty user password, AES-256): opens fine in pdf.js but
+		// pdf-lib cannot decrypt it — without the up-front guard the output PDF
+		// comes out corrupt/unreadable after a full (wasted) recognition pass.
+		// Built inline with qpdf so the test runs on a checkout that never ran
+		// `pnpm fixtures`.
+		const { dirname, join } = await import('node:path');
+		const { fileURLToPath } = await import('node:url');
+		const { PDFDocument } = await import('pdf-lib');
+		const doc = await PDFDocument.create();
+		doc.addPage([200, 200]);
+		const plain = await doc.save();
+		const factory = (await import('@neslinesli93/qpdf-wasm')).default;
+		const wasmPath = join(
+			dirname(fileURLToPath(import.meta.url)),
+			'../../../node_modules/@neslinesli93/qpdf-wasm/dist/qpdf.wasm'
 		);
+		const origLog = console.log;
+		const origErr = console.error;
+		console.log = () => {};
+		console.error = () => {};
+		let encrypted: Uint8Array;
+		try {
+			const qpdf = await factory({ locateFile: () => wasmPath });
+			(qpdf.FS as unknown as { writeFile(p: string, d: Uint8Array): void }).writeFile(
+				'/in.pdf',
+				plain
+			);
+			qpdf.callMain([
+				'--warning-exit-0',
+				'--encrypt',
+				'',
+				'owner-pw',
+				'256',
+				'--',
+				'/in.pdf',
+				'/out.pdf'
+			]);
+			encrypted = qpdf.FS.readFile('/out.pdf');
+		} finally {
+			console.log = origLog;
+			console.error = origErr;
+		}
+		const bytes = encrypted.buffer.slice(
+			encrypted.byteOffset,
+			encrypted.byteOffset + encrypted.byteLength
+		) as ArrayBuffer;
 		const file = new File([bytes], 'scan-text-locked.pdf', { type: 'application/pdf' });
 		await expect(ocrPdf(file, { op: 'toPdf', language: 'eng' })).rejects.toThrow(/unlock-pdf/i);
 	});

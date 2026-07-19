@@ -3138,6 +3138,9 @@ generateSvgs();
 console.log('  svgs ✓');
 await generatePdfs();
 
+// BMP/TIFF must precede the scan-text PDFs below — they embed graphic-bmp-ref.png.
+await generateBmpTiff();
+
 // scan-text.pdf — an image-only PDF (rasterized page, NO text layer): the
 // OCR e2e must prove recognition ADDS text, so the input can't carry any.
 {
@@ -3190,8 +3193,6 @@ await generatePdfs();
 }
 
 await generateAudio();
-
-await generateBmpTiff();
 
 await generateRaw();
 
