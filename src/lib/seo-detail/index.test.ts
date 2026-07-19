@@ -37,9 +37,14 @@ describe('seo detail modules', () => {
 			expect(detail.preset, e.path).toBeDefined();
 			expect(detail.preset.kind, e.path).toBeTruthy();
 		}
-		// …and the converse: plain format pages/home must NOT smuggle one in.
+		// …and the converse: plain format pages/home must NOT smuggle one in —
+		// except hubs that deliberately RESET sticky settings (afterNavigate
+		// reads entry.preset as a fallback): the ebook hub clears a persisted
+		// txt/pdf output so it never refuses EPUBs it promises to compress.
+		const hubResetPresets = new Set(['compress-epub']);
 		for (const e of [HOME, ...FORMATS]) {
-			expect('preset' in ALL_DETAILS[e.path.slice(1)], e.path).toBe(false);
+			const slug = e.path.slice(1);
+			expect('preset' in ALL_DETAILS[slug], e.path).toBe(hubResetPresets.has(slug));
 		}
 	});
 
