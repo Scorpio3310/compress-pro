@@ -41,7 +41,23 @@ const MAX_OBJSTM_PROBE_BYTES = 64_000_000;
 /** Cheap byte scan — is there anything interactive worth preserving? */
 export function scanInteractive(input: ArrayBuffer): boolean {
 	const bytes = new Uint8Array(input);
-	if (findAscii(bytes, '/AcroForm') || findAscii(bytes, '/Annots')) return true;
+	// Single pass for both needles — separate scans cost ~2 s extra on a
+	// match-free 400 MB scan PDF (bench MEM-01 delta), pure waste on the
+	// every-compress hot path. All needles start with '/', so one first-byte
+	// gate covers them.
+	const A = '/AcroForm';
+	const N = '/Annots';
+	const SLASH = 0x2f;
+	outer: for (let i = 0; i <= bytes.length - N.length; i++) {
+		if (bytes[i] !== SLASH) continue;
+		let a = i + A.length <= bytes.length;
+		for (let j = 1; a && j < A.length; j++) a = bytes[i + j] === A.charCodeAt(j);
+		if (a) return true;
+		let n = true;
+		for (let j = 1; n && j < N.length; j++) n = bytes[i + j] === N.charCodeAt(j);
+		if (n) return true;
+		continue outer;
+	}
 	// Writers using object streams (PDF 1.5+) compress those dictionaries away
 	// from the raw byte stream — only a real parse can tell, so bounded inputs
 	// take the prepare path on the /ObjStm marker alone.

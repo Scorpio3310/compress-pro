@@ -74,6 +74,12 @@ limit — re-verify queued; full detail incl. failure scenarios + repro ideas in
 | F-55 | S6 | fonts | WOFF extended-metadata and private blocks silently dropped on every conversion, no note (`src/lib/codecs/woff1.ts:67`) | FIXED | note surfaced; unit | 4dd6494 |
 | F-56 | S6 | docs-models | Simplify is silently skipped on morph-target meshes — setting ignored with no warning (`src/lib/workers/model.worker.ts:192`) | FIXED | modelWarning unit + MD-10 e2e (morph fixture) | a22c4c7 |
 
+| F-69 | S5 | images | Huge-image PNG conversions ground for minutes: oxipng optimise pass on 12–48 MP outputs (heic/webp→png @q100) ran 4–8+ min and timed out matrix cells; straight @jsquash/png encode is seconds. Fix: skip oxipng past 12 MP (savings there were single-digit %). Matrix cells 13–18 s after fix; existing <12 MP threshold suites untouched. | FIXED | matrix heic-to-png/webp-to-png cells (4-8 min timeout → green in seconds) + images-quality/defaults regression green | 4ff4fa5 |
+| F-70 | S6 (test-infra) | matrix harness | remove-audio duration compare used CONTAINER duration; real webm's audio track runs 0.49 s longer than video, so stripping audio legitimately shortens the container. Spec now compares the input's VIDEO track duration. | FIXED | matrix remove-audio cell green | 4ff4fa5 |
+
+| F-72 | S2 | video | video→GIF silently truncates the timeline: 13.33 s 4K source → 9.04 s GIF (113×80 ms frames; measured via sharp delay sum). Caught by the VISUAL inspector (mid-frame showed a different moment); metrics/pages alone looked plausible. Root cause: CanvasSink yields null for slots it can't produce and the loop SKIPPED them (no frame written) — timeline contracted by the null count. Fix: hold the previous frame for null slots (+ backfill leading nulls). | FIXED | V-37 e2e (red 9.04s→green 13.3s±7%) | 2c535c5 |
+| F-73 | S2 | video | gif→mp4 output visibly brighter/higher-contrast than the GIF source (Muybridge cat cell) — suspected full-vs-limited range (or gamma/matrix) mismatch in the RGB→H.264 path. Pixel probe REFUTED it: mean luma gif 197.4 vs mp4 197.5 (identical) through the same browser decode path — the perceived shift was the inspection compositor decoding the GIF via sharp vs the MP4 via browser video. App output correct; compositor polish noted in O-07. | REFUTED | luminance probe (this log) | — |
+
 ### Audit round 1b (re-verified after usage-limit failures — ALL 12 real)
 
 | F-57 | S3 | models | Truncated/corrupt GLB surfaces raw RangeError/JSON SyntaxError instead of a friendly error (`src/lib/codecs/model-shared.ts:85`) | FIXED | model-shared units (4) + MD-11 e2e | a22c4c7 |
@@ -149,6 +155,14 @@ tar-gz↔zip, ttf↔woff, ttf↔woff2, woff↔woff2) whose title token SETS are 
   MEMFS; -mcp rejected). Zip gets repaired from its own central directory (30f6085);
   other formats would each need a minimal name+CRC header walker, or the js7z-tools
   (7-Zip 25.01) upgrade already noted in memory. Content is correct either way.
+- **O-07 (harness polish):** the side-by-side raster compositor offsets the right panel
+  ~12 px and can render dark scenes slightly darker on one side (different decode paths
+  for GIF vs video panels) — cosmetic, but it cost two false S2 alarms during visual
+  inspection; align panels pixel-exact and decode both sides through one path.
+- **O-08 (perf watch):** MEM-04 (AVIF batch) settled Δ is high and noisy across runs
+  (529 MB before, 846 MB after; peaks similar) — pooled image workers keep wasm heaps
+  alive by design; no per-run leak signal, but worth a look if users report memory
+  pressure after large AVIF batches.
 
 - **O-01 (SEO, editorial):** 10 reversed converter pairs share identical title token
   sets (e.g. "Convert TTF to WOFF2 …" vs "Convert WOFF2 to TTF …") — potential keyword
