@@ -569,19 +569,36 @@
    by the slideIndicator attachment via container.dataset.scroll. Fades whichever
    edge(s) still have more content to scroll toward; absent when it all fits. */
 [data-scroll='end'] {
-	mask-image: linear-gradient(to right, black calc(100% - 28px), transparent);
+	mask-image: linear-gradient(to right, black calc(100% - 48px), transparent);
 }
 [data-scroll='start'] {
-	mask-image: linear-gradient(to right, transparent, black 28px);
+	mask-image: linear-gradient(to right, transparent, black 48px);
 }
 [data-scroll='both'] {
 	mask-image: linear-gradient(
 		to right,
 		transparent,
-		black 28px,
-		black calc(100% - 28px),
+		black 48px,
+		black calc(100% - 48px),
 		transparent
 	);
+}
+
+/* Chevron nudgers for the hidden-scrollbar pill tracks — fine pointers only
+   (touch swipes natively). Each side mirrors the sibling track's data-scroll
+   state, which slideIndicator keeps fresh on scroll/resize/fonts.ready.
+   Presentation-only (aria-hidden + tabindex=-1): Tab-key focus already brings
+   off-screen pills into view. */
+[data-chev] {
+	display: none;
+}
+@media (pointer: fine) {
+	[data-chevrons]:has(> [data-scroll='start']) > [data-chev='left'],
+	[data-chevrons]:has(> [data-scroll='both']) > [data-chev='left'],
+	[data-chevrons]:has(> [data-scroll='end']) > [data-chev='right'],
+	[data-chevrons]:has(> [data-scroll='both']) > [data-chev='right'] {
+		display: flex;
+	}
 }
 
 /* ── Pre-hydration entrance for SSR'd content ──────────────────────

@@ -57,6 +57,8 @@
 	import { FORMATS, pathFor } from '$lib/seo';
 	import { resolve } from '$app/paths';
 	import { slideIndicator } from '$lib/motion/indicator.svelte';
+	import { wheelX } from '$lib/motion/gestures';
+	import { motionOK } from '$lib/motion/prefs.svelte';
 	import { pop } from '$lib/motion/reveal';
 	import Spinner from './Spinner.svelte';
 	import Icon, { type IconName } from './Icon.svelte';
@@ -116,6 +118,14 @@
 		model: 'cube',
 		data: 'table'
 	};
+
+	// Chevron nudge targets — visibility is pure CSS off the sibling's
+	// data-scroll (see [data-chev] in layout.css), so no reactive plumbing.
+	let primaryNav = $state<HTMLElement>();
+	let railTrack = $state<HTMLElement>();
+	function nudge(el: HTMLElement | undefined, dir: 1 | -1) {
+		el?.scrollBy({ left: dir * el.clientWidth * 0.7, behavior: motionOK() ? 'smooth' : 'instant' });
+	}
 
 	const imagesActive = $derived(isImageTab(activeTab));
 	const activeGroup = $derived(imagesActive ? 'images' : activeTab);
@@ -208,6 +218,34 @@
 	</button>
 {/snippet}
 
+<!-- Desktop-only scroll nudgers, shown per side via [data-chev] CSS when the
+     sibling track's data-scroll says that side has more content. Deliberately
+     out of the a11y tree (aria-hidden + tabindex=-1): pills are Tab-reachable
+     and focus scrolls them into view natively. No data-seg/role names, so e2e
+     queries can never match these. -->
+{#snippet chevrons(track: () => HTMLElement | undefined, cls: string)}
+	<button
+		type="button"
+		tabindex="-1"
+		aria-hidden="true"
+		data-chev="left"
+		class="absolute left-1 w-8 items-center justify-center rounded-full text-muted hover:text-ink {cls}"
+		onclick={() => nudge(track(), -1)}
+	>
+		<Icon name="chevron-left" class="size-4" />
+	</button>
+	<button
+		type="button"
+		tabindex="-1"
+		aria-hidden="true"
+		data-chev="right"
+		class="absolute right-1 w-8 items-center justify-center rounded-full text-muted hover:text-ink {cls}"
+		onclick={() => nudge(track(), 1)}
+	>
+		<Icon name="chevron-right" class="size-4" />
+	</button>
+{/snippet}
+
 <div>
 	<!-- Tabs are real routes; the shared page component is reused on navigation.
 	     Primary row = format groups as machine cells; image formats collapse
@@ -215,51 +253,56 @@
 	<!-- Bottom padding shrinks when no rail follows, so the dashed drop frame
 	     sits as close to the pills as it does to the rail track on rail tabs.
 	     The padding animates in step with the rail's collapse. -->
-	<nav
-		aria-label="File format"
-		class="relative flex w-full items-stretch gap-1 overflow-x-auto px-2 pt-2 transition-[padding] duration-300 ease-[var(--ease-swift)] scrollbar-none motion-reduce:transition-none {railOpen
-			? 'pb-2'
-			: 'pb-0.5'}"
-		{@attach slideIndicator(() => activeGroup)}
-	>
-		<!-- sliding thumb; the active link's own bg is the pre-hydration fallback -->
-		<span
-			data-thumb
-			aria-hidden="true"
-			class="absolute top-2 left-0 w-0 rounded-full bg-ink opacity-0 transition-[bottom] duration-300 ease-[var(--ease-swift)] motion-reduce:transition-none {railOpen
-				? 'bottom-2'
-				: 'bottom-0.5'}"
-		></span>
-		{#each primaryTabs as tab (tab.id)}
-			{@const active = activeGroup === tab.id}
-			<a
-				href={resolve(tab.id === 'images' ? imagesHref : pathFor(tab.id))}
-				aria-current={active ? (tab.id === 'images' ? 'true' : 'page') : undefined}
-				data-seg={tab.id}
-				data-sveltekit-noscroll
-				data-sveltekit-keepfocus
-				class="relative flex shrink-0 items-center rounded-full px-4 py-2.5 font-mono text-xs font-medium tracking-[0.08em] whitespace-nowrap uppercase transition-colors duration-300 {active
-					? 'bg-ink text-ink-contrast in-data-ready:bg-transparent'
-					: 'text-muted hover:text-ink'}"
-			>
-				<!-- active branch remounts the svg → its activation move replays -->
-				{#if active}
-					<Icon
-						name={TAB_ICONS[tab.id]}
-						class="icon-activate-{tab.id} mr-1.5 hidden size-4 shrink-0 sm:block"
-					/>
-				{:else}
-					<Icon name={TAB_ICONS[tab.id]} class="mr-1.5 hidden size-4 shrink-0 sm:block" />
-				{/if}
-				{tab.label}
-				{@render badge(
-					tab.id === 'images' ? imagesCount : (counts[tab.id] ?? 0),
-					tab.id === 'images' ? imagesPct : (progress[tab.id] ?? null),
-					tab.id === 'images' ? imagesStatus : status[tab.id]
-				)}
-			</a>
-		{/each}
-	</nav>
+	<div class="relative" data-chevrons>
+		<nav
+			aria-label="File format"
+			bind:this={primaryNav}
+			class="relative flex w-full items-stretch gap-1 overflow-x-auto px-2 pt-2 transition-[padding] duration-300 ease-[var(--ease-swift)] scrollbar-none motion-reduce:transition-none {railOpen
+				? 'pb-2'
+				: 'pb-0.5'}"
+			{@attach slideIndicator(() => activeGroup)}
+			{@attach wheelX()}
+		>
+			<!-- sliding thumb; the active link's own bg is the pre-hydration fallback -->
+			<span
+				data-thumb
+				aria-hidden="true"
+				class="absolute top-2 left-0 w-0 rounded-full bg-ink opacity-0 transition-[bottom] duration-300 ease-[var(--ease-swift)] motion-reduce:transition-none {railOpen
+					? 'bottom-2'
+					: 'bottom-0.5'}"
+			></span>
+			{#each primaryTabs as tab (tab.id)}
+				{@const active = activeGroup === tab.id}
+				<a
+					href={resolve(tab.id === 'images' ? imagesHref : pathFor(tab.id))}
+					aria-current={active ? (tab.id === 'images' ? 'true' : 'page') : undefined}
+					data-seg={tab.id}
+					data-sveltekit-noscroll
+					data-sveltekit-keepfocus
+					class="relative flex shrink-0 items-center rounded-full px-4 py-2.5 font-mono text-xs font-medium tracking-[0.08em] whitespace-nowrap uppercase transition-colors duration-300 {active
+						? 'bg-ink text-ink-contrast in-data-ready:bg-transparent'
+						: 'text-muted hover:text-ink'}"
+				>
+					<!-- active branch remounts the svg → its activation move replays -->
+					{#if active}
+						<Icon
+							name={TAB_ICONS[tab.id]}
+							class="icon-activate-{tab.id} mr-1.5 hidden size-4 shrink-0 sm:block"
+						/>
+					{:else}
+						<Icon name={TAB_ICONS[tab.id]} class="mr-1.5 hidden size-4 shrink-0 sm:block" />
+					{/if}
+					{tab.label}
+					{@render badge(
+						tab.id === 'images' ? imagesCount : (counts[tab.id] ?? 0),
+						tab.id === 'images' ? imagesPct : (progress[tab.id] ?? null),
+						tab.id === 'images' ? imagesStatus : status[tab.id]
+					)}
+				</a>
+			{/each}
+		</nav>
+		{@render chevrons(() => primaryNav, 'top-2 h-9 bg-card')}
+	</div>
 
 	<!-- Second row: a quiet gray rail. Image tabs → format links; pdf/zip → op
 	     buttons (their file/result-clearing side effects live in +page's
@@ -284,9 +327,10 @@
 			<div class="px-2 sm:px-2.5">
 				{#key railGroup}
 					<div
-						class="transition-opacity duration-300 {opsFrozen
+						class="relative w-fit max-w-full transition-opacity duration-300 {opsFrozen
 							? 'pointer-events-none opacity-50'
 							: ''}"
+						data-chevrons
 						inert={opsFrozen}
 					>
 						<svelte:element
@@ -299,8 +343,10 @@
 									: railGroup === 'font'
 										? 'Font tool'
 										: 'ZIP mode'}
+							bind:this={railTrack}
 							class="relative flex w-fit max-w-full items-stretch gap-1 overflow-x-auto rounded-full bg-card-2 p-1 scrollbar-none"
 							{@attach slideIndicator(() => railKey)}
+							{@attach wheelX()}
 						>
 							<!-- sliding white thumb; the active item's own bg is the pre-hydration fallback -->
 							<span
@@ -339,6 +385,7 @@
 								{/each}
 							{/if}
 						</svelte:element>
+						{@render chevrons(() => railTrack, 'inset-y-1 bg-card-2')}
 					</div>
 				{/key}
 			</div>

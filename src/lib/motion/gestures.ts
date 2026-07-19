@@ -3,10 +3,10 @@ import { whenEngine } from './engine';
 import { motionOK } from './prefs.svelte';
 import { SPRING_POP, SPRING_UI } from './tokens';
 
-// All three gestures register interaction LISTENERS — nothing animates until
-// the user presses/hovers, so late-attaching them once the lazy engine lands
-// is invisible. Cleanups cancel the pending whenEngine callback too, or an
-// element removed during the cold window would leak its queued registration.
+// The press/hover gestures register interaction LISTENERS — nothing animates
+// until the user presses/hovers, so late-attaching them once the lazy engine
+// lands is invisible. Cleanups cancel the pending whenEngine callback too, or
+// an element removed during the cold window would leak its queued registration.
 
 /** Press feedback: scale down on pointer-down/Enter, spring back on release. */
 export function pressable(scale = 0.97): Attachment {
@@ -46,6 +46,28 @@ export function hoverLift(dy = -1.5): Attachment {
 			cancel();
 			stop?.();
 		};
+	};
+}
+
+/** Vertical wheel → horizontal scroll for hidden-scrollbar pill tracks.
+ *  Needs a real non-passive listener (Svelte template wheel handlers are
+ *  passive, so they can't preventDefault). Direct scrollLeft writes are 1:1
+ *  user input — no animation, hence no motionOK gate. */
+export function wheelX(): Attachment<HTMLElement> {
+	return (el) => {
+		function onWheel(e: WheelEvent) {
+			if (e.ctrlKey) return; // trackpad pinch-zoom
+			if (Math.abs(e.deltaX) >= Math.abs(e.deltaY)) return; // trackpads pan natively
+			const max = el.scrollWidth - el.clientWidth;
+			if (max <= 1) return;
+			const dy = e.deltaMode === 1 ? e.deltaY * 32 : e.deltaY; // Firefox scrolls in lines
+			// At either end, fall through to page scroll instead of jailing the wheel.
+			if (dy < 0 ? el.scrollLeft <= 0 : el.scrollLeft >= max - 1) return;
+			e.preventDefault();
+			el.scrollLeft += dy;
+		}
+		el.addEventListener('wheel', onWheel, { passive: false });
+		return () => el.removeEventListener('wheel', onWheel);
 	};
 }
 
