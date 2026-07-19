@@ -260,7 +260,7 @@
 				</a>
 			{/each}
 		</nav>
-		{@render chevrons(() => primaryNav, 'top-2 h-9 bg-card')}
+		{@render chevrons(() => primaryNav, 'top-2 h-9')}
 	</div>
 
 	<!-- Second row: a quiet gray rail. Image tabs → format links; op groups →
@@ -331,7 +331,7 @@
 								{/each}
 							{/if}
 						</svelte:element>
-						{@render chevrons(() => railTrack, 'inset-y-1 bg-card-2')}
+						{@render chevrons(() => railTrack, 'inset-y-1')}
 					</div>
 				{/key}
 			</div>
