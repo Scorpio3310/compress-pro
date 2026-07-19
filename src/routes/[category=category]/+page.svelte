@@ -44,10 +44,16 @@
 	</div>
 
 	{#each entry.directory as section, sectionIndex (section.heading)}
+		{@const words = section.heading.split(' ')}
 		<div class="reveal-css spec-row" style="--reveal-i: {sectionIndex + 1}">
+			<!-- The count rides the heading's LAST word in a nowrap span — when the
+			     narrow spec-row column wraps the label, "Tools · 5" breaks as one
+			     unit and the count never orphans onto its own line. -->
 			<h2 class="microlabel text-muted">
-				{section.heading}
-				<span class="text-faint">· {section.items.length}</span>
+				{words.slice(0, -1).join(' ')}
+				<span class="whitespace-nowrap"
+					>{words[words.length - 1]} <span class="text-faint">· {section.items.length}</span></span
+				>
 			</h2>
 			<ul class="mt-3 grid grid-cols-1 gap-x-8 gap-y-2 sm:grid-cols-2">
 				{#each section.items as item (item.path)}
