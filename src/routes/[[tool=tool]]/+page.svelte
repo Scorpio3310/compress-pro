@@ -673,6 +673,7 @@
 			settings.subtitle.to = preset.to;
 		} else if (preset.kind === 'ebook') {
 			if (preset.quality !== undefined) settings.ebook.quality = preset.quality;
+			if (preset.to !== undefined) settings.ebook.to = preset.to;
 		} else if (preset.kind === 'archive') {
 			handleZipOpChange(preset.op);
 			if (preset.to) settings.zip.outputFormat = preset.to;

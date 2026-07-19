@@ -168,7 +168,7 @@ export type ConverterPreset =
 	| { kind: 'subtitle'; to: 'vtt' | 'srt' }
 	// Ebook tab: one uniform pipeline; /cbr-to-cbz presets quality 100 so the
 	// per-entry keep-original guard makes it a bit-exact container repack.
-	| { kind: 'ebook'; quality?: number }
+	| { kind: 'ebook'; quality?: number; to?: 'txt' | 'pdf' }
 	// Data tab: one uniform pipeline, nothing to preset — the marker exists
 	// because every converter detail must carry a preset (index test).
 	| { kind: 'data' };
@@ -897,6 +897,27 @@ export const CONVERTERS: ConverterLite[] = [
 		label: 'CBR → CBZ',
 		feature: 'Convert CBR to CBZ',
 		h1: 'Convert CBR to CBZ.'
+	},
+	{
+		format: 'ebook',
+		path: '/epub-to-txt',
+		label: 'EPUB → TXT',
+		feature: 'Convert EPUB to TXT',
+		h1: 'Convert EPUB to TXT.'
+	},
+	{
+		format: 'ebook',
+		path: '/cbz-to-pdf',
+		label: 'CBZ → PDF',
+		feature: 'Convert CBZ to PDF',
+		h1: 'Convert CBZ to PDF.'
+	},
+	{
+		format: 'ebook',
+		path: '/cbr-to-pdf',
+		label: 'CBR → PDF',
+		feature: 'Convert CBR to PDF',
+		h1: 'Convert CBR to PDF.'
 	},
 	{
 		format: 'data',

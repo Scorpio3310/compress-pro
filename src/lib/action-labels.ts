@@ -35,8 +35,13 @@ export function actionLabel(
 		const to = (settings as SettingsMap['subtitle']).to;
 		return `Convert ${filesCount} file${plural} to ${to.toUpperCase()}`;
 	}
-	// One uniform op — cbr inputs convert as a side effect, the CTA stays honest.
-	if (format === 'ebook') return `Compress ${filesCount} file${plural}`;
+	if (format === 'ebook') {
+		const to = (settings as SettingsMap['ebook']).to;
+		if (to === 'txt') return `Extract text from ${filesCount} file${plural}`;
+		if (to === 'pdf') return `Convert ${filesCount} file${plural} to PDF`;
+		// One uniform op — cbr inputs convert as a side effect, the CTA stays honest.
+		return `Compress ${filesCount} file${plural}`;
+	}
 	if (format === 'model') return `Compress ${filesCount} model${plural}`;
 	// Target is per-file (csv→xlsx, json→yaml…) — a mixed batch is legal, so
 	// the CTA names no destination format.
@@ -97,7 +102,10 @@ export function busyLabel(format: FileFormat, settings: ToolSettings): string {
 	if (format === 'exif') return 'Cleaning…';
 	if (format === 'ocr') return 'Recognizing…';
 	if (format === 'subtitle') return 'Converting…';
-	if (format === 'ebook') return 'Working…';
+	if (format === 'ebook') {
+		const to = (settings as SettingsMap['ebook']).to;
+		return to === 'txt' ? 'Extracting…' : to === 'pdf' ? 'Converting…' : 'Working…';
+	}
 	if (format === 'model') return 'Working…';
 	if (format === 'data') return 'Converting…';
 	if (format === 'audio') return 'Converting…';

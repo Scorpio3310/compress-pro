@@ -1044,6 +1044,58 @@ export async function compressFiles(
 			// — the keep-original guard must never "un-convert".
 			formatChanged = true;
 			outName = replaceExtension(file.name, out.outExt);
+		} else if (format === 'ebook' && (settings as EbookSettings).to === 'txt') {
+			if (/\.(cbz|cbr)$/i.test(file.name)) {
+				throw new Error(
+					"'Extract text' reads EPUB books — a comic's pages are images. Use /cbz-to-pdf to turn this one into a PDF instead"
+				);
+			}
+			const { epubToText } = await import('$lib/codecs/ebook-text');
+			const out = await epubToText(
+				file,
+				(fraction, detail) =>
+					onProgress({
+						...base,
+						fileFraction: Math.min(fraction, 0.98),
+						detail,
+						stage: 'processing'
+					}),
+				signal
+			);
+			blob = new Blob([out.text], { type: 'text/plain' });
+			info = `${out.chapters} chapter${out.chapters !== 1 ? 's' : ''} · ${out.words.toLocaleString('en-US')} words`;
+			// Extracted text must never fall back to the EPUB bytes.
+			formatChanged = true;
+			outName = replaceExtension(file.name, '.txt');
+		} else if (format === 'ebook' && (settings as EbookSettings).to === 'pdf') {
+			if (/\.epub$/i.test(file.name)) {
+				throw new Error(
+					"'To PDF' lays out comic pages (CBZ/CBR) — for an EPUB's text use /epub-to-txt instead"
+				);
+			}
+			const { comicToPdf } = await import('$lib/codecs/ebook-pdf');
+			const out = await comicToPdf(
+				file,
+				settings as EbookSettings,
+				(fraction, detail) =>
+					onProgress({
+						...base,
+						fileFraction: Math.min(fraction, 0.98),
+						detail,
+						stage: 'processing'
+					}),
+				signal
+			);
+			blob = out.blob;
+			info =
+				`${out.pages} page${out.pages !== 1 ? 's' : ''}` +
+				(out.lossless > 0 ? ` · ${out.lossless} embedded losslessly` : '') +
+				(out.transcoded > 0 ? ` · ${out.transcoded} re-encoded` : '');
+			// A comic PDF is usually LARGER than its source archive (PDF framing
+			// on top of the same bytes) — the keep-original guard must not
+			// silently hand back the .cbz.
+			formatChanged = true;
+			outName = replaceExtension(file.name, '.pdf');
 		} else if (format === 'ebook') {
 			const { compressEbook } = await import('$lib/codecs/ebook');
 			const out = await compressEbook(
