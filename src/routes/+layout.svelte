@@ -22,10 +22,12 @@
 	});
 
 	// Footer directory — the homepage buckets' curated picks (hub page first);
-	// the full 93 live behind the "All tools" link. seo.test.ts asserts every
-	// path resolves and the buckets stay a partition.
+	// the full list lives behind the "All tools" link. seo.test.ts asserts every
+	// path resolves and the buckets stay a partition. Column headers link the
+	// group's category hub page.
 	const footerColumns = TOOL_GROUPS.map((group) => ({
 		title: group.footerTitle ?? group.title,
+		categoryPath: group.categoryPath,
 		links: group.footerPaths.map((path) => seoFor(path.slice(1)))
 	}));
 
@@ -138,7 +140,12 @@
 			>
 				{#each footerColumns as column (column.title)}
 					<div>
-						<p class="microlabel text-muted">{column.title}</p>
+						<a
+							href={resolve(column.categoryPath)}
+							class="microlabel text-muted transition-colors hover:text-ink"
+						>
+							{column.title}
+						</a>
 						<ul class="mt-3 space-y-2">
 							{#each column.links as link (link.path)}
 								<li>

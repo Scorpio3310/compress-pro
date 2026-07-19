@@ -1,5 +1,5 @@
 import type { Handle } from '@sveltejs/kit';
-import { TOOL_SLUGS } from '$lib/seo';
+import { CATEGORY_SLUGS, TOOL_SLUGS } from '$lib/seo';
 import { FULL_CONVERTERS, FULL_FORMATS, FULL_TOOLS, fullSeoFor } from '$lib/seo-full.server';
 import { toolMarkdown, homeMarkdown } from '$lib/markdown';
 
@@ -43,7 +43,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 		wantsMarkdown(event.request.headers.get('accept'))
 	) {
 		const slug = event.url.pathname.replace(/^\/+|\/+$/g, '');
-		if (slug === '' || TOOL_SLUGS.includes(slug)) {
+		if (slug === '' || TOOL_SLUGS.includes(slug) || CATEGORY_SLUGS.includes(slug)) {
 			const md =
 				slug === ''
 					? homeMarkdown(fullSeoFor(undefined), {

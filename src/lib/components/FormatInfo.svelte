@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { Component } from 'svelte';
 	import type { DemoKind } from '$lib/types';
-	import { seoFor, type SeoBody, type SeoEntry } from '$lib/seo';
+	import { categoryFor, seoFor, type SeoBody, type SeoEntry } from '$lib/seo';
 	import { pasteKey } from '$lib/paste-key.svelte';
 	import { resolve } from '$app/paths';
 
@@ -26,6 +26,11 @@
 	// Prose may carry `[text](/path)` internal links and `**bold**` emphasis — parsed
 	// into segments here (never {@html}) and rendered with the content-link / strong
 	// styling. `**` markers double as native bold in the .md twins (see markdown.ts).
+	// "Image tools" → "image tools" for the "All …" pill; acronym-led labels
+	// ("PDF tools") keep their caps.
+	const allLabel = (label: string) =>
+		/^[A-Z][a-z]/.test(label) ? label[0].toLowerCase() + label.slice(1) : label;
+
 	type TextSegment = { text: string; href?: string; bold?: boolean };
 	function parseInline(paragraph: string): TextSegment[] {
 		const segments: TextSegment[] = [];
@@ -165,11 +170,11 @@
 		</div>
 	{/if}
 
-	{#if entry.related?.length}
+	{#if entry.related?.length || entry.format !== null}
 		<div class="spec-row">
 			<h2 class="microlabel text-muted">Related tools</h2>
 			<div class="mt-3 flex flex-wrap gap-2">
-				{#each entry.related as path (path)}
+				{#each entry.related ?? [] as path (path)}
 					{@const target = seoFor(path.slice(1))}
 					<a
 						href={resolve(path)}
@@ -178,6 +183,18 @@
 						{target.h1.replace(/\.$/, '')}
 					</a>
 				{/each}
+				{#if entry.format !== null}
+					{@const group = categoryFor(entry.format)}
+					<!-- The category hub pill — every tool page links its parent
+					     (/image-tools …); "PDF tools" keeps its caps, "Image tools"
+					     reads as "all image tools". -->
+					<a
+						href={resolve(group.categoryPath)}
+						class="rounded-full bg-card/70 px-3.5 py-1.5 font-mono text-xs font-medium text-ink ring-1 ring-line-strong backdrop-blur-xs transition-colors hover:bg-card"
+					>
+						All {allLabel(group.categoryLabel)} →
+					</a>
+				{/if}
 			</div>
 		</div>
 	{/if}

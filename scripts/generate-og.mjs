@@ -221,6 +221,19 @@ const PAGES = [
 	['og/xlsx-to-csv.jpg', 'XLSX → CSV', 'Clean CSV out of Excel. Values, locally.'],
 	['og/json-to-yaml.jpg', 'JSON → YAML', 'Readable configs, rewritten on-device.'],
 	['og/yaml-to-json.jpg', 'YAML → JSON', 'Anchors resolved, JSON out. Locally.'],
+	['og/image-tools.jpg', 'Image tools.', 'Compress, convert & resize — every image tool, local.'],
+	[
+		'og/video-audio-tools.jpg',
+		'Video & audio tools.',
+		'Shrink, convert, extract — on your own hardware.'
+	],
+	['og/pdf-tools.jpg', 'PDF tools.', 'Compress, merge, split, protect — never uploaded.'],
+	['og/font-tools.jpg', 'Font tools.', 'Convert, subset, instance — web-ready, on-device.'],
+	[
+		'og/archive-tools.jpg',
+		'Archive & data tools.',
+		'Zip, extract, convert — plus ebooks, models & data.'
+	],
 	[
 		'og/about.jpg',
 		'About Compress Pro.',

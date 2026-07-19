@@ -16,6 +16,7 @@ import { DETAILS as VIDEO_AUDIO_DETAILS } from '$lib/seo-detail/video-audio';
 import { DETAILS as PDF_DETAILS } from '$lib/seo-detail/pdf';
 import { DETAILS as FONT_DETAILS } from '$lib/seo-detail/fonts';
 import { DETAILS as ARCHIVE_DETAILS } from '$lib/seo-detail/archives';
+import { CATEGORIES, type FullCategoryEntry } from '$lib/seo-categories';
 import { BODIES as HOME_BODIES } from '$lib/seo-body/home';
 import { BODIES as IMAGE_BODIES } from '$lib/seo-body/images';
 import { BODIES as VIDEO_AUDIO_BODIES } from '$lib/seo-body/video-audio';
@@ -74,13 +75,18 @@ export const FULL_TOOLS: readonly FullConverterEntry[] = TOOLS.map(
 	(t) => assemble(t) as FullConverterEntry
 );
 
+/** Category hub pages — already fully assembled in seo-categories.ts (their
+ *  copy is not split into detail/body tiers; five pages don't warrant it). */
+export const FULL_CATEGORIES: readonly FullCategoryEntry[] = CATEGORIES;
+
 /** Every page, fully assembled, in the canonical [HOME, FORMATS, CONVERTERS,
- *  TOOLS] order llms-full.txt has always used. */
+ *  TOOLS, CATEGORIES] order llms-full.txt uses. */
 export const FULL_PAGES: readonly FullSeoEntry[] = [
 	FULL_HOME,
 	...FULL_FORMATS,
 	...FULL_CONVERTERS,
-	...FULL_TOOLS
+	...FULL_TOOLS,
+	...FULL_CATEGORIES
 ];
 
 const BY_PATH = new Map(FULL_PAGES.map((entry) => [entry.path, entry]));

@@ -4,6 +4,7 @@
 		SITE_NAME,
 		FORMATS,
 		FEATURED_PATHS,
+		categoryFor,
 		seoFor,
 		type SeoEntry,
 		type SeoFaq
@@ -77,12 +78,33 @@
 		}))
 	};
 
-	const breadcrumbList = $derived({
-		'@type': 'BreadcrumbList',
-		itemListElement: [
-			{ '@type': 'ListItem', position: 1, name: 'Home', item: SITE_URL + '/' },
-			{ '@type': 'ListItem', position: 2, name: entry.h1.replace(/\.$/, ''), item: canonical }
-		]
+	// Home > category hub > tool — the hub crumb gives every tool page an
+	// anchor into its /image-tools-style parent (format is null only on home,
+	// which never emits a breadcrumb).
+	const breadcrumbList = $derived.by(() => {
+		const group = entry.format !== null ? categoryFor(entry.format) : null;
+		return {
+			'@type': 'BreadcrumbList',
+			itemListElement: [
+				{ '@type': 'ListItem', position: 1, name: 'Home', item: SITE_URL + '/' },
+				...(group
+					? [
+							{
+								'@type': 'ListItem',
+								position: 2,
+								name: group.categoryLabel,
+								item: SITE_URL + group.categoryPath
+							}
+						]
+					: []),
+				{
+					'@type': 'ListItem',
+					position: group ? 3 : 2,
+					name: entry.h1.replace(/\.$/, ''),
+					item: canonical
+				}
+			]
+		};
 	});
 
 	// Mirrors the visible FAQ section; answers are plain strings, safe as Answer.text.

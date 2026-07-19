@@ -1,4 +1,4 @@
-import { SITE_URL, HOME, FORMATS, CONVERTERS, TOOLS } from '$lib/seo';
+import { SITE_URL, HOME, FORMATS, CONVERTERS, TOOLS, TOOL_GROUPS } from '$lib/seo';
 
 export const prerender = true;
 
@@ -12,6 +12,7 @@ export function GET() {
 		...FORMATS.map((f) => f.path),
 		...CONVERTERS.map((c) => c.path),
 		...TOOLS.map((t) => t.path),
+		...TOOL_GROUPS.map((g) => g.categoryPath),
 		'/about',
 		'/privacy'
 	];

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { SITE_URL, TOOL_SLUGS } from '$lib/seo';
+import { CATEGORY_SLUGS, SITE_URL, TOOL_SLUGS } from '$lib/seo';
 import {
+	FULL_CATEGORIES,
 	FULL_CONVERTERS,
 	FULL_FORMATS,
 	FULL_PAGES,
@@ -8,6 +9,28 @@ import {
 	fullSeoFor
 } from '$lib/seo-full.server';
 import { homeMarkdown, llmsFullMarkdown, toolMarkdown } from './markdown';
+
+describe('category hub markdown twins', () => {
+	it('lists every tool of the group as an absolute link', () => {
+		for (const category of FULL_CATEGORIES) {
+			const md = toolMarkdown(category);
+			expect(md, category.path).toContain(`canonical: ${SITE_URL}${category.path}`);
+			expect(md, category.path).toContain(`# ${category.h1}`);
+			for (const item of category.directory.flatMap((s) => s.items)) {
+				expect(md, `${category.path} → ${item.path}`).toContain(
+					`- [${item.name}](${SITE_URL}${item.path})`
+				);
+			}
+		}
+	});
+
+	it('appears in llms-full with a Canonical line per hub', () => {
+		const md = llmsFullMarkdown(FULL_PAGES);
+		for (const slug of CATEGORY_SLUGS) {
+			expect(md, slug).toContain(`Canonical: ${SITE_URL}/${slug}\n`);
+		}
+	});
+});
 
 describe('toolMarkdown', () => {
 	const md = toolMarkdown(fullSeoFor('compress-jpg'));

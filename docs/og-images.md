@@ -13,158 +13,163 @@ mirrors this table; edit copy here, then re-run it. Output: `static/og.jpg`
 (default) + `static/og/<name>.jpg`, wired as `ogImage: '/og/<name>.jpg'` on
 each entry in `src/lib/seo.ts` — pages without one fall back to `/og.jpg`.
 
-| Page                       | Headline            | Subline                                                        |
-| -------------------------- | ------------------- | -------------------------------------------------------------- |
-| `/` (default `og.jpg`)     | Compress anything.  | Images, video, audio & PDFs — private, in your browser.        |
-| `/compress-pdf`            | Compress PDFs.      | Hit 2 MB exactly — compressed in your browser. Never uploaded. |
-| `/compress-video`          | Compress video.     | MP4 & WebM under any size limit — encoded on your device.      |
-| `/compress-jpg`            | Compress JPGs.      | Quality sliders, target sizes, batches — all local.            |
-| `/compress-png`            | Compress PNGs.      | Lossless or tiny — your pixels never leave.                    |
-| `/compress-webp`           | Compress WebP.      | Still or animated — re-encoded on your device.                 |
-| `/compress-gif`            | Compress GIFs.      | Keep the animation, lose the megabytes.                        |
-| `/compress-heic`           | Compress HEIC.      | iPhone photos, shrunk locally.                                 |
-| `/compress-svg`            | Compress SVGs.      | Minified locally — your artwork stays yours.                   |
-| `/remove-exif`             | Remove EXIF.        | See what your photos reveal — then wipe it, locally.           |
-| `/heic-to-jpg`             | HEIC → JPG          | iPhone photos that open anywhere. Converted locally.           |
-| `/webp-to-jpg`             | WebP → JPG          | For every app that still wants JPG. No uploads.                |
-| `/webp-to-png`             | WebP → PNG          | Lossless, transparency intact — in your browser.               |
-| `/avif-to-jpg`             | AVIF → JPG          | The newest format, made universal. Locally.                    |
-| `/png-to-jpg`              | PNG → JPG           | Photos 5–10× smaller. Flattened to white, never uploaded.      |
-| `/jpg-to-webp`             | JPG → WebP          | ~30% smaller at the same quality.                              |
-| `/png-to-webp`             | PNG → WebP          | Smaller files, alpha preserved.                                |
-| `/jpg-to-pdf`              | JPG → PDF           | Photos into one PDF — built in your browser.                   |
-| `/pdf-to-jpg`              | PDF → JPG           | Every page becomes an image. Rendered locally.                 |
-| `/mov-to-mp4`              | MOV → MP4           | iPhone video that plays everywhere.                            |
-| `/webm-to-mp4`             | WebM → MP4          | For Apple devices, TVs and editors.                            |
-| `/mkv-to-mp4`              | MKV → MP4           | Universal playback, converted on-device.                       |
-| `/mp4-to-webm`             | MP4 → WebM          | Smaller video for the web. Converted locally.                  |
-| `/compress-audio`          | Compress audio.     | MP3, FLAC, M4A, WAV & OGG — encoded on your device.            |
-| `/zip-files`               | Zip & Unzip.        | Archives created and opened locally. No upload.                |
-| `/rar-to-zip`              | RAR → ZIP           | Opens everywhere — converted on your device.                   |
-| `/7z-to-zip`               | 7Z → ZIP            | Universal archives, repacked locally.                          |
-| `/zip-to-7z`               | ZIP → 7Z            | Same files, tighter compression.                               |
-| `/tar-gz-to-zip`           | TAR.GZ → ZIP        | Unix tarballs, Windows-friendly.                               |
-| `/iso-to-zip`              | ISO → ZIP           | Disc image files, no mounting.                                 |
-| `/zip-to-tar-gz`           | ZIP → TAR.GZ        | For servers and pipelines. Local.                              |
-| `/create-7z`               | Create 7Z.          | Strongest compression, AES-256. On-device.                     |
-| `/protect-zip`             | Protect ZIP.        | AES-256 locked ZIPs. Keys stay local.                          |
-| `/protect-7z`              | Protect 7Z.         | AES-256, hidden file names. On-device.                         |
-| `/create-tar`              | Create TAR.         | The unix bundle — built in your browser.                       |
-| `/create-tar-gz`           | Create TAR.GZ.      | Tarballs the unix way. Nothing uploaded.                       |
-| `/gzip-files`              | Gzip files.         | Every file to its own .gz — locally.                           |
-| `/bzip2-files`             | Bzip2 files.        | Smaller than gzip, right in your browser.                      |
-| `/xz-files`                | XZ files.           | The hardest squeeze — on your device.                          |
-| `/extract-rar`             | Extract RAR.        | No WinRAR, no upload — opened in-browser.                      |
-| `/extract-7z`              | Extract 7Z.         | Unpacked locally, passwords included.                          |
-| `/extract-tar-gz`          | Extract TAR.GZ.     | Both layers unwrapped automatically.                           |
-| `/extract-gz`              | Extract GZ.         | Gunzip in the browser. Nothing uploaded.                       |
-| `/extract-iso`             | Extract ISO.        | Disc images opened — never mounted.                            |
-| `/extract-cab`             | Extract CAB.        | Windows cabinets, opened locally.                              |
-| `/extract-deb`             | Extract DEB.        | Debian payloads, unpacked in-browser.                          |
-| `/extract-rpm`             | Extract RPM.        | rpm2cpio, retired. Runs on your device.                        |
-| `/extract-cpio`            | Extract CPIO.       | initramfs & rpm payloads, opened locally.                      |
-| `/extract-lha`             | Extract LHA.        | Retro LZH archives, opened in-browser.                         |
-| `/extract-arj`             | Extract ARJ.        | DOS-era archives, opened on your device.                       |
-| `/unlock-pdf`              | Unlock PDFs.        | Your password never leaves your device.                        |
-| `/protect-pdf`             | Protect PDFs.       | Set a password — encrypted on your device.                     |
-| `/video-to-gif`            | Video → GIF         | Clips become loops — right in your browser.                    |
-| `/gif-to-mp4`              | GIF → MP4           | Same loop, a tenth of the bytes.                               |
-| `/mp4-to-mp3`              | MP4 → MP3           | Pull the audio out of any video. Locally.                      |
-| `/wav-to-mp3`              | WAV → MP3           | Huge recordings, made shareable.                               |
-| `/bmp-to-jpg`              | BMP → JPG           | Raw bitmaps, 10–20× smaller.                                   |
-| `/tiff-to-jpg`             | TIFF → JPG          | Scans that fit in an email. Converted locally.                 |
-| `/png-to-ico`              | PNG → ICO           | A multi-size favicon in one click.                             |
-| `/jpg-to-ico`              | JPG → ICO           | Any logo or photo becomes a favicon. Locally.                  |
-| `/svg-to-png`              | SVG → PNG           | Vector art rendered crisp at any size. Locally.                |
-| `/svg-to-ico`              | SVG → ICO           | Vector-sharp favicons — made in your browser.                  |
-| `/merge-pdf`               | Merge PDFs.         | Many documents into one — reordered, never uploaded.           |
-| `/split-pdf`               | Split PDFs.         | Extract or remove pages with ranges like 1-3,7. Local.         |
-| `/extract-pages-from-pdf`  | Extract pages.      | Only the PDF pages you list. On-device.                        |
-| `/delete-pages-from-pdf`   | Delete pages.       | Listed PDF pages removed. On-device.                           |
-| `/compress-mp4`            | Compress MP4.       | Hit 10 MB for Discord — encoded on your device.                |
-| `/resize-image`            | Resize images.      | Cap the longest side — aspect kept, resized locally.           |
-| `/png-to-pdf`              | PNG → PDF           | Screenshots into one document. Assembled locally.              |
-| `/mp4-to-gif`              | MP4 → GIF           | Looping GIFs, no watermark — made in your browser.             |
-| `/pdf-to-png`              | PDF → PNG           | Lossless page renders — made in your browser.                  |
-| `/heic-to-png`             | HEIC → PNG          | iPhone photos, converted lossless. Locally.                    |
-| `/m4a-to-mp3`              | M4A → MP3           | Voice memos that play anywhere. No upload.                     |
-| `/flac-to-mp3`             | FLAC → MP3          | Lossless archives, played anywhere. Locally.                   |
-| `/wav-to-flac`             | WAV → FLAC          | Same audio, half the bytes — lossless.                         |
-| `/opus-to-mp3`             | OPUS → MP3          | WhatsApp voice notes, made universal.                          |
-| `/ogg-to-mp3`              | OGG → MP3           | Open audio for every player. No uploads.                       |
-| `/aac-to-mp3`              | AAC → MP3           | Raw AAC streams, playable everywhere.                          |
-| `/mp3-to-wav`              | MP3 → WAV           | Clean PCM for editors and samplers.                            |
-| `/mp4-to-wav`              | MP4 → WAV           | The audio track, ready for any editor.                         |
-| `/compress-image`          | Compress any image. | JPG, PNG, WebP, HEIC & more — smaller on your device.          |
-| `/compress-jpg-to-100kb`   | JPG under 100 KB.   | Type the cap — the best quality that fits, locally.            |
-| `/font-converter`          | Convert fonts.      | TTF, OTF, WOFF & WOFF2 — lossless, in your browser.            |
-| `/ttf-to-woff2`            | TTF → WOFF2         | Web-ready fonts at half the size. Locally.                     |
-| `/ttf-to-woff`             | TTF → WOFF          | Legacy web fonts, byte-exact. No uploads.                      |
-| `/otf-to-woff2`            | OTF → WOFF2         | Web-ready fonts, outlines untouched. Locally.                  |
-| `/otf-to-woff`             | OTF → WOFF          | Legacy web wrapper, byte-exact. No uploads.                    |
-| `/woff-to-ttf`             | WOFF → TTF          | Web fonts unwrapped to installable TTF. Locally.               |
-| `/woff-to-otf`             | WOFF → OTF          | Web fonts unwrapped to desktop OTF. Locally.                   |
-| `/woff-to-woff2`           | WOFF → WOFF2        | Same font, about 30% smaller. In your browser.                 |
-| `/woff2-to-ttf`            | WOFF2 → TTF         | Web fonts decoded to installable TTF. Locally.                 |
-| `/woff2-to-otf`            | WOFF2 → OTF         | Web fonts decoded to desktop OTF. Locally.                     |
-| `/woff2-to-woff`           | WOFF2 → WOFF        | The fallback old browsers still ask for. Local.                |
-| `/ttf-to-eot`              | TTF → EOT           | For Internet Explorer 6–8 holdouts. Locally.                   |
-| `/eot-to-ttf`              | EOT → TTF           | Fonts rescued from legacy EOT files. Locally.                  |
-| `/subset-font`             | Subset fonts.       | Keep only the glyphs you use — subset locally.                 |
-| `/variable-font-to-static` | Variable → static   | Pin the axes, ship one static font. Locally.                   |
-| `/compress-avif`           | Compress AVIF.      | The tightest format, tuned tighter — on your device.           |
-| `/jpg-to-avif`             | JPG → AVIF          | Up to half the bytes, same picture. Local.                     |
-| `/png-to-avif`             | PNG → AVIF          | Graphics shrink, transparency stays.                           |
-| `/webp-to-avif`            | WebP → AVIF         | One generation newer, one size smaller.                        |
-| `/avif-to-png`             | AVIF → PNG          | Lossless pixels for every editor. Local.                       |
-| `/heic-to-avif`            | HEIC → AVIF         | iPhone photos, web-ready. Converted locally.                   |
-| `/gif-to-webp`             | GIF → WebP          | Animation kept, 50–70% smaller. Locally.                       |
-| `/heic-to-webp`            | HEIC → WebP         | iPhone photos the whole web can show. Local.                   |
-| `/tiff-to-png`             | TIFF → PNG          | Lossless scans for every editor. Local.                        |
-| `/bmp-to-png`              | BMP → PNG           | Same pixels, a fraction of the bytes.                          |
-| `/webm-to-mp3`             | WebM → MP3          | The soundtrack of any screen recording. Local.                 |
-| `/mov-to-mp3`              | MOV → MP3           | iPhone video audio, extracted locally.                         |
-| `/mp3-to-m4a`              | MP3 → M4A           | Apple-native audio, converted on-device.                       |
-| `/wav-to-m4a`              | WAV → M4A           | A tenth of the size, nothing you can hear.                     |
-| `/mp3-to-ogg`              | MP3 → OGG           | Opus for games and the web. No uploads.                        |
-| `/wav-to-opus`             | WAV → Opus          | The efficiency king, encoded locally.                          |
-| `/create-tar-bz2`          | Create TAR.BZ2.     | Tighter than gzip — built in your browser.                     |
-| `/create-tar-xz`           | Create TAR.XZ.      | The hardest-squeezing tarball. On-device.                      |
-| `/extract-z`               | Extract .Z.         | Unix compress, opened without unix.                            |
-| `/remove-audio-from-video` | Remove audio.       | The picture stays, the sound goes. Locally.                    |
-| `/png-to-svg`              | PNG → SVG           | Pixels become paths — vectorized locally.                      |
-| `/jpg-to-svg`              | JPG → SVG           | Logos traced into real vectors. On-device.                     |
-| `/raw-to-jpg`              | RAW → JPG           | CR2, NEF, ARW & DNG — developed locally.                       |
-| `/cr2-to-jpg`              | CR2 → JPG           | Canon RAW, developed in your browser.                          |
-| `/nef-to-jpg`              | NEF → JPG           | Nikon RAW, developed in your browser.                          |
-| `/arw-to-jpg`              | ARW → JPG           | Sony RAW, developed in your browser.                           |
-| `/dng-to-jpg`              | DNG → JPG           | Digital negatives, developed on-device.                        |
-| `/image-to-text`           | Image → Text.       | OCR in 8 languages — read on your device.                      |
-| `/ocr-pdf`                 | OCR PDF.            | Scans become searchable. Recognized locally.                   |
-| `/rotate-pdf`              | Rotate PDF.         | Sideways scans, turned upright. Locally.                       |
-| `/watermark-pdf`           | Watermark PDF.      | Your stamp on every page — added locally.                      |
-| `/pdf-page-numbers`        | Number pages.       | Page / total on every page. On-device.                         |
-| `/pdf-to-text`             | PDF → Text          | All the words, extracted in your browser.                      |
-| `/grayscale-pdf`           | Grayscale PDF.      | Print-ready mono, converted locally.                           |
-| `/pdf-to-pdfa`             | PDF → PDF/A         | ISO archival grade, made on your device.                       |
-| `/srt-to-vtt`              | SRT → VTT           | Web-ready captions, converted on-device.                       |
-| `/vtt-to-srt`              | VTT → SRT           | Captions every player accepts. Locally.                        |
-| `/ass-to-srt`              | ASS → SRT           | Styling out, dialogue kept. On-device.                         |
-| `/jxl-to-jpg`              | JXL → JPG           | JPEG XL opened everywhere. Decoded locally.                    |
-| `/jpg-to-jxl`              | JPG → JXL           | JPEG XL: smaller archives, made on-device.                     |
-| `/compress-jxl`            | Compress JXL.       | JPEG XL re-encoded on your device.                             |
-| `/psd-to-jpg`              | PSD → JPG           | Photoshop files opened as JPG. Locally.                        |
-| `/psd-to-png`              | PSD → PNG           | Flattened lossless, transparency kept.                         |
-| `/compress-epub`           | Compress EPUB.      | Lighter e-books, text untouched. Local.                        |
-| `/compress-cbz`            | Compress CBZ.       | Comics slimmed page by page. On-device.                        |
-| `/cbr-to-cbz`              | CBR → CBZ           | RAR comics repacked. Pages bit-exact.                          |
-| `/epub-to-txt`             | EPUB → TXT          | A whole book as plain text. On-device.                         |
-| `/cbz-to-pdf`              | CBZ → PDF           | Comic pages embedded lossless. Local.                          |
-| `/cbr-to-pdf`              | CBR → PDF           | RAR comics as PDFs. Pages untouched.                           |
-| `/compress-glb`            | Compress GLB.       | 3D models crushed with Draco. On-device.                       |
-| `/csv-to-xlsx`             | CSV → XLSX          | A real Excel workbook, made on-device.                         |
-| `/xlsx-to-csv`             | XLSX → CSV          | Clean CSV out of Excel. Values, locally.                       |
-| `/json-to-yaml`            | JSON → YAML         | Readable configs, rewritten on-device.                         |
-| `/yaml-to-json`            | YAML → JSON         | Anchors resolved, JSON out. Locally.                           |
-| `/about`                   | About Compress Pro. | Free, open source — and your files never leave your device.    |
-| `/privacy`                 | Privacy.            | No uploads, no cookies, no analytics — nothing to leak.        |
+| Page                       | Headline              | Subline                                                        |
+| -------------------------- | --------------------- | -------------------------------------------------------------- |
+| `/` (default `og.jpg`)     | Compress anything.    | Images, video, audio & PDFs — private, in your browser.        |
+| `/compress-pdf`            | Compress PDFs.        | Hit 2 MB exactly — compressed in your browser. Never uploaded. |
+| `/compress-video`          | Compress video.       | MP4 & WebM under any size limit — encoded on your device.      |
+| `/compress-jpg`            | Compress JPGs.        | Quality sliders, target sizes, batches — all local.            |
+| `/compress-png`            | Compress PNGs.        | Lossless or tiny — your pixels never leave.                    |
+| `/compress-webp`           | Compress WebP.        | Still or animated — re-encoded on your device.                 |
+| `/compress-gif`            | Compress GIFs.        | Keep the animation, lose the megabytes.                        |
+| `/compress-heic`           | Compress HEIC.        | iPhone photos, shrunk locally.                                 |
+| `/compress-svg`            | Compress SVGs.        | Minified locally — your artwork stays yours.                   |
+| `/remove-exif`             | Remove EXIF.          | See what your photos reveal — then wipe it, locally.           |
+| `/heic-to-jpg`             | HEIC → JPG            | iPhone photos that open anywhere. Converted locally.           |
+| `/webp-to-jpg`             | WebP → JPG            | For every app that still wants JPG. No uploads.                |
+| `/webp-to-png`             | WebP → PNG            | Lossless, transparency intact — in your browser.               |
+| `/avif-to-jpg`             | AVIF → JPG            | The newest format, made universal. Locally.                    |
+| `/png-to-jpg`              | PNG → JPG             | Photos 5–10× smaller. Flattened to white, never uploaded.      |
+| `/jpg-to-webp`             | JPG → WebP            | ~30% smaller at the same quality.                              |
+| `/png-to-webp`             | PNG → WebP            | Smaller files, alpha preserved.                                |
+| `/jpg-to-pdf`              | JPG → PDF             | Photos into one PDF — built in your browser.                   |
+| `/pdf-to-jpg`              | PDF → JPG             | Every page becomes an image. Rendered locally.                 |
+| `/mov-to-mp4`              | MOV → MP4             | iPhone video that plays everywhere.                            |
+| `/webm-to-mp4`             | WebM → MP4            | For Apple devices, TVs and editors.                            |
+| `/mkv-to-mp4`              | MKV → MP4             | Universal playback, converted on-device.                       |
+| `/mp4-to-webm`             | MP4 → WebM            | Smaller video for the web. Converted locally.                  |
+| `/compress-audio`          | Compress audio.       | MP3, FLAC, M4A, WAV & OGG — encoded on your device.            |
+| `/zip-files`               | Zip & Unzip.          | Archives created and opened locally. No upload.                |
+| `/rar-to-zip`              | RAR → ZIP             | Opens everywhere — converted on your device.                   |
+| `/7z-to-zip`               | 7Z → ZIP              | Universal archives, repacked locally.                          |
+| `/zip-to-7z`               | ZIP → 7Z              | Same files, tighter compression.                               |
+| `/tar-gz-to-zip`           | TAR.GZ → ZIP          | Unix tarballs, Windows-friendly.                               |
+| `/iso-to-zip`              | ISO → ZIP             | Disc image files, no mounting.                                 |
+| `/zip-to-tar-gz`           | ZIP → TAR.GZ          | For servers and pipelines. Local.                              |
+| `/create-7z`               | Create 7Z.            | Strongest compression, AES-256. On-device.                     |
+| `/protect-zip`             | Protect ZIP.          | AES-256 locked ZIPs. Keys stay local.                          |
+| `/protect-7z`              | Protect 7Z.           | AES-256, hidden file names. On-device.                         |
+| `/create-tar`              | Create TAR.           | The unix bundle — built in your browser.                       |
+| `/create-tar-gz`           | Create TAR.GZ.        | Tarballs the unix way. Nothing uploaded.                       |
+| `/gzip-files`              | Gzip files.           | Every file to its own .gz — locally.                           |
+| `/bzip2-files`             | Bzip2 files.          | Smaller than gzip, right in your browser.                      |
+| `/xz-files`                | XZ files.             | The hardest squeeze — on your device.                          |
+| `/extract-rar`             | Extract RAR.          | No WinRAR, no upload — opened in-browser.                      |
+| `/extract-7z`              | Extract 7Z.           | Unpacked locally, passwords included.                          |
+| `/extract-tar-gz`          | Extract TAR.GZ.       | Both layers unwrapped automatically.                           |
+| `/extract-gz`              | Extract GZ.           | Gunzip in the browser. Nothing uploaded.                       |
+| `/extract-iso`             | Extract ISO.          | Disc images opened — never mounted.                            |
+| `/extract-cab`             | Extract CAB.          | Windows cabinets, opened locally.                              |
+| `/extract-deb`             | Extract DEB.          | Debian payloads, unpacked in-browser.                          |
+| `/extract-rpm`             | Extract RPM.          | rpm2cpio, retired. Runs on your device.                        |
+| `/extract-cpio`            | Extract CPIO.         | initramfs & rpm payloads, opened locally.                      |
+| `/extract-lha`             | Extract LHA.          | Retro LZH archives, opened in-browser.                         |
+| `/extract-arj`             | Extract ARJ.          | DOS-era archives, opened on your device.                       |
+| `/unlock-pdf`              | Unlock PDFs.          | Your password never leaves your device.                        |
+| `/protect-pdf`             | Protect PDFs.         | Set a password — encrypted on your device.                     |
+| `/video-to-gif`            | Video → GIF           | Clips become loops — right in your browser.                    |
+| `/gif-to-mp4`              | GIF → MP4             | Same loop, a tenth of the bytes.                               |
+| `/mp4-to-mp3`              | MP4 → MP3             | Pull the audio out of any video. Locally.                      |
+| `/wav-to-mp3`              | WAV → MP3             | Huge recordings, made shareable.                               |
+| `/bmp-to-jpg`              | BMP → JPG             | Raw bitmaps, 10–20× smaller.                                   |
+| `/tiff-to-jpg`             | TIFF → JPG            | Scans that fit in an email. Converted locally.                 |
+| `/png-to-ico`              | PNG → ICO             | A multi-size favicon in one click.                             |
+| `/jpg-to-ico`              | JPG → ICO             | Any logo or photo becomes a favicon. Locally.                  |
+| `/svg-to-png`              | SVG → PNG             | Vector art rendered crisp at any size. Locally.                |
+| `/svg-to-ico`              | SVG → ICO             | Vector-sharp favicons — made in your browser.                  |
+| `/merge-pdf`               | Merge PDFs.           | Many documents into one — reordered, never uploaded.           |
+| `/split-pdf`               | Split PDFs.           | Extract or remove pages with ranges like 1-3,7. Local.         |
+| `/extract-pages-from-pdf`  | Extract pages.        | Only the PDF pages you list. On-device.                        |
+| `/delete-pages-from-pdf`   | Delete pages.         | Listed PDF pages removed. On-device.                           |
+| `/compress-mp4`            | Compress MP4.         | Hit 10 MB for Discord — encoded on your device.                |
+| `/resize-image`            | Resize images.        | Cap the longest side — aspect kept, resized locally.           |
+| `/png-to-pdf`              | PNG → PDF             | Screenshots into one document. Assembled locally.              |
+| `/mp4-to-gif`              | MP4 → GIF             | Looping GIFs, no watermark — made in your browser.             |
+| `/pdf-to-png`              | PDF → PNG             | Lossless page renders — made in your browser.                  |
+| `/heic-to-png`             | HEIC → PNG            | iPhone photos, converted lossless. Locally.                    |
+| `/m4a-to-mp3`              | M4A → MP3             | Voice memos that play anywhere. No upload.                     |
+| `/flac-to-mp3`             | FLAC → MP3            | Lossless archives, played anywhere. Locally.                   |
+| `/wav-to-flac`             | WAV → FLAC            | Same audio, half the bytes — lossless.                         |
+| `/opus-to-mp3`             | OPUS → MP3            | WhatsApp voice notes, made universal.                          |
+| `/ogg-to-mp3`              | OGG → MP3             | Open audio for every player. No uploads.                       |
+| `/aac-to-mp3`              | AAC → MP3             | Raw AAC streams, playable everywhere.                          |
+| `/mp3-to-wav`              | MP3 → WAV             | Clean PCM for editors and samplers.                            |
+| `/mp4-to-wav`              | MP4 → WAV             | The audio track, ready for any editor.                         |
+| `/compress-image`          | Compress any image.   | JPG, PNG, WebP, HEIC & more — smaller on your device.          |
+| `/compress-jpg-to-100kb`   | JPG under 100 KB.     | Type the cap — the best quality that fits, locally.            |
+| `/font-converter`          | Convert fonts.        | TTF, OTF, WOFF & WOFF2 — lossless, in your browser.            |
+| `/ttf-to-woff2`            | TTF → WOFF2           | Web-ready fonts at half the size. Locally.                     |
+| `/ttf-to-woff`             | TTF → WOFF            | Legacy web fonts, byte-exact. No uploads.                      |
+| `/otf-to-woff2`            | OTF → WOFF2           | Web-ready fonts, outlines untouched. Locally.                  |
+| `/otf-to-woff`             | OTF → WOFF            | Legacy web wrapper, byte-exact. No uploads.                    |
+| `/woff-to-ttf`             | WOFF → TTF            | Web fonts unwrapped to installable TTF. Locally.               |
+| `/woff-to-otf`             | WOFF → OTF            | Web fonts unwrapped to desktop OTF. Locally.                   |
+| `/woff-to-woff2`           | WOFF → WOFF2          | Same font, about 30% smaller. In your browser.                 |
+| `/woff2-to-ttf`            | WOFF2 → TTF           | Web fonts decoded to installable TTF. Locally.                 |
+| `/woff2-to-otf`            | WOFF2 → OTF           | Web fonts decoded to desktop OTF. Locally.                     |
+| `/woff2-to-woff`           | WOFF2 → WOFF          | The fallback old browsers still ask for. Local.                |
+| `/ttf-to-eot`              | TTF → EOT             | For Internet Explorer 6–8 holdouts. Locally.                   |
+| `/eot-to-ttf`              | EOT → TTF             | Fonts rescued from legacy EOT files. Locally.                  |
+| `/subset-font`             | Subset fonts.         | Keep only the glyphs you use — subset locally.                 |
+| `/variable-font-to-static` | Variable → static     | Pin the axes, ship one static font. Locally.                   |
+| `/compress-avif`           | Compress AVIF.        | The tightest format, tuned tighter — on your device.           |
+| `/jpg-to-avif`             | JPG → AVIF            | Up to half the bytes, same picture. Local.                     |
+| `/png-to-avif`             | PNG → AVIF            | Graphics shrink, transparency stays.                           |
+| `/webp-to-avif`            | WebP → AVIF           | One generation newer, one size smaller.                        |
+| `/avif-to-png`             | AVIF → PNG            | Lossless pixels for every editor. Local.                       |
+| `/heic-to-avif`            | HEIC → AVIF           | iPhone photos, web-ready. Converted locally.                   |
+| `/gif-to-webp`             | GIF → WebP            | Animation kept, 50–70% smaller. Locally.                       |
+| `/heic-to-webp`            | HEIC → WebP           | iPhone photos the whole web can show. Local.                   |
+| `/tiff-to-png`             | TIFF → PNG            | Lossless scans for every editor. Local.                        |
+| `/bmp-to-png`              | BMP → PNG             | Same pixels, a fraction of the bytes.                          |
+| `/webm-to-mp3`             | WebM → MP3            | The soundtrack of any screen recording. Local.                 |
+| `/mov-to-mp3`              | MOV → MP3             | iPhone video audio, extracted locally.                         |
+| `/mp3-to-m4a`              | MP3 → M4A             | Apple-native audio, converted on-device.                       |
+| `/wav-to-m4a`              | WAV → M4A             | A tenth of the size, nothing you can hear.                     |
+| `/mp3-to-ogg`              | MP3 → OGG             | Opus for games and the web. No uploads.                        |
+| `/wav-to-opus`             | WAV → Opus            | The efficiency king, encoded locally.                          |
+| `/create-tar-bz2`          | Create TAR.BZ2.       | Tighter than gzip — built in your browser.                     |
+| `/create-tar-xz`           | Create TAR.XZ.        | The hardest-squeezing tarball. On-device.                      |
+| `/extract-z`               | Extract .Z.           | Unix compress, opened without unix.                            |
+| `/remove-audio-from-video` | Remove audio.         | The picture stays, the sound goes. Locally.                    |
+| `/png-to-svg`              | PNG → SVG             | Pixels become paths — vectorized locally.                      |
+| `/jpg-to-svg`              | JPG → SVG             | Logos traced into real vectors. On-device.                     |
+| `/raw-to-jpg`              | RAW → JPG             | CR2, NEF, ARW & DNG — developed locally.                       |
+| `/cr2-to-jpg`              | CR2 → JPG             | Canon RAW, developed in your browser.                          |
+| `/nef-to-jpg`              | NEF → JPG             | Nikon RAW, developed in your browser.                          |
+| `/arw-to-jpg`              | ARW → JPG             | Sony RAW, developed in your browser.                           |
+| `/dng-to-jpg`              | DNG → JPG             | Digital negatives, developed on-device.                        |
+| `/image-to-text`           | Image → Text.         | OCR in 8 languages — read on your device.                      |
+| `/ocr-pdf`                 | OCR PDF.              | Scans become searchable. Recognized locally.                   |
+| `/rotate-pdf`              | Rotate PDF.           | Sideways scans, turned upright. Locally.                       |
+| `/watermark-pdf`           | Watermark PDF.        | Your stamp on every page — added locally.                      |
+| `/pdf-page-numbers`        | Number pages.         | Page / total on every page. On-device.                         |
+| `/pdf-to-text`             | PDF → Text            | All the words, extracted in your browser.                      |
+| `/grayscale-pdf`           | Grayscale PDF.        | Print-ready mono, converted locally.                           |
+| `/pdf-to-pdfa`             | PDF → PDF/A           | ISO archival grade, made on your device.                       |
+| `/srt-to-vtt`              | SRT → VTT             | Web-ready captions, converted on-device.                       |
+| `/vtt-to-srt`              | VTT → SRT             | Captions every player accepts. Locally.                        |
+| `/ass-to-srt`              | ASS → SRT             | Styling out, dialogue kept. On-device.                         |
+| `/jxl-to-jpg`              | JXL → JPG             | JPEG XL opened everywhere. Decoded locally.                    |
+| `/jpg-to-jxl`              | JPG → JXL             | JPEG XL: smaller archives, made on-device.                     |
+| `/compress-jxl`            | Compress JXL.         | JPEG XL re-encoded on your device.                             |
+| `/psd-to-jpg`              | PSD → JPG             | Photoshop files opened as JPG. Locally.                        |
+| `/psd-to-png`              | PSD → PNG             | Flattened lossless, transparency kept.                         |
+| `/compress-epub`           | Compress EPUB.        | Lighter e-books, text untouched. Local.                        |
+| `/compress-cbz`            | Compress CBZ.         | Comics slimmed page by page. On-device.                        |
+| `/cbr-to-cbz`              | CBR → CBZ             | RAR comics repacked. Pages bit-exact.                          |
+| `/epub-to-txt`             | EPUB → TXT            | A whole book as plain text. On-device.                         |
+| `/cbz-to-pdf`              | CBZ → PDF             | Comic pages embedded lossless. Local.                          |
+| `/cbr-to-pdf`              | CBR → PDF             | RAR comics as PDFs. Pages untouched.                           |
+| `/compress-glb`            | Compress GLB.         | 3D models crushed with Draco. On-device.                       |
+| `/csv-to-xlsx`             | CSV → XLSX            | A real Excel workbook, made on-device.                         |
+| `/xlsx-to-csv`             | XLSX → CSV            | Clean CSV out of Excel. Values, locally.                       |
+| `/json-to-yaml`            | JSON → YAML           | Readable configs, rewritten on-device.                         |
+| `/yaml-to-json`            | YAML → JSON           | Anchors resolved, JSON out. Locally.                           |
+| `/image-tools`             | Image tools.          | Compress, convert & resize — every image tool, local.          |
+| `/video-audio-tools`       | Video & audio tools.  | Shrink, convert, extract — on your own hardware.               |
+| `/pdf-tools`               | PDF tools.            | Compress, merge, split, protect — never uploaded.              |
+| `/font-tools`              | Font tools.           | Convert, subset, instance — web-ready, on-device.              |
+| `/archive-tools`           | Archive & data tools. | Zip, extract, convert — plus ebooks, models & data.            |
+| `/about`                   | About Compress Pro.   | Free, open source — and your files never leave your device.    |
+| `/privacy`                 | Privacy.              | No uploads, no cookies, no analytics — nothing to leak.        |

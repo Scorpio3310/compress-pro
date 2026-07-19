@@ -1298,11 +1298,16 @@ export const TOOL_GROUPS: readonly {
 	title: string;
 	/** Column heading override where `title` wraps the narrow footer grid. */
 	footerTitle?: string;
+	/** The group's category hub page — flat literals (validate-seo greps them). */
+	categoryPath: string;
+	categoryLabel: string;
 	formats: readonly FileFormat[];
 	footerPaths: readonly string[];
 }[] = [
 	{
 		title: 'Images',
+		categoryPath: '/image-tools',
+		categoryLabel: 'Image tools',
 		formats: ['jpg', 'png', 'webp', 'gif', 'heic', 'svg', 'ocr'],
 		footerPaths: [
 			'/compress-jpg',
@@ -1316,6 +1321,8 @@ export const TOOL_GROUPS: readonly {
 	},
 	{
 		title: 'Video & audio',
+		categoryPath: '/video-audio-tools',
+		categoryLabel: 'Video & audio tools',
 		formats: ['video', 'audio', 'subtitle'],
 		footerPaths: [
 			'/compress-video',
@@ -1329,6 +1336,8 @@ export const TOOL_GROUPS: readonly {
 	},
 	{
 		title: 'PDF',
+		categoryPath: '/pdf-tools',
+		categoryLabel: 'PDF tools',
 		formats: ['pdf'],
 		footerPaths: [
 			'/compress-pdf',
@@ -1342,6 +1351,8 @@ export const TOOL_GROUPS: readonly {
 	},
 	{
 		title: 'Fonts',
+		categoryPath: '/font-tools',
+		categoryLabel: 'Font tools',
 		formats: ['font'],
 		footerPaths: [
 			'/font-converter',
@@ -1354,6 +1365,8 @@ export const TOOL_GROUPS: readonly {
 	{
 		title: 'Archives & metadata',
 		footerTitle: 'Archives',
+		categoryPath: '/archive-tools',
+		categoryLabel: 'Archive & data tools',
 		// 'model' and 'data' ride here as the misc bucket (footer picks are
 		// full at 7 — their hubs are reachable via the homepage directory).
 		formats: ['zip', 'exif', 'ebook', 'model', 'data'],
@@ -1368,6 +1381,18 @@ export const TOOL_GROUPS: readonly {
 		]
 	}
 ];
+
+/** Category hub slugs (no leading slash) — the `[category=category]` route's
+ *  param set. Deliberately disjoint from TOOL_SLUGS; src/params tests pin it. */
+export const CATEGORY_SLUGS: readonly string[] = TOOL_GROUPS.map((g) => g.categoryPath.slice(1));
+
+/** The TOOL_GROUPS entry hosting a format — every FileFormat is in exactly one
+ *  group (pinned by seo.test.ts), so this never legitimately returns undefined. */
+export function categoryFor(format: FileFormat): (typeof TOOL_GROUPS)[number] {
+	const group = TOOL_GROUPS.find((g) => g.formats.includes(format));
+	if (!group) throw new Error(`categoryFor: ${format} is in no TOOL_GROUPS bucket`);
+	return group;
+}
 
 export function pathFor(format: FileFormat): string {
 	// EXIF removes, ZIP archives and fonts convert rather than compress —

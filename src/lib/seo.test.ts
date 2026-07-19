@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+	CATEGORY_SLUGS,
 	CONVERTERS,
 	FEATURED_PATHS,
 	FORMATS,
@@ -7,6 +8,7 @@ import {
 	TOOLS,
 	TOOL_GROUPS,
 	TOOL_SLUGS,
+	categoryFor,
 	converterFor,
 	pathFor,
 	seoFor
@@ -15,6 +17,7 @@ import {
 // guide) go through the server-side assembly — the light index above carries
 // only the lite fields (path/label/h1/feature/demo).
 import {
+	FULL_CATEGORIES,
 	FULL_CONVERTERS,
 	FULL_FORMATS,
 	FULL_PAGES,
@@ -48,7 +51,9 @@ describe('seo entries', () => {
 	});
 
 	it('every non-home page has a 3–4 item FAQ', () => {
-		for (const e of FULL_PAGES.filter((p) => p.format !== null)) {
+		// path (not format) — category hubs carry format: null like HOME but
+		// must still ship a FAQ.
+		for (const e of FULL_PAGES.filter((p) => p.path !== '/')) {
 			expect(e.faq.length, `${e.path} faq`).toBeGreaterThanOrEqual(3);
 			expect(e.faq.length, `${e.path} faq`).toBeLessThanOrEqual(4);
 		}
@@ -102,6 +107,51 @@ describe('converter entries', () => {
 		}
 	});
 });
+
+describe('category hubs', () => {
+	it('declares five unique category slugs disjoint from TOOL_SLUGS', () => {
+		expect(CATEGORY_SLUGS).toHaveLength(5);
+		expect(new Set(CATEGORY_SLUGS).size).toBe(CATEGORY_SLUGS.length);
+		for (const slug of CATEGORY_SLUGS) expect(TOOL_SLUGS.includes(slug), slug).toBe(false);
+	});
+
+	it('mirrors TOOL_GROUPS 1:1 and derives the OG image from the path', () => {
+		expect(FULL_CATEGORIES.map((c) => c.path)).toEqual(TOOL_GROUPS.map((g) => g.categoryPath));
+		for (const c of FULL_CATEGORIES) {
+			expect(c.format, c.path).toBeNull();
+			expect(c.ogImage, c.path).toBe(`/og${c.path}.jpg`);
+			expect(c.label, c.path).toBe(categoryFor0(c.path).categoryLabel);
+		}
+	});
+
+	it('links every tool of its group — a partition, nothing missed, nothing foreign', () => {
+		const all = [...FORMATS, ...CONVERTERS, ...TOOLS];
+		for (const c of FULL_CATEGORIES) {
+			const group = TOOL_GROUPS.find((g) => g.categoryPath === c.path)!;
+			const expected = all.filter((e) => e.format !== null && group.formats.includes(e.format));
+			const linked = c.directory.flatMap((s) => s.items);
+			expect(linked.map((i) => i.path).sort(), c.path).toEqual(expected.map((e) => e.path).sort());
+			// Anchor text is the page's display name — h1 minus the trailing period.
+			for (const item of linked) {
+				const entry = seoFor(item.path.slice(1));
+				expect(item.name, `${c.path} → ${item.path}`).toBe(entry.h1.replace(/\.$/, ''));
+			}
+		}
+	});
+
+	it('categoryFor covers every format and matches the group buckets', () => {
+		for (const f of FORMATS) {
+			const group = categoryFor(f.format);
+			expect(group.formats.includes(f.format), f.format).toBe(true);
+		}
+	});
+});
+
+// Test-local lookup: TOOL_GROUPS entry by its categoryPath (always present —
+// the mirror test above pins the 1:1 relationship).
+function categoryFor0(path: string) {
+	return TOOL_GROUPS.find((g) => g.categoryPath === path)!;
+}
 
 describe('tool groups (homepage directory + footer columns)', () => {
 	it('partitions every FileFormat into exactly one group', () => {

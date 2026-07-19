@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { SITE_URL, SITE_NAME } from '$lib/seo';
+	import { SITE_URL, SITE_NAME, type SeoFaq } from '$lib/seo';
 
 	interface Props {
 		title: string;
@@ -7,14 +7,31 @@
 		/** Canonical path, e.g. '/about' — never page.url (prerender origin is a placeholder). */
 		path: string;
 		/** Schema.org page type. */
-		type?: 'WebPage' | 'AboutPage';
+		type?: 'WebPage' | 'AboutPage' | 'CollectionPage';
 		/** Maintainer surfaced as the page's mainEntity (about-page E-E-A-T). */
 		person?: { name: string; url: string };
 		/** Per-page OG image path under static/ — falls back to the generic card. */
 		image?: string;
+		/** The page's markdown twin path (category hubs) — emits the
+		 *  rel=alternate link validate-seo requires on twin-bearing pages. */
+		markdownPath?: string;
+		/** Visible FAQ mirrored as a FAQPage node (category hubs). */
+		faq?: SeoFaq[];
+		/** Collection contents mirrored as the page's mainEntity ItemList. */
+		items?: { name: string; url: string }[];
 	}
 
-	let { title, description, path, type = 'WebPage', person, image = '/og.jpg' }: Props = $props();
+	let {
+		title,
+		description,
+		path,
+		type = 'WebPage',
+		person,
+		image = '/og.jpg',
+		markdownPath,
+		faq,
+		items
+	}: Props = $props();
 
 	const canonical = $derived(SITE_URL + path);
 	const ogImage = $derived(SITE_URL + image);
@@ -36,6 +53,17 @@
 						url: person.url,
 						sameAs: ['https://github.com/Scorpio3310']
 					}
+				}),
+				...(items && {
+					mainEntity: {
+						'@type': 'ItemList',
+						itemListElement: items.map((item, i) => ({
+							'@type': 'ListItem',
+							position: i + 1,
+							name: item.name,
+							url: item.url
+						}))
+					}
 				})
 			},
 			{
@@ -45,7 +73,19 @@
 					// "About — Compress Pro" → breadcrumb reads just "About".
 					{ '@type': 'ListItem', position: 2, name: title.split(' — ')[0], item: canonical }
 				]
-			}
+			},
+			...(faq?.length
+				? [
+						{
+							'@type': 'FAQPage',
+							mainEntity: faq.map((f) => ({
+								'@type': 'Question',
+								name: f.q,
+								acceptedAnswer: { '@type': 'Answer', text: f.a }
+							}))
+						}
+					]
+				: [])
 		]
 	});
 	const jsonLd = $derived(JSON.stringify(schema).replace(/</g, '\\u003c'));
@@ -55,6 +95,9 @@
 	<title>{title}</title>
 	<meta name="description" content={description} />
 	<link rel="canonical" href={canonical} />
+	{#if markdownPath}
+		<link rel="alternate" type="text/markdown" href={SITE_URL + markdownPath} />
+	{/if}
 	<meta property="og:type" content="website" />
 	<meta property="og:locale" content="en_US" />
 	<meta property="og:site_name" content={SITE_NAME} />

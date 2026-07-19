@@ -14,8 +14,9 @@
 	// rows above — no duplicate links, and the repeated group headings read as
 	// continuation instead of repetition. Featured plus expanded cover every
 	// tool, and all of them stay in the DOM.
-	const DIRECTORY_GROUPS = TOOL_GROUPS.map(({ title, formats }) => ({
+	const DIRECTORY_GROUPS = TOOL_GROUPS.map(({ title, formats, categoryPath }) => ({
 		title,
+		categoryPath,
 		entries: ALL_TOOL_ENTRIES.filter(
 			(e) => e.format !== null && formats.includes(e.format) && !FEATURED_PATHS.includes(e.path)
 		)
@@ -41,8 +42,9 @@
 			icon: iconFor(entry.format!)
 		};
 	});
-	const FEATURED_GROUPS = TOOL_GROUPS.map(({ title, formats }) => ({
+	const FEATURED_GROUPS = TOOL_GROUPS.map(({ title, formats, categoryPath }) => ({
 		title,
+		categoryPath,
 		tools: FEATURED.filter((t) => formats.includes(t.format))
 	})).filter((g) => g.tools.length > 0);
 
@@ -65,7 +67,11 @@
 		<div class="space-y-6">
 			{#each FEATURED_GROUPS as group (group.title)}
 				<div>
-					<h3 class="microlabel text-faint">{group.title}</h3>
+					<h3 class="microlabel text-faint">
+						<a href={resolve(group.categoryPath)} class="transition-colors hover:text-ink">
+							{group.title}
+						</a>
+					</h3>
 					<div class="mt-2.5 grid gap-2 md:grid-cols-2">
 						{#each group.tools as tool (tool.path)}
 							<a
@@ -117,7 +123,11 @@
 				<div id="all-tools" role="region" aria-label="All tools" class="space-y-6 pt-6">
 					{#each DIRECTORY_GROUPS as group (group.title)}
 						<div>
-							<h3 class="microlabel text-faint">{group.title}</h3>
+							<h3 class="microlabel text-faint">
+								<a href={resolve(group.categoryPath)} class="transition-colors hover:text-ink">
+									{group.title}
+								</a>
+							</h3>
 							<ul class="mt-2.5 grid grid-cols-1 gap-x-8 gap-y-2 sm:grid-cols-2">
 								{#each group.entries as e (e.path)}
 									<li>

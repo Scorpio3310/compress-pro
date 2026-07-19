@@ -6,6 +6,8 @@ import {
 	type SeoEntry,
 	type SeoLite
 } from '$lib/seo';
+// Type-only — erased at build, so seo-categories stays out of the client graph.
+import type { CategoryDirectorySection } from '$lib/seo-categories';
 
 // Markdown twins of the tool pages (`/<slug>.md`, `/index.md`) — the
 // agent-facing render of the same seo entries the HTML pages are built
@@ -39,8 +41,12 @@ function tableMarkdown(table: { columns: string[]; rows: string[][] }): string {
 
 const pageName = (e: SeoLite) => e.h1.replace(/\.$/, '');
 
-/** The page as an ordered list of markdown blocks (joined with blank lines). */
-function blocks(entry: FullSeoEntry): string[] {
+/** The page as an ordered list of markdown blocks (joined with blank lines).
+ *  Category hub entries additionally carry a `directory` — rendered as one
+ *  linked section per sub-group, so a hub's twin lists every tool it links. */
+function blocks(
+	entry: FullSeoEntry & { directory?: readonly CategoryDirectorySection[] }
+): string[] {
 	const out: string[] = [
 		[
 			'---',
@@ -52,10 +58,18 @@ function blocks(entry: FullSeoEntry): string[] {
 		`# ${entry.h1}`,
 		`> ${entry.tagline}`,
 		absolutize(entry.intro),
-		'**No uploads · No ads · Free & open source.**',
+		'**No uploads · No ads · Free & open source.**'
+	];
+	for (const section of entry.directory ?? []) {
+		out.push(
+			`## ${section.heading}`,
+			section.items.map((item) => `- [${item.name}](${SITE_URL}${item.path})`).join('\n')
+		);
+	}
+	out.push(
 		'## How it works',
 		(entry.steps ?? GENERIC_STEPS).map((step, i) => `${i + 1}. ${step}`).join('\n')
-	];
+	);
 	for (const section of entry.guide ?? []) {
 		out.push(`## ${section.heading}`);
 		for (const paragraph of section.paragraphs ?? []) out.push(absolutize(paragraph));

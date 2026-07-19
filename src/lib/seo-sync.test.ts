@@ -9,18 +9,19 @@
 import { readFileSync } from 'node:fs';
 import { expect, it } from 'vitest';
 import config from '../../svelte.config.js';
-import { TOOL_SLUGS } from './seo';
+import { CATEGORY_SLUGS, TOOL_SLUGS } from './seo';
 
 it('svelte.config prerender entries match TOOL_SLUGS exactly', () => {
 	const entries = (config.kit?.prerender?.entries ?? []).filter((e) => e !== '*' && e !== '/');
 	expect([...entries].sort()).toEqual(TOOL_SLUGS.map((slug) => `/${slug}`).sort());
 });
 
-it('generate-og PAGES cover TOOL_SLUGS exactly, plus home/about/privacy', () => {
+it('generate-og PAGES cover TOOL_SLUGS + categories exactly, plus home/about/privacy', () => {
 	const source = readFileSync('scripts/generate-og.mjs', 'utf8');
 	const slugs = [...source.matchAll(/'og\/([a-z0-9-]+)\.jpg'/g)].map((m) => m[1]);
 	expect(slugs.length, 'duplicate OG entries').toBe(new Set(slugs).size);
-	// about/privacy are static routes (PageHead), not registry tools.
-	expect([...slugs].sort()).toEqual([...TOOL_SLUGS, 'about', 'privacy'].sort());
+	// about/privacy are static routes (PageHead), not registry tools; category
+	// hubs get their own cards too.
+	expect([...slugs].sort()).toEqual([...TOOL_SLUGS, ...CATEGORY_SLUGS, 'about', 'privacy'].sort());
 	expect(source).toContain("'og.jpg'"); // the home card
 });

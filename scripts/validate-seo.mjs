@@ -62,6 +62,7 @@ const EXPECTED_LD_TYPES = new Set([
 	'WebSite',
 	'WebPage',
 	'AboutPage',
+	'CollectionPage',
 	'BreadcrumbList',
 	'FAQPage',
 	'ItemList'
@@ -236,6 +237,16 @@ const SLUGS = [
 ].sort();
 if (SLUGS.length < 100) {
 	console.error(`Registry parse yielded only ${SLUGS.length} slugs — refusing to validate.`);
+	process.exit(1);
+}
+
+// Category hub slugs — flat `categoryPath: '/…'` literals on TOOL_GROUPS
+// (they sit AFTER the TOOL_SLUGS export, outside the SLUGS window above).
+const CATEGORY_SLUGS = [
+	...new Set([...seoSrc.matchAll(/categoryPath: '\/([a-z0-9-]+)'/g)].map((m) => m[1]))
+].sort();
+if (CATEGORY_SLUGS.length !== 5) {
+	console.error(`Category parse yielded ${CATEGORY_SLUGS.length} slugs (expected 5) — refusing.`);
 	process.exit(1);
 }
 
@@ -453,7 +464,13 @@ for (const [file, p] of pages) {
 // 8. sitemap.xml + built-file set vs registry
 // ---------------------------------------------------------------------------
 
-const expectedPaths = new Set(['/', '/about', '/privacy', ...SLUGS.map((s) => `/${s}`)]);
+const expectedPaths = new Set([
+	'/',
+	'/about',
+	'/privacy',
+	...SLUGS.map((s) => `/${s}`),
+	...CATEGORY_SLUGS.map((s) => `/${s}`)
+]);
 {
 	const sitemapFile = join(DIST, 'sitemap.xml');
 	if (!existsSync(sitemapFile)) {
@@ -657,7 +674,7 @@ for (const [file, p] of pages) {
 	if (!allFiles.has('llms-full.txt')) err('llms', 'llms-full.txt', 'file missing from build');
 	else {
 		const full = readFileSync(join(DIST, 'llms-full.txt'), 'utf8');
-		for (const slug of SLUGS)
+		for (const slug of [...SLUGS, ...CATEGORY_SLUGS])
 			if (!full.includes(`${ORIGIN}/${slug}`))
 				err('llms', 'llms-full.txt', `tool slug missing: ${slug}`);
 	}
