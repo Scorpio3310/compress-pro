@@ -82,7 +82,7 @@ export const DETAILS: Record<string, SeoDetail | ConverterDetail> = {
 		accept: 'font/woff,application/font-woff,.woff',
 		dropSubject: 'WOFF fonts',
 		dropHint: 'WOFF web fonts · unwrapped locally',
-		title: 'WOFF to TTF Converter — Free, Private, Local | Compress Pro',
+		title: 'WOFF back to TTF — Unpack a Web Font Free | Compress Pro',
 		description:
 			'Convert WOFF web fonts back to installable TTF in your browser — the original font data, unwrapped losslessly. Nothing uploaded. Free, no sign-up.',
 		tagline: 'Unwrap WOFF web fonts back to installable TTF — locally.',
@@ -95,7 +95,7 @@ export const DETAILS: Record<string, SeoDetail | ConverterDetail> = {
 		accept: 'font/woff,application/font-woff,.woff',
 		dropSubject: 'WOFF fonts',
 		dropHint: 'WOFF web fonts · unwrapped locally',
-		title: 'WOFF to OTF Converter — Free, Private, Local | Compress Pro',
+		title: 'WOFF back to OTF — Unpack Web Fonts Locally | Compress Pro',
 		description:
 			'Convert WOFF web fonts back to desktop OTF in your browser — the original CFF font, unwrapped losslessly. Nothing is uploaded. Free and private.',
 		tagline: 'Unwrap WOFF web fonts back to desktop OTF — in-browser.',
@@ -121,7 +121,7 @@ export const DETAILS: Record<string, SeoDetail | ConverterDetail> = {
 		accept: 'font/woff2,.woff2',
 		dropSubject: 'WOFF2 fonts',
 		dropHint: 'WOFF2 web fonts · decoded locally',
-		title: 'WOFF2 to TTF Converter — Free, Private, Local | Compress Pro',
+		title: 'WOFF2 back to TTF — Edit & Install Anywhere | Compress Pro',
 		description:
 			'Convert WOFF2 web fonts to installable TTF in your browser — glyphs, kerning and hinting all preserved. Nothing is uploaded. Free, private, no sign-up.',
 		tagline: 'Unpack WOFF2 web fonts into installable TTF — privately.',
@@ -134,7 +134,7 @@ export const DETAILS: Record<string, SeoDetail | ConverterDetail> = {
 		accept: 'font/woff2,.woff2',
 		dropSubject: 'WOFF2 fonts',
 		dropHint: 'WOFF2 web fonts · decoded locally',
-		title: 'WOFF2 to OTF Converter — Free, Private, Local | Compress Pro',
+		title: 'WOFF2 back to OTF — Recover Desktop Fonts | Compress Pro',
 		description:
 			'Convert WOFF2 web fonts to desktop OTF in your browser — the CFF font data comes out byte-for-byte intact. Nothing uploaded. Free, private, no sign-up.',
 		tagline: 'Unpack WOFF2 web fonts into desktop OTF — in your browser.',
@@ -147,7 +147,7 @@ export const DETAILS: Record<string, SeoDetail | ConverterDetail> = {
 		accept: 'font/woff2,.woff2',
 		dropSubject: 'WOFF2 fonts',
 		dropHint: 'WOFF2 web fonts · repacked as WOFF locally',
-		title: 'WOFF2 to WOFF Converter — Free, Private, Local | Compress Pro',
+		title: 'WOFF2 down to WOFF — Legacy Browser Support | Compress Pro',
 		description:
 			'Convert WOFF2 to WOFF in your browser for legacy browser support — lossless, though zlib output is larger. Nothing is uploaded. Free, private, no limits.',
 		tagline: 'Repack WOFF2 as WOFF for legacy browsers — output grows.',
@@ -160,7 +160,7 @@ export const DETAILS: Record<string, SeoDetail | ConverterDetail> = {
 		accept: 'font/ttf,.ttf',
 		dropSubject: 'TTF fonts',
 		dropHint: 'TTF fonts · wrapped as EOT locally',
-		title: 'TTF to EOT Converter — Free, Private, Local | Compress Pro',
+		title: 'TTF to EOT for Legacy IE — Free, On-Device | Compress Pro',
 		description:
 			'Convert TTF fonts to EOT for Internet Explorer 6–8 in your browser — a lossless header wrapper. Your font never leaves your device. Free, no sign-up.',
 		tagline: 'EOT files for the old Internet Explorer — created locally.',

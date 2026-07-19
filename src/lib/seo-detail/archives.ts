@@ -88,7 +88,7 @@ export const DETAILS: Record<string, SeoDetail | ConverterDetail> = {
 		accept: '.zip,application/zip,application/x-zip-compressed',
 		dropSubject: 'ZIP archives',
 		dropHint: 'ZIP archives · repacked to tar.gz locally',
-		title: 'ZIP to TAR.GZ Converter — Private, No Upload | Compress Pro',
+		title: 'ZIP to TAR.GZ for Unix & Servers — Local | Compress Pro',
 		description:
 			'Turn a ZIP into a unix-style tar.gz tarball right in your browser — for build pipelines, servers and tools that expect tarballs. Free and private.',
 		tagline: 'ZIP from Windows in, unix-ready tar.gz out — on-device.',
@@ -476,7 +476,7 @@ export const DETAILS: Record<string, SeoDetail | ConverterDetail> = {
 		accept: '.yaml,.yml',
 		dropSubject: 'YAML files',
 		dropHint: 'YAML · anchors resolved, output JSON',
-		title: 'YAML to JSON — Free, Private, No Upload | Compress Pro',
+		title: 'YAML to JSON — Parse Configs Anywhere, Local | Compress Pro',
 		description:
 			'Convert YAML to JSON right in your browser — anchors resolved, pretty or minified output, nothing uploaded. Free, no accounts, works offline too.',
 		tagline: 'YAML flattened to portable JSON — right on your device.',

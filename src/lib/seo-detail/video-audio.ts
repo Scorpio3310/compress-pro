@@ -277,7 +277,7 @@ export const DETAILS: Record<string, SeoDetail | ConverterDetail> = {
 		accept: 'audio/mpeg,audio/mp3,.mp3',
 		dropSubject: 'MP3 files',
 		dropHint: 'MP3 audio · encoded to OGG (Opus) locally',
-		title: 'MP3 to OGG Converter — Free, No Upload | Compress Pro',
+		title: 'MP3 to OGG (Opus) for Games & Web — Local | Compress Pro',
 		description:
 			'Convert MP3 audio to OGG right in your browser — modern Opus in an OGG container, ideal for games and the web. No uploads, no sign-up. Free forever.',
 		tagline: 'MP3 into OGG (Opus) for games and the web — made locally.',
@@ -338,7 +338,7 @@ export const DETAILS: Record<string, SeoDetail | ConverterDetail> = {
 		accept: 'text/vtt,.vtt',
 		dropSubject: 'VTT files',
 		dropHint: 'VTT only · converted locally',
-		title: 'VTT to SRT Converter — Free, Private, No Upload | Compress Pro',
+		title: 'VTT to SRT for Players & TVs — Free, Local | Compress Pro',
 		description:
 			'Convert WebVTT captions to SRT right in your browser — the format every player and TV accepts. Instant and private, nothing is uploaded. Free, no limits.',
 		tagline: 'Web captions turned into classic SRT — right on-device.',
