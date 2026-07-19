@@ -173,13 +173,21 @@
 	</button>
 {/snippet}
 
-{#snippet stat(label: string, value: string, emphasize: boolean, overlay: boolean)}
+{#snippet stat(label: string, value: string, tone: 'ok' | 'warn' | 'plain', overlay: boolean)}
 	{#if overlay}
 		<div
 			class="pointer-events-auto rounded-full bg-black/60 px-4 py-2 text-center text-white backdrop-blur-sm"
 		>
 			<p class="text-[10px] uppercase tracking-wider opacity-70">{label}</p>
-			<p class="text-sm font-semibold tabular-nums {emphasize ? 'text-green-400' : ''}">{value}</p>
+			<p
+				class="text-sm font-semibold tabular-nums {tone === 'ok'
+					? 'text-green-400'
+					: tone === 'warn'
+						? 'text-amber-400'
+						: ''}"
+			>
+				{value}
+			</p>
 		</div>
 	{:else}
 		<div
@@ -188,9 +196,12 @@
 		>
 			<p class="text-[11px] font-medium tracking-label text-muted uppercase">{label}</p>
 			<p
-				class="mt-1 text-xl font-semibold tracking-tight tabular-nums max-sm:mt-0 max-sm:text-base {emphasize
+				class="mt-1 text-xl font-semibold tracking-tight tabular-nums max-sm:mt-0 max-sm:text-base {tone ===
+				'ok'
 					? 'text-ok'
-					: 'text-ink'}"
+					: tone === 'warn'
+						? 'text-warn-solid'
+						: 'text-ink'}"
 			>
 				{value}
 			</p>
@@ -283,9 +294,15 @@
 								{@render pager(true)}
 							</div>
 						{/if}
-						{@render stat('Original', formatBytes(original.size), false, true)}
-						{@render stat('Compressed', formatBytes(compressed.compressedSize), false, true)}
-						{@render stat('Saved', `${compressed.savings}%`, true, true)}
+						{@render stat('Original', formatBytes(original.size), 'plain', true)}
+						{@render stat('Compressed', formatBytes(compressed.compressedSize), 'plain', true)}
+						<!-- Negative savings = the file GREW — say so, never "Saved −N%" in green. -->
+						{@render stat(
+							compressed.savings < 0 ? 'Grew' : 'Saved',
+							`${Math.abs(compressed.savings)}%`,
+							compressed.savings < 0 ? 'warn' : 'ok',
+							true
+						)}
 					</div>
 				</div>
 			{:else}
@@ -318,9 +335,14 @@
 					<div
 						class="mt-5 grid grid-cols-3 gap-3 text-center max-sm:grid-cols-1 max-sm:gap-2 max-sm:text-left"
 					>
-						{@render stat('Original', formatBytes(original.size), false, false)}
-						{@render stat('Compressed', formatBytes(compressed.compressedSize), false, false)}
-						{@render stat('Saved', `${compressed.savings}%`, true, false)}
+						{@render stat('Original', formatBytes(original.size), 'plain', false)}
+						{@render stat('Compressed', formatBytes(compressed.compressedSize), 'plain', false)}
+						{@render stat(
+							compressed.savings < 0 ? 'Grew' : 'Saved',
+							`${Math.abs(compressed.savings)}%`,
+							compressed.savings < 0 ? 'warn' : 'ok',
+							false
+						)}
 					</div>
 				</div>
 			{/if}

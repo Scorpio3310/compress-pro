@@ -38,6 +38,14 @@ test('K-02: conversion is honored even when the output is larger', async ({ page
 	// The row chip must agree with the "↑ larger" summary: a grown conversion
 	// reads "+N%", never the old clamped "−0%".
 	await expect(rows(page).first()).toContainText(/\+\d+%/);
+	// The compare modal must agree too: a grown file reads "Grew N%", never a
+	// green "Saved −N%" (O-04).
+	await page.getByRole('button', { name: 'Compare', exact: true }).click();
+	const dialog = page.getByRole('dialog', { name: 'File comparison' });
+	await expect(dialog).toContainText('Grew');
+	await expect(dialog).not.toContainText('Saved');
+	await page.keyboard.press('Escape');
+	await expect(dialog).toHaveCount(0);
 	const art = await downloadRow(page);
 	const m = await imageMeta(art.bytes);
 	expect(m.format, 'conversion must not silently keep the jpg').toBe('png');
