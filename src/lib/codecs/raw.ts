@@ -1,6 +1,14 @@
 import type LibRaw from 'libraw-wasm';
 import type { LibRawSettings } from 'libraw-wasm';
 import type { PredecodedPixels } from '$lib/workers/protocol';
+import { buildExifTiffFromRaw, type RawExifSource } from './exif-build';
+
+/** Decoded RAW pixels plus the EXIF rebuilt from LibRaw metadata (null when
+ *  the file exposed none). The TIFF stays on the main thread — the worker
+ *  protocol carries pixels only; image.ts splices after encode. */
+export interface RawDecodedPixels extends PredecodedPixels {
+	exifTiff: Uint8Array | null;
+}
 
 /**
  * Camera RAW decode (CR2/NEF/ARW/DNG/RAF/RW2/ORF) via LibRaw. The package is
@@ -50,7 +58,7 @@ function disposeEngine(): void {
 	current?.then((raw) => raw.dispose()).catch(() => {});
 }
 
-export async function decodeRaw(file: File, signal?: AbortSignal): Promise<PredecodedPixels> {
+export async function decodeRaw(file: File, signal?: AbortSignal): Promise<RawDecodedPixels> {
 	signal?.throwIfAborted();
 	// Read the bytes BEFORE claiming the decode slot — I/O need not serialize,
 	// only the shared-engine open→imageData transaction must.
@@ -71,12 +79,22 @@ export async function decodeRaw(file: File, signal?: AbortSignal): Promise<Prede
 			if (img.colors !== 3 && img.colors !== 4) {
 				throw new Error(`Unsupported RAW channel count (${img.colors})`);
 			}
+			// Camera metadata → minimal EXIF TIFF (O-03). Best-effort: a RAW
+			// whose metadata call fails still decodes — the toggle then shows
+			// the honest "not kept" note instead of sinking the file.
+			let exifTiff: Uint8Array | null = null;
+			try {
+				exifTiff = buildExifTiffFromRaw((await raw.metadata()) as RawExifSource | undefined);
+			} catch {
+				// metadata is optional; pixels are the product
+			}
 			return {
 				data: img.data.buffer as ArrayBuffer,
 				width: img.width,
 				height: img.height,
-				channels: img.colors
-			} satisfies PredecodedPixels;
+				channels: img.colors,
+				exifTiff
+			} satisfies RawDecodedPixels;
 		} finally {
 			signal?.removeEventListener('abort', onAbort);
 		}

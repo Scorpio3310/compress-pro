@@ -11,6 +11,13 @@ export interface ExifSummary {
 	orientation: number | null;
 	dateTime: string | null;
 	gps: { lat: number; lon: number } | null;
+	/** ISOSpeedRatings from the Exif sub-IFD. */
+	iso: number | null;
+	/** ExposureTime in seconds. */
+	exposureTime: number | null;
+	fNumber: number | null;
+	/** FocalLength in mm. */
+	focalLength: number | null;
 	/** Entries across IFD0 + Exif sub-IFD + GPS IFD. */
 	fieldCount: number;
 }
@@ -151,6 +158,10 @@ export function readExifSummary(input: Uint8Array): ExifSummary {
 
 	let dateTime = dateEntry ? reader.ascii(dateEntry) : null;
 
+	let iso: number | null = null;
+	let exposureTime: number | null = null;
+	let fNumber: number | null = null;
+	let focalLength: number | null = null;
 	const exifPointer = ifd0.get(0x8769);
 	if (exifPointer) {
 		try {
@@ -158,6 +169,14 @@ export function readExifSummary(input: Uint8Array): ExifSummary {
 			fieldCount += exifIfd.size;
 			const original = exifIfd.get(0x9003); // DateTimeOriginal
 			if (original) dateTime = reader.ascii(original);
+			const isoEntry = exifIfd.get(0x8827);
+			if (isoEntry) iso = reader.ushort(isoEntry);
+			const exposure = exifIfd.get(0x829a);
+			if (exposure) exposureTime = reader.rationals(exposure)[0] ?? null;
+			const fnum = exifIfd.get(0x829d);
+			if (fnum) fNumber = reader.rationals(fnum)[0] ?? null;
+			const focal = exifIfd.get(0x920a);
+			if (focal) focalLength = reader.rationals(focal)[0] ?? null;
 		} catch {
 			// A broken sub-IFD shouldn't sink the whole summary.
 		}
@@ -191,6 +210,10 @@ export function readExifSummary(input: Uint8Array): ExifSummary {
 		orientation: orientationEntry ? reader.ushort(orientationEntry) : null,
 		dateTime,
 		gps,
+		iso,
+		exposureTime,
+		fNumber,
+		focalLength,
 		fieldCount
 	};
 }

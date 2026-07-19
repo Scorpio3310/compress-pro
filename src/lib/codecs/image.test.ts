@@ -208,16 +208,45 @@ describe('RAW (predecoded) + keep metadata', () => {
 	};
 	const rawFile = new File([new Uint8Array(4)], 'shot.nef', { type: 'image/x-nikon-nef' });
 
-	it('surfaces an honest "metadata not kept" note when the toggle is on', async () => {
+	it('splices the rebuilt RAW EXIF and reports "Metadata kept" (O-03)', async () => {
+		const { buildExifTiffFromRaw } = await import('./exif-build');
+		const { exifPayloadForReencode } = await import('./exif-copy');
+		const { readExifSummary } = await import('./exif-parse');
+		const { callWorker } = await import('$lib/workers/rpc');
+		// A minimal VALID jpeg (SOI+EOI) so the splice has a marker stream.
+		vi.mocked(callWorker).mockResolvedValueOnce({
+			bytes: new Uint8Array([0xff, 0xd8, 0xff, 0xd9]).buffer,
+			resized: false,
+			width: 2,
+			height: 2,
+			chosenFormat: 'jpg'
+		} as never);
 		const result = await compressImage(
 			rawFile,
 			imageSettings({ outputFormat: 'jpg', keepMetadata: true }),
 			undefined,
 			undefined,
 			undefined,
-			predecoded
+			{ ...predecoded, exifTiff: buildExifTiffFromRaw({ camera_make: 'Canon', iso_speed: 400 }) }
 		);
-		expect(result.info).toMatch(/metadata/i);
+		expect(result.info).toMatch(/Metadata kept/);
+		expect(result.info).not.toMatch(/not kept/i);
+		const tiff = exifPayloadForReencode(await result.blob.arrayBuffer());
+		const summary = readExifSummary(tiff!);
+		expect(summary.make).toBe('Canon');
+		expect(summary.iso).toBe(400);
+	});
+
+	it('surfaces an honest "metadata not kept" note when the RAW has no EXIF', async () => {
+		const result = await compressImage(
+			rawFile,
+			imageSettings({ outputFormat: 'jpg', keepMetadata: true }),
+			undefined,
+			undefined,
+			undefined,
+			predecoded // no exifTiff — a RAW that exposed nothing readable
+		);
+		expect(result.info).toMatch(/metadata not kept/i);
 		expect(result.info).toMatch(/raw/i);
 	});
 

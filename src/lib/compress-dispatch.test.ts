@@ -163,7 +163,8 @@ describe('svg output decode bridge', () => {
 			data: new ArrayBuffer(16),
 			width: 2,
 			height: 2,
-			channels: 4
+			channels: 4,
+			exifTiff: null
 		});
 		vi.mocked(compressImage).mockResolvedValue({
 			blob: new Blob(['png bytes'], { type: 'image/png' }),

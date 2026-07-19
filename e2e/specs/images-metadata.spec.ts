@@ -1,7 +1,8 @@
 /**
- * KM-01…08: the "Keep metadata" toggle — EXIF carried over into re-encoded
+ * KM-01…09: the "Keep metadata" toggle — EXIF carried over into re-encoded
  * JPG/PNG/WebP outputs (orientation neutralized, thumbnail dropped, ICC
- * never copied), silent skip where the container can't hold it (AVIF).
+ * never copied), silent skip where the container can't hold it (AVIF), and
+ * for RAW inputs REBUILT from LibRaw metadata (exif-build, O-03).
  */
 import { readFileSync } from 'node:fs';
 import { readExifSummary } from '../../src/lib/codecs/exif-parse';
@@ -154,4 +155,26 @@ test('KM-08: real HEIC → JPG carries its EXIF when the source has any', async 
 	} else {
 		expect(m.exif, 'no note → no EXIF (source had none)').toBeNull();
 	}
+});
+
+test('KM-09: RAW → JPG rebuilds EXIF from LibRaw metadata (O-03)', async ({ page }) => {
+	// Real camera file required: the generated photo.dng carries only
+	// UniqueCameraModel, no Make/ISO — nothing to rebuild or assert.
+	const dng = realFile(/^sample1\.dng$/i);
+	test.skip(!dng, 'real RAW fixture not present');
+	await gotoTab(page, 'jpg');
+	await upload(page, dng!);
+	await setOutputFormat(page, 'JPG');
+	await toggle(page, 'Keep metadata', true);
+	await compress(page, { timeout: 240_000 });
+	await expect(page.getByTestId('row-info')).toHaveText(/Metadata kept/);
+	const art = await downloadRow(page);
+	const m = await exifMeta(art.bytes);
+	expect(m.exif, 'rebuilt EXIF present in the developed JPG').not.toBeNull();
+	const summary = readExifSummary(new Uint8Array(m.exif!));
+	expect(summary.make).toMatch(/canon/i); // sample1.dng = Canon EOS 350D
+	expect(summary.model).toMatch(/eos/i);
+	// LibRaw pixels are pre-rotated — a copied RAW flip would double-rotate.
+	expect(summary.orientation).toBe(1);
+	expect(summary.iso, 'ISO rides the Exif sub-IFD').not.toBeNull();
 });

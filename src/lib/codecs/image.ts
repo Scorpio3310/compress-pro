@@ -194,8 +194,17 @@ export async function encodeOnce(
 	// Transfer a copy: target-size mode reuses `bytes` across attempts.
 	const copy = bytes.slice(0);
 	const transfer = [copy];
-	// Same rule for predecoded RAW pixels — clone per attempt, transfer the clone.
-	const predecodedCopy = predecoded ? { ...predecoded, data: predecoded.data.slice(0) } : undefined;
+	// Same rule for predecoded RAW pixels — clone per attempt, transfer the
+	// clone. Explicit fields: the RAW exifTiff stays on the main thread (the
+	// worker protocol carries pixels only; the splice happens after encode).
+	const predecodedCopy = predecoded
+		? {
+				data: predecoded.data.slice(0),
+				width: predecoded.width,
+				height: predecoded.height,
+				channels: predecoded.channels
+			}
+		: undefined;
 	if (predecodedCopy) transfer.push(predecodedCopy.data);
 	return callWorker(
 		'image',
@@ -238,8 +247,9 @@ export async function compressImage(
 	onProgress?: (p: ImageProgress) => void,
 	sourceFormat?: FileFormat,
 	signal?: AbortSignal,
-	/** Pixels decoded outside the worker (camera RAW) — skips byte-level work. */
-	predecoded?: PredecodedPixels
+	/** Pixels decoded outside the worker (camera RAW) — skips byte-level work.
+	 *  May carry the rebuilt RAW EXIF (raw.ts RawDecodedPixels). */
+	predecoded?: PredecodedPixels & { exifTiff?: Uint8Array | null }
 ): Promise<ImageResult> {
 	// SVG output never reaches this codec — compress.ts dispatches it to the
 	// vectorize codec first; the guard also narrows outputFormat's type here.
@@ -276,13 +286,18 @@ export async function compressImage(
 		colorInfo &&
 		(!isWasmDecodedSource(bytes) || convertibleSpace(colorInfo.space, colorInfo.transfer));
 	const gamutInfo = converted ? `Wide-gamut color (${colorInfo.name}) converted to sRGB` : null;
-	const exifTiff = keepMetadata && !predecoded ? exifPayloadForReencode(bytes) : null;
-	// "Keep metadata" promises EXIF in JPG/PNG/WebP outputs, but RAW rides the
-	// predecoded path where the original bytes (and their EXIF) never enter the
-	// pipeline — be honest about the ignored toggle instead of silent.
+	// RAW rides the predecoded path where the original bytes never enter the
+	// pipeline — its EXIF is REBUILT from LibRaw metadata (exif-build, O-03)
+	// and arrives alongside the pixels; every other source extracts from bytes.
+	const exifTiff = keepMetadata
+		? predecoded
+			? (predecoded.exifTiff ?? null)
+			: exifPayloadForReencode(bytes)
+		: null;
+	// A RAW that exposed no usable metadata still deserves honesty over silence.
 	const rawMetadataInfo =
-		keepMetadata && predecoded
-			? "Metadata not kept — EXIF (date, camera, GPS) can't be copied from RAW files yet"
+		keepMetadata && predecoded && !exifTiff
+			? 'Metadata not kept — this RAW exposed no readable EXIF (date, camera, GPS)'
 			: null;
 
 	if (mode === 'target' && outputFormat !== 'gif' && outputFormat !== 'ico') {

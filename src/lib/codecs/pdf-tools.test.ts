@@ -107,7 +107,7 @@ describe('mergePdfs honors its AbortSignal', () => {
 		const a = await pdfFile('a.pdf');
 		const controller = new AbortController();
 		controller.abort();
-		const ticks: string[] = [];
+		const ticks: (string | null)[] = [];
 		await expect(
 			mergePdfs([a, a], (_d, _t, detail) => void ticks.push(detail), controller.signal)
 		).rejects.toThrow();
@@ -121,7 +121,7 @@ describe('mergePdfs honors its AbortSignal', () => {
 			pdfFile('c.pdf')
 		]);
 		const controller = new AbortController();
-		const ticks: string[] = [];
+		const ticks: (string | null)[] = [];
 		await expect(
 			mergePdfs(
 				[a, b, c],
