@@ -1649,6 +1649,18 @@ async function generateArchives() {
 		}
 	}
 
+	// 43b. Extension-less image stream — extracting photo-payload.gz strips the
+	// container extension, leaving a bare "photo-payload" whose JPEG bytes the
+	// app must magic-sniff back to ".jpg" (O-02: a type-less, extension-less
+	// download otherwise lands as "<name>.txt" in Chromium).
+	{
+		const jpg = await sharp(await photoScene(320, 240, { seed: 77 }))
+			.jpeg({ quality: 85 })
+			.toBuffer();
+		await write('photo-payload.gz', Buffer.from(gzipSync(new Uint8Array(jpg), { level: 6 })));
+		manifest['photo-payload.gz'] = { inner: 'photo-payload', size: jpg.length };
+	}
+
 	// 44. deb — ar(debian-binary, control.tar.gz, data.tar.gz); the app must
 	// chain-unwrap data.tar.* and skip the control files.
 	{

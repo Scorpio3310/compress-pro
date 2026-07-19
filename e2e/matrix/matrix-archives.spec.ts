@@ -284,8 +284,9 @@ for (const f of archives) {
 			if (ref) {
 				const refFiles = Object.values(ref);
 				if (entryCount === 1 && refFiles.length === 1) {
-					// Chromium mangles extension-less download names (sample-2 →
-					// sample-2.txt) — for the 1:1 case bytes are the whole truth.
+					// Names may legitimately differ in the 1:1 case: image payloads gain
+					// a sniffed extension (sample-2 → sample-2.jpg, O-02), non-image
+					// ones still get Chromium's ".txt" — bytes are the truth either way.
 					const same = Buffer.from(Object.values(out)[0]).equals(Buffer.from(refFiles[0]));
 					metrics.matched = same ? 1 : 0;
 					if (!same) failures.push('single-entry bytes differ from reference');

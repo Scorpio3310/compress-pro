@@ -16,7 +16,7 @@ import {
 	rows,
 	upload
 } from '../helpers';
-import { gunzipBuf, sevenZipEntries, unzip, zipEntryEncrypted } from '../verify';
+import { gunzipBuf, imageMeta, sevenZipEntries, unzip, zipEntryEncrypted } from '../verify';
 
 type Page = import('@playwright/test').Page;
 
@@ -138,6 +138,21 @@ for (const fixture of [
 		}
 	});
 }
+
+test('AR-19: an extension-less extracted image is sniffed back to .jpg (O-02)', async ({
+	page
+}) => {
+	// photo-payload.gz sheds its container extension on extract; without the
+	// magic sniff the bare, type-less name downloads as "photo-payload.txt".
+	await gotoTab(page, 'zip');
+	await setOp(page, 'Extract');
+	await upload(page, fx('photo-payload.gz'));
+	await compress(page, { timeout: 120_000 });
+	const art = await downloadRow(page, 'photo-payload.jpg');
+	expect(art.name).toBe('photo-payload.jpg');
+	const meta = await imageMeta(art.bytes);
+	expect([meta.format, meta.width, meta.height]).toEqual(['jpeg', 320, 240]);
+});
 
 // Generated chained fixtures: deb → data.tar → payload; tar.gz → tar → files.
 test('AR-06: deb and tar.gz chain-unwrap to the real files', async ({ page }) => {

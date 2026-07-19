@@ -39,6 +39,7 @@ import { convertFont, subsetFont } from '$lib/codecs/font';
 import { callWorker, imageLaneCap } from '$lib/workers/rpc';
 import { formatBytes } from '$lib/utils';
 import { displayableImageMime } from '$lib/file-visual';
+import { sniffGif, sniffImage } from '$lib/codecs/ebook';
 import { isRawFile } from '$lib/routing';
 import type { PredecodedPixels } from '$lib/workers/protocol';
 
@@ -215,9 +216,21 @@ function entryRow(
 ): CompressedFile {
 	// stripC1 first: sanitizeEntryName only strips C0 controls, and latin1-
 	// decoded legacy names (or hostile archives) carry invisible C1s.
-	const short = uniqueEntryName(sanitizeEntryName(stripC1(entryPath.split('/').pop()!)), used);
+	let name = sanitizeEntryName(stripC1(entryPath.split('/').pop()!));
+	// Extension-less entries (gz/bz2 streams shed the container extension) get
+	// a magic-sniffed image extension: with a bare name AND an empty blob type
+	// Chromium downloads "<name>.txt" (O-02). Sniff BEFORE dedup so two
+	// "photo" entries collide as "photo.jpg", not after numbering. Names that
+	// already carry an extension are left alone; SVG stays name-based (never
+	// content-sniffed); non-image bytes keep the honest bare name.
+	if (name.lastIndexOf('.') <= 0) {
+		const view = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+		const kind = sniffImage(view) ?? (sniffGif(view) ? 'gif' : null);
+		if (kind) name = `${name}.${kind}`;
+	}
+	const short = uniqueEntryName(name, used);
 	used.add(short);
-	// SVG is never content-sniffed; '' keeps today's default otherwise.
+	// '' keeps today's default for non-displayable types.
 	const blob = new Blob([bytes as BlobPart], { type: displayableImageMime(short) ?? '' });
 	return {
 		id: `${fileId}#${index}`, // never collides with an upload id
