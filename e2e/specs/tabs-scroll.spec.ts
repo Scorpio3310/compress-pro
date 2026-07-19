@@ -123,3 +123,31 @@ test('TS-07: the ebook rail shows all outputs pre-upload, mix-filters after, kee
 	await expect(rows(page)).toHaveCount(1);
 	await expect(page.getByTestId('compress-cta')).toHaveText('Extract text from 1 file');
 });
+
+test('TS-08: no ghost chevron when the ebook rail shrinks under a stale thumb', async ({
+	page
+}) => {
+	// With "To PDF" selected, an EPUB drop removes that item and snaps the
+	// selection to Compress. The thumb springs back from the removed segment —
+	// its transient overhang must never stamp data-scroll on the shrunk track
+	// (the scroll hint measures segs, not scrollWidth).
+	await gotoPath(page, '/compress-epub');
+	await page.getByRole('button', { name: 'To PDF', exact: true }).click();
+	await upload(page, fx('sample.epub'));
+	await expect(page.getByRole('button', { name: 'Compress', exact: true })).toHaveAttribute(
+		'aria-pressed',
+		'true'
+	);
+	const railWrap = page.locator('[data-chevrons]:has([aria-label="E-book output"])');
+	await expect(railWrap.locator('[data-chev]:visible')).toHaveCount(0);
+	await expect(railWrap.locator('[aria-label="E-book output"]')).not.toHaveAttribute(
+		'data-scroll',
+		/.+/
+	);
+	// both remaining items stay fully usable
+	await page.getByRole('button', { name: 'To TXT', exact: true }).click();
+	await expect(page.getByRole('button', { name: 'To TXT', exact: true })).toHaveAttribute(
+		'aria-pressed',
+		'true'
+	);
+});

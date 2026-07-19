@@ -25,13 +25,27 @@ export function slideIndicator(getKey: () => string): Attachment {
 		if (!thumb) return;
 		container.dataset.ready = '';
 
+		// Scrollable extent of the CONTENT — the segs plus trailing padding, never
+		// scrollWidth: the absolutely-positioned thumb's inline left/width lag
+		// behind during springs, and a thumb still parked on a removed segment
+		// (dynamic rails shrink their items) inflates scrollWidth past the shrunk
+		// track, ghosting a data-scroll fade/chevron that nothing would clear.
+		function contentEnd() {
+			let end = 0;
+			for (const seg of container.querySelectorAll<HTMLElement>('[data-seg]')) {
+				end = Math.max(end, seg.offsetLeft + seg.offsetWidth);
+			}
+			return end + (parseFloat(getComputedStyle(container).paddingRight) || 0);
+		}
+
 		function updateScrollHint() {
-			if (container.scrollWidth <= container.clientWidth + 1) {
+			const max = contentEnd() - container.clientWidth;
+			if (max <= 1) {
 				delete container.dataset.scroll;
 				return;
 			}
 			const atStart = container.scrollLeft <= 1;
-			const atEnd = container.scrollLeft >= container.scrollWidth - container.clientWidth - 1;
+			const atEnd = container.scrollLeft >= max - 1;
 			container.dataset.scroll = atStart ? 'end' : atEnd ? 'start' : 'both';
 		}
 
@@ -77,7 +91,7 @@ export function slideIndicator(getKey: () => string): Attachment {
 
 		/** Keep the active segment visible inside a horizontally scrollable track. */
 		function scrollIntoView(pos: { x: number; width: number }, smooth: boolean) {
-			if (container.scrollWidth <= container.clientWidth) return;
+			if (contentEnd() <= container.clientWidth) return;
 			const viewLeft = container.scrollLeft;
 			const viewRight = viewLeft + container.clientWidth;
 			if (pos.x < viewLeft + 8 || pos.x + pos.width > viewRight - 8) {
