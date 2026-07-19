@@ -104,7 +104,35 @@ export const DETAILS: Record<string, SeoDetail | ConverterDetail> = {
 		description:
 			'Make a 7Z archive from any files right in your browser — the strongest everyday compression, optional AES-256 password, nothing uploaded anywhere.',
 		tagline: 'Build 7Z archives in your browser — small, AES, private.',
-		related: ['/zip-to-7z', '/7z-to-zip', '/zip-files']
+		related: ['/zip-to-7z', '/7z-to-zip', '/protect-7z', '/zip-files']
+	},
+	// The protect pages preset the SAME create op as create-7z/zip-files — the
+	// password field renders automatically (canEncrypt: create + zip/7z). The
+	// pages exist so "password protect zip" searches land on a page whose copy
+	// leads with the password, not the bundling.
+	'protect-zip': {
+		ogImage: '/og/protect-zip.jpg',
+		preset: { kind: 'archive', op: 'create', to: 'zip' },
+		accept: '',
+		dropSubject: 'any files',
+		dropHint: 'Any files · zipped & AES-256 encrypted locally',
+		title: 'Password Protect ZIP — AES-256, No Upload | Compress Pro',
+		description:
+			'Password-protect a ZIP right in your browser — files are bundled and encrypted with AES-256 locally, nothing is uploaded. Free, no accounts, no limits.',
+		tagline: 'ZIPs locked with AES-256 — encrypted on your own device.',
+		related: ['/protect-7z', '/create-7z', '/protect-pdf', '/zip-files']
+	},
+	'protect-7z': {
+		ogImage: '/og/protect-7z.jpg',
+		preset: { kind: 'archive', op: 'create', to: '7z' },
+		accept: '',
+		dropSubject: 'any files',
+		dropHint: 'Any files · 7Z with AES-256, built locally',
+		title: 'Password Protect 7Z — AES-256 & Hidden Names | Compress Pro',
+		description:
+			'Create a password-protected 7Z in your browser — AES-256 encryption with optional hidden file names, all local. Nothing uploaded, nothing stored. Free.',
+		tagline: '7Z with AES-256 and hidden file names — built on-device.',
+		related: ['/protect-zip', '/create-7z', '/extract-7z']
 	},
 	'create-tar': {
 		ogImage: '/og/create-tar.jpg',

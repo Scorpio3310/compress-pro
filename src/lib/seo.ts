@@ -150,6 +150,9 @@ export type ConverterPreset =
 				| 'toText'
 				| 'grayscale'
 				| 'toPdfa';
+			/** Pages-op direction — /extract-pages… presets 'keep', /delete-pages…
+			 *  'remove'; pages presets without it (split-pdf) normalize to 'keep'. */
+			pageMode?: 'keep' | 'remove';
 	  }
 	// Longest-side cap across every image tab — the page's whole point, so
 	// drops that re-route to their native tab (png → png) land configured.
@@ -978,6 +981,20 @@ export const TOOLS: ConverterLite[] = [
 	},
 	{
 		format: 'pdf',
+		path: '/extract-pages-from-pdf',
+		label: 'Extract PDF pages',
+		feature: 'Extract pages from PDFs',
+		h1: 'Extract pages from a PDF.'
+	},
+	{
+		format: 'pdf',
+		path: '/delete-pages-from-pdf',
+		label: 'Delete PDF pages',
+		feature: 'Delete pages from PDFs',
+		h1: 'Delete pages from a PDF.'
+	},
+	{
+		format: 'pdf',
 		path: '/rotate-pdf',
 		label: 'Rotate PDF',
 		feature: 'Rotate PDF pages',
@@ -1096,6 +1113,20 @@ export const TOOLS: ConverterLite[] = [
 		label: 'Create 7Z',
 		feature: 'Create 7Z archives',
 		h1: 'Create 7Z archives.'
+	},
+	{
+		format: 'zip',
+		path: '/protect-zip',
+		label: 'Protect ZIP',
+		feature: 'Password-protect ZIP archives',
+		h1: 'Password-protect ZIP files.'
+	},
+	{
+		format: 'zip',
+		path: '/protect-7z',
+		label: 'Protect 7Z',
+		feature: 'Password-protect 7Z archives',
+		h1: 'Password-protect 7Z archives.'
 	},
 	{
 		format: 'zip',

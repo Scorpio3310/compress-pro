@@ -47,6 +47,8 @@ each entry in `src/lib/seo.ts` — pages without one fall back to `/og.jpg`.
 | `/iso-to-zip`              | ISO → ZIP           | Disc image files, no mounting.                                 |
 | `/zip-to-tar-gz`           | ZIP → TAR.GZ        | For servers and pipelines. Local.                              |
 | `/create-7z`               | Create 7Z.          | Strongest compression, AES-256. On-device.                     |
+| `/protect-zip`             | Protect ZIP.        | AES-256 locked ZIPs. Keys stay local.                          |
+| `/protect-7z`              | Protect 7Z.         | AES-256, hidden file names. On-device.                         |
 | `/create-tar`              | Create TAR.         | The unix bundle — built in your browser.                       |
 | `/create-tar-gz`           | Create TAR.GZ.      | Tarballs the unix way. Nothing uploaded.                       |
 | `/gzip-files`              | Gzip files.         | Every file to its own .gz — locally.                           |
@@ -77,6 +79,8 @@ each entry in `src/lib/seo.ts` — pages without one fall back to `/og.jpg`.
 | `/svg-to-ico`              | SVG → ICO           | Vector-sharp favicons — made in your browser.                  |
 | `/merge-pdf`               | Merge PDFs.         | Many documents into one — reordered, never uploaded.           |
 | `/split-pdf`               | Split PDFs.         | Extract or remove pages with ranges like 1-3,7. Local.         |
+| `/extract-pages-from-pdf`  | Extract pages.      | Only the PDF pages you list. On-device.                        |
+| `/delete-pages-from-pdf`   | Delete pages.       | Listed PDF pages removed. On-device.                           |
 | `/compress-mp4`            | Compress MP4.       | Hit 10 MB for Discord — encoded on your device.                |
 | `/resize-image`            | Resize images.      | Cap the longest side — aspect kept, resized locally.           |
 | `/png-to-pdf`              | PNG → PDF           | Screenshots into one document. Assembled locally.              |

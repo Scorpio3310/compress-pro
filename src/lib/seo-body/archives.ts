@@ -324,6 +324,74 @@ export const BODIES: Record<string, SeoBody> = {
 			{ q: 'Is it private?', a: PRIVACY_A_ARCHIVE }
 		]
 	},
+	'protect-zip': {
+		intro:
+			'Put a password on a ZIP entirely in your browser — **your files are bundled and encrypted with AES-256 on your own device**, so neither the files nor the password ever travel anywhere. Drop files, set a password, download one locked .zip.',
+		guide: [
+			{
+				heading: 'Real encryption, not the broken kind',
+				paragraphs: [
+					'ZIPs can be "protected" two ways: the legacy ZipCrypto scheme, which has been practically crackable for decades, and AES-256, which is the same encryption class banks and disk encryption use. This tool always writes AES-256 — a password here actually protects the contents. The encryption happens inside the page as the archive is built; the password is used in memory and never stored or transmitted.',
+					'One honest limit of the ZIP format itself: the **file names stay visible** even in an encrypted ZIP — anyone can list the contents, they just can’t open them. If the names are sensitive too, [Protect 7Z](/protect-7z) can hide the entire file list behind the password.'
+				]
+			},
+			{
+				heading: 'Opening it on the other side',
+				paragraphs: [
+					'Because ZipCrypto is broken, this tool doesn’t write it — but that means the built-in extractors in Windows Explorer and macOS Finder, which only understand the legacy scheme, will ask for the password and then fail. Recipients need a free unarchiver: 7-Zip or WinRAR on Windows, Keka or The Unarchiver on macOS, and most Linux file managers handle it out of the box. Mention that when you share the file.'
+				]
+			}
+		],
+		faq: [
+			{
+				q: 'What if I forget the password?',
+				a: 'The files are gone — that is what real AES-256 encryption means. There is no backdoor, no recovery, and this site never sees or stores the password, so it cannot help either. Keep the password somewhere safe.'
+			},
+			{
+				q: 'Why won’t Windows Explorer open my protected ZIP?',
+				a: 'Built-in extractors only support the obsolete ZipCrypto scheme, which is trivially crackable — this tool deliberately writes AES-256 instead. Free tools like 7-Zip, WinRAR or Keka open it with the password.'
+			},
+			{
+				q: 'Are the file names hidden too?',
+				a: 'No — that is a limit of the ZIP format itself: contents are encrypted, the file list is not. If the names must be secret as well, use Protect 7Z, which can encrypt the headers so even the list needs the password.'
+			},
+			{ q: 'Is it private?', a: PRIVACY_A_ARCHIVE }
+		]
+	},
+	'protect-7z': {
+		intro:
+			'Create a password-protected 7Z entirely in your browser — **AES-256 encryption with an option to hide even the file names**, built locally so files and password never leave your device. Drop files, set a password, download one locked .7z.',
+		guide: [
+			{
+				heading: 'AES-256, and nothing to list without the password',
+				paragraphs: [
+					'7Z encrypts with AES-256 as the archive is built. Tick “Also hide file names inside the archive” and the archive headers are encrypted too — without the password an attacker cannot even see what files are inside, let alone open them. That header encryption is something the ZIP format cannot do ([Protect ZIP](/protect-zip) explains the difference), and it is the reason 7Z is the better choice when the file names themselves are sensitive.',
+					'The password is used in memory on your device and never stored or transmitted; there is no account, no cloud, no recovery service. Compression still applies before encryption, so a protected 7Z is usually also the smallest way to ship the files — [Create 7Z](/create-7z) covers the compression side in detail.'
+				]
+			},
+			{
+				heading: 'Opening it on the other side',
+				paragraphs: [
+					'Recipients open the archive with any modern unarchiver — 7-Zip on Windows, Keka on macOS, p7zip on Linux, all free. On the way back, [Extract 7Z](/extract-7z) opens password-protected 7Z archives right in the browser, including ones with hidden file names.'
+				]
+			}
+		],
+		faq: [
+			{
+				q: 'What does “hide file names” actually do?',
+				a: 'It encrypts the archive headers (7-Zip’s -mhe switch), so the list of contents is unreadable without the password. Without it, an encrypted 7Z still shows its file names — like a locked box with a printed inventory.'
+			},
+			{
+				q: 'Can the password be recovered?',
+				a: 'No. AES-256 has no backdoor, and this site never sees or stores the password — the encryption runs entirely on your device. A forgotten password means the contents are permanently unreadable.'
+			},
+			{
+				q: 'Does the protection weaken the compression?',
+				a: 'No — files are compressed first and encrypted after, so a protected 7Z is the same size as an unprotected one. Encrypted data itself cannot be compressed, which is why the order matters and why the tool handles it for you.'
+			},
+			{ q: 'Is it private?', a: PRIVACY_A_ARCHIVE }
+		]
+	},
 	'create-tar': {
 		intro:
 			'A tar file glues many files into one stream without compressing them — the format unix tooling has expected since the tape-drive era. Drop files, download one .tar. **Built entirely in your browser**; combine it with gzip or xz here too if you want it compressed.',

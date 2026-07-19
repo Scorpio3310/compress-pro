@@ -557,5 +557,61 @@ export const BODIES: Record<string, SeoBody> = {
 			},
 			{ q: 'Is it private?', a: PRIVACY_A_PDF }
 		]
+	},
+	'extract-pages-from-pdf': {
+		intro:
+			'Pull only the pages you need out of a PDF, entirely in your browser — type a range like 1-3,7,12- and those pages become a **clean new document, copied without re-encoding**. The original stays untouched and nothing is uploaded.',
+		guide: [
+			{
+				heading: 'The everyday cases',
+				paragraphs: [
+					'The signed page out of a forty-page contract, one chapter from a manual, pages 34–41 from a scanned bundle — extraction answers “I only need these”. Ranges combine freely: 5 is one page, 1-3,7 mixes a run with a single page, and open-ended 12- reaches to the end without knowing the page count. Pages land in the new PDF in document order.',
+					'Extraction copies pages instead of rendering them, so it is instant even on huge scans and costs no quality. If the extracted part should also be smaller, run it through [Compress PDF](/compress-pdf) afterwards; to cut pages out instead, [Delete Pages from a PDF](/delete-pages-from-pdf) is the same engine pointed the other way.'
+				]
+			}
+		],
+		faq: [
+			{
+				q: 'How do I pick the pages?',
+				a: 'Type page numbers and ranges separated by commas: 1-3,7,12- means pages one to three, page seven, and everything from twelve onward. Whatever you list is what the new PDF contains.'
+			},
+			{
+				q: 'Is the original PDF changed?',
+				a: 'No — the tool builds a fresh document from copies of the listed pages and leaves your original exactly as it was. Extracting is non-destructive by design.'
+			},
+			{
+				q: 'Does extraction lose quality?',
+				a: 'No — pages are copied at the PDF object level, not rendered or re-encoded, so text stays sharp and images keep their exact bytes.'
+			},
+			{ q: 'Is it private?', a: PRIVACY_A_PDF }
+		]
+	},
+	'delete-pages-from-pdf': {
+		intro:
+			'Remove pages from a PDF entirely in your browser — list what should go, like 1,14-16, and everything else assembles into a **new document with nothing re-encoded and nothing uploaded**. The original file stays untouched.',
+		guide: [
+			{
+				heading: 'Cutting the right pages',
+				paragraphs: [
+					'Blank pages from a duplex scan, an outdated appendix, a fax cover sheet, a page with someone else’s data — deletion answers “these pages shouldn’t be here”. The range you type is the removal list: 2 drops one page, 14-16 a run, 12- everything from twelve onward. Removing every page is refused with a clear message rather than producing an empty file.',
+					'Pages that stay are copied as-is, so a hundred-page scan loses its blanks in an instant with zero quality cost. To keep a selection instead of removing one, [Extract PDF Pages](/extract-pages-from-pdf) is the same engine in the opposite direction; a smaller file afterwards is [Compress PDF](/compress-pdf)’s job.'
+				]
+			}
+		],
+		faq: [
+			{
+				q: 'Which pages does the range refer to?',
+				a: 'The ones being deleted: 1,14-16 removes page one and pages fourteen to sixteen, and everything else survives into the new PDF. Switch the toggle to Keep and the same range means the opposite.'
+			},
+			{
+				q: 'Can I undo a deletion?',
+				a: 'Your original file is never modified — the tool writes a new PDF without the listed pages. If the result is wrong, just run the original again with a different range.'
+			},
+			{
+				q: 'What happens if my range covers every page?',
+				a: 'The run stops with an honest error — a PDF must keep at least one page. Adjust the range and run again.'
+			},
+			{ q: 'Is it private?', a: PRIVACY_A_PDF }
+		]
 	}
 };

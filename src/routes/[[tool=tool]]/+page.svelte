@@ -670,6 +670,10 @@
 			}
 		} else if (preset.kind === 'pdf-op') {
 			handlePdfOpChange(preset.op);
+			// Pages-op landings normalize the direction (EB-15 discipline: a
+			// persisted 'remove' must not leak into /split-pdf's Extract framing).
+			// Other pdf ops never touch pageMode.
+			if (preset.op === 'pages') settings.pdf.pageMode = preset.pageMode ?? 'keep';
 		} else if (preset.kind === 'ocr') {
 			settings.ocr.op = preset.op;
 		} else if (preset.kind === 'subtitle') {

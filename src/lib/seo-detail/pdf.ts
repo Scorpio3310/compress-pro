@@ -77,7 +77,7 @@ export const DETAILS: Record<string, SeoDetail | ConverterDetail> = {
 		description:
 			'Add a password to a PDF right in your browser — real AES-256 encryption, run locally. The file and the password never leave your device. Free & unlimited.',
 		tagline: 'Password-protect PDFs locally — no uploads, no accounts.',
-		related: ['/compress-pdf', '/unlock-pdf', '/split-pdf']
+		related: ['/compress-pdf', '/unlock-pdf', '/protect-zip', '/split-pdf']
 	},
 	'rotate-pdf': {
 		ogImage: '/og/rotate-pdf.jpg',
@@ -173,6 +173,32 @@ export const DETAILS: Record<string, SeoDetail | ConverterDetail> = {
 		description:
 			'Split a PDF in your browser — keep only the pages you need or delete the ones you don’t, with ranges like 1-3,7. The file never leaves your device. Free.',
 		tagline: 'Extract or remove PDF pages locally — nothing is uploaded.',
-		related: ['/merge-pdf', '/compress-pdf', '/pdf-to-jpg']
+		related: ['/extract-pages-from-pdf', '/delete-pages-from-pdf', '/merge-pdf', '/compress-pdf']
+	},
+	// Same 'pages' engine as split-pdf, landed in a fixed direction — the search
+	// intents ("extract pages from pdf" / "delete pages from pdf") are distinct.
+	'extract-pages-from-pdf': {
+		ogImage: '/og/extract-pages-from-pdf.jpg',
+		preset: { kind: 'pdf-op', op: 'pages', pageMode: 'keep' },
+		accept: 'application/pdf,.pdf',
+		dropSubject: 'PDF files',
+		dropHint: 'PDF files · listed pages pulled out locally',
+		title: 'Extract PDF Pages — Free, Private, No Upload | Compress Pro',
+		description:
+			'Pull only the pages you list out of a PDF, right in your browser — ranges like 1-3,7 become a clean new document. Nothing is uploaded. Free, no limits.',
+		tagline: 'Just the PDF pages you need, pulled out on your device.',
+		related: ['/delete-pages-from-pdf', '/split-pdf', '/merge-pdf']
+	},
+	'delete-pages-from-pdf': {
+		ogImage: '/og/delete-pages-from-pdf.jpg',
+		preset: { kind: 'pdf-op', op: 'pages', pageMode: 'remove' },
+		accept: 'application/pdf,.pdf',
+		dropSubject: 'PDF files',
+		dropHint: 'PDF files · listed pages removed locally',
+		title: 'Delete Pages from a PDF — Free, No Upload | Compress Pro',
+		description:
+			'Remove the pages you list from a PDF right in your browser — ranges like 1-3,7 delete cover sheets, blanks or whole sections. Nothing is uploaded. Free.',
+		tagline: 'Unwanted PDF pages deleted on your own device, privately.',
+		related: ['/extract-pages-from-pdf', '/split-pdf', '/compress-pdf']
 	}
 };
