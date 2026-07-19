@@ -52,7 +52,7 @@ export const CATEGORIES: readonly FullCategoryEntry[] = [
 			'Download the results — nothing was ever uploaded.'
 		],
 		intro:
-			'One engine room, many doors. Every image tool here shares the same local pipeline — MozJPEG, OxiPNG, libwebp, LibRaw and Tesseract compiled to WebAssembly — so whichever door you walk through, photos are processed on your own device and never uploaded. **The pages differ only in what they preconfigure.**',
+			'One engine room, many doors. Every image tool here shares the same local pipeline — MozJPEG, OxiPNG, libwebp, LibRaw and Tesseract compiled to WebAssembly — so whichever door you walk through, **photos are processed on your own device and never uploaded.** The pages differ only in what they preconfigure.',
 		directory: directoryFor('/image-tools'),
 		faq: [
 			{
@@ -200,7 +200,7 @@ export const CATEGORIES: readonly FullCategoryEntry[] = [
 			'Download the archive or its contents — nothing was uploaded.'
 		],
 		intro:
-			'One 7-Zip engine, compiled to WebAssembly, opens more or less everything ever called an archive — ZIP and 7Z through RAR, ISO, DEB and formats from the floppy era. The same corner of the site houses the structured-file tools: **ebooks, 3D models and spreadsheet data**, each recompressed or converted with its own specialist engine, all locally.',
+			'One 7-Zip engine, compiled to WebAssembly, opens more or less everything ever called an archive — ZIP and 7Z through RAR, ISO, DEB and formats from the floppy era. The same corner of the site houses the structured-file tools: ebooks, 3D models and spreadsheet data, each recompressed or converted with its own specialist engine — **all locally, nothing uploaded.**',
 		directory: directoryFor('/archive-tools'),
 		faq: [
 			{

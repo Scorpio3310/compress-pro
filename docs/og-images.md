@@ -170,6 +170,6 @@ each entry in `src/lib/seo.ts` — pages without one fall back to `/og.jpg`.
 | `/video-audio-tools`       | Video & audio tools.  | Shrink, convert, extract — on your own hardware.               |
 | `/pdf-tools`               | PDF tools.            | Compress, merge, split, protect — never uploaded.              |
 | `/font-tools`              | Font tools.           | Convert, subset, instance — web-ready, on-device.              |
-| `/archive-tools`           | Archive & data tools. | Zip, extract, convert — plus ebooks, models & data.            |
+| `/archive-tools`           | Archive & data tools. | Zip, extract & convert — ebooks, models & data, all local.     |
 | `/about`                   | About Compress Pro.   | Free, open source — and your files never leave your device.    |
 | `/privacy`                 | Privacy.              | No uploads, no cookies, no analytics — nothing to leak.        |

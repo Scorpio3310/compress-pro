@@ -250,7 +250,7 @@
 					creditPrefix: '',
 					toolName: 'Merge PDF',
 					lede: `these two documents — ${parts} pages — went through the`,
-					body: `tool and came out as one ${m?.pages}-page PDF, assembled by pdf-lib on your device. Pages are copied structurally — nothing is re-encoded, so text and images stay byte-identical to their sources. The upload order is the page order; drop your own files in and the table above is exactly what you'll see.`,
+					body: `tool and came out as one ${m?.pages}-page PDF, assembled by pdf-lib on your device. Pages are copied structurally — nothing is re-encoded, so text and images stay byte-identical to their sources. The order you add them is the page order; drop your own files in and the table above is exactly what you'll see.`,
 					beforeAlt: '',
 					afterAlt: ''
 				};

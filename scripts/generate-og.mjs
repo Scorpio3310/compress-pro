@@ -232,7 +232,7 @@ const PAGES = [
 	[
 		'og/archive-tools.jpg',
 		'Archive & data tools.',
-		'Zip, extract, convert — plus ebooks, models & data.'
+		'Zip, extract & convert — ebooks, models & data, all local.'
 	],
 	[
 		'og/about.jpg',
