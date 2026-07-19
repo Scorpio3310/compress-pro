@@ -21,7 +21,7 @@
 </script>
 
 {#if settings.to === 'txt'}
-	<div class="panel-span">
+	<div>
 		<p class="hint text-faint">
 			Reads an EPUB's chapters in book order and saves them as one plain-text file — paragraphs
 			kept, markup dropped. Everything happens in this tab; the book never leaves your device.

@@ -21,7 +21,7 @@
 	];
 </script>
 
-<div class="panel-span">
+<div>
 	<p class="microlabel mb-2.5 text-muted">Geometry compression</p>
 	<SegmentedControl
 		items={codecs}
@@ -42,11 +42,18 @@
 	</p>
 </div>
 <div>
-	<label class="flex items-center justify-between gap-3 py-1">
-		<span class="microlabel text-muted">Simplify geometry</span>
+	<!-- Title + off-hint stack on the left so the hint sits right under the
+	     title; the switch rides the title line instead of stretching the row. -->
+	<label class="flex items-start justify-between gap-3 py-1">
+		<span>
+			<span class="microlabel block text-muted">Simplify geometry</span>
+			{#if settings.simplify === null}
+				<span class="mt-1.5 block hint text-faint">Off — the mesh keeps every triangle.</span>
+			{/if}
+		</span>
 		<input
 			type="checkbox"
-			class="switch"
+			class="switch shrink-0"
 			checked={settings.simplify !== null}
 			onchange={(e) => (settings.simplify = e.currentTarget.checked ? 50 : null)}
 		/>
@@ -63,8 +70,6 @@
 			Reduces the triangle count — permanent detail loss, biggest wins on dense scans and
 			photogrammetry.
 		</p>
-	{:else}
-		<p class="mt-1.5 hint text-faint">Off — the mesh keeps every triangle.</p>
 	{/if}
 </div>
 <div>
