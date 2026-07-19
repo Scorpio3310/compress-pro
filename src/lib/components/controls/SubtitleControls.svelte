@@ -1,26 +1,15 @@
 <script lang="ts">
 	import type { SubtitleSettings } from '$lib/types';
-	import SegmentedControl from './SegmentedControl.svelte';
 
 	interface Props {
 		settings: SubtitleSettings;
 	}
 
+	// The target itself (To VTT | To SRT) lives in the tab rail, visible
+	// before upload; this panel keeps the target-keyed explainer.
 	let { settings = $bindable() }: Props = $props();
-
-	const targets = [
-		{ id: 'vtt', label: 'To VTT' },
-		{ id: 'srt', label: 'To SRT' }
-	];
 </script>
 
-<div class="panel-span">
-	<SegmentedControl
-		items={targets}
-		selected={settings.to}
-		onselect={(id) => (settings.to = id as SubtitleSettings['to'])}
-	/>
-</div>
 <div>
 	{#if settings.to === 'vtt'}
 		<p class="hint text-faint">

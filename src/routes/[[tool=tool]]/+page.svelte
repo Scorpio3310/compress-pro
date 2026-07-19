@@ -8,6 +8,7 @@
 		OcrSettings,
 		PdfOp,
 		ProgressInfo,
+		SubtitleSettings,
 		ZipSettings
 	} from '$lib/types';
 	import { IMAGE_FORMATS, isBundlingArchiveFormat, isLosslessAudioFormat } from '$lib/types';
@@ -21,7 +22,7 @@
 	import { fontMeta, probeFont, removeFontMeta } from '$lib/font-meta.svelte';
 	import { estimateAudioBytes, estimateVideoBytes } from '$lib/video-estimate';
 	import * as actionLabels from '$lib/action-labels';
-	import { FONT_OPS, OCR_OPS, PDF_OPS, ZIP_OPS, type Rail } from '$lib/rails';
+	import { FONT_OPS, OCR_OPS, PDF_OPS, SUBTITLE_TARGETS, ZIP_OPS, type Rail } from '$lib/rails';
 	import Tabs, { type TabBadgeStatus } from '$lib/components/Tabs.svelte';
 	import FileUpload from '$lib/components/FileUpload.svelte';
 	import CompressButton from '$lib/components/controls/CompressButton.svelte';
@@ -142,6 +143,14 @@
 					items: OCR_OPS,
 					value: ocrOp,
 					onselect: (id) => handleOcrOpChange(id as OcrSettings['op'])
+				};
+			case 'subtitle':
+				return {
+					group: 'subtitle',
+					label: 'Subtitle format',
+					items: SUBTITLE_TARGETS,
+					value: settings.subtitle.to,
+					onselect: (id) => handleSubtitleTargetChange(id as SubtitleSettings['to'])
 				};
 			default:
 				return null;
@@ -652,6 +661,15 @@
 		settings.ocr.op = op;
 	}
 
+	function handleSubtitleTargetChange(to: SubtitleSettings['to']) {
+		if (to === settings.subtitle.to) return;
+		const state = tabStates.subtitle;
+		clearResults(state);
+		state.error = null;
+		// Every target reads the same srt/vtt/ass inputs — files stay parked.
+		settings.subtitle.to = to;
+	}
+
 	// Converter landing pages preset the tool. afterNavigate fires on hydration
 	// ('enter') and on every client navigation while this shared component stays
 	// mounted — once per navigation, so manual changes afterwards are never
@@ -744,7 +762,7 @@
 		} else if (preset.kind === 'ocr') {
 			handleOcrOpChange(preset.op);
 		} else if (preset.kind === 'subtitle') {
-			settings.subtitle.to = preset.to;
+			handleSubtitleTargetChange(preset.to);
 		} else if (preset.kind === 'ebook') {
 			if (preset.quality !== undefined) settings.ebook.quality = preset.quality;
 			// No `to` in the preset means the page promises compression — a
