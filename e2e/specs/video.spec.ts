@@ -956,3 +956,27 @@ test('V-36: 720p → GIF auto-caps the dimensions and says so', async ({ page })
 	const m = await imageMeta(art.bytes);
 	expect([m.width, m.height], 'longest side capped to 800').toEqual([800, 450]);
 });
+
+test('V-37: video→GIF preserves the full timeline (no silent truncation)', async ({ page }) => {
+	// F-72: CanvasSink yields null for slots it can't produce; the old loop
+	// skipped them entirely, so a 13.3 s 4K clip shipped as a 9.0 s GIF (32 %
+	// of the timeline silently gone). Null slots must hold the previous frame.
+	test.setTimeout(540_000);
+	const src = realFile(/magnific-474074.*\.mp4$/i);
+	test.skip(!src, 'drop the magnific 4K clip into tests/fixtures/real to enable');
+	const srcDuration = (await videoInfo(readFileSync(src!))).durationSec;
+
+	const { gotoPath } = await import('../helpers');
+	await gotoPath(page, '/video-to-gif');
+	await upload(page, src!);
+	await setMaxDimension(page, 480);
+	await compress(page, { timeout: 480_000 });
+	const art = await downloadRow(page);
+	const m = await imageMeta(art.bytes);
+	const gifDuration = (m.delay ?? []).reduce((a, b) => a + b, 0) / 1000;
+	expect(m.format).toBe('gif');
+	expect(
+		Math.abs(gifDuration - srcDuration) / srcDuration,
+		`gif ${gifDuration.toFixed(2)}s vs source ${srcDuration.toFixed(2)}s`
+	).toBeLessThanOrEqual(0.07);
+});

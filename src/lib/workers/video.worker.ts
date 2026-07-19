@@ -611,14 +611,29 @@ expose<WorkerContracts['video']>({
 			} else {
 				// CanvasSink scales for us; frames are copied onto our own canvas so
 				// getImageData never depends on the sink's internal context type.
+				// A null slot (seek miss / undecodable moment) still OWNS its slice
+				// of the timeline — hold the previous frame instead of skipping, or
+				// the GIF silently contracts (13.3 s 4K clip shipped as 9.0 s, F-72).
 				const sink = new CanvasSink(video, { width, height, fit: 'fill' });
+				let held: ReturnType<typeof quantizeCanvas> | null = null;
+				let leadingNulls = 0;
 				for await (const wrapped of sink.canvasesAtTimestamps(timestamps)) {
 					job.throwIfCancelled();
 					frame++;
-					if (!wrapped) continue;
-					ctx.drawImage(wrapped.canvas, 0, 0);
-					const { palette, index } = quantizeCanvas();
-					gif.writeFrame(index, width, height, { palette, delay: delayMs });
+					if (wrapped) {
+						ctx.drawImage(wrapped.canvas, 0, 0);
+						held = quantizeCanvas();
+						// Slots missed before the first decodable frame get backfilled
+						// with it — leading timeline must not vanish either.
+						for (; leadingNulls > 0; leadingNulls--) {
+							gif.writeFrame(held.index, width, height, { palette: held.palette, delay: delayMs });
+						}
+					} else if (!held) {
+						leadingNulls++;
+						progress({ frame, frameCount: timestamps.length });
+						continue;
+					}
+					gif.writeFrame(held.index, width, height, { palette: held.palette, delay: delayMs });
 					progress({ frame, frameCount: timestamps.length });
 				}
 			}
