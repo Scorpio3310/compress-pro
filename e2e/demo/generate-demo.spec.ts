@@ -1,6 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, writeFileSync, statSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync, statSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import sharp from 'sharp';
 import { PDFDocument } from 'pdf-lib';
@@ -20,7 +20,7 @@ import {
 	setQuality,
 	upload
 } from '../helpers';
-import { psnr, videoInfo } from '../verify';
+import { glbInfo, glbJson, psnr, unzip, videoInfo, xlsxInfo } from '../verify';
 import { fitDimensions } from '../../src/lib/codecs/video-math';
 import { readExifSummary } from '../../src/lib/codecs/exif-parse';
 import type { DemoCredit, DemoKind, DemoStats } from '../../src/lib/types';
@@ -56,8 +56,55 @@ const KIND_ORDER: DemoKind[] = [
 	'audio',
 	'font',
 	'archive',
-	'exif'
+	'exif',
+	'ocr',
+	'subtitle',
+	'ebook',
+	'model',
+	'data'
 ];
+
+// Authored demo inputs (subtitle/data) — deterministic bytes written into the
+// gitignored real-fixtures dir, so the byte-for-byte source check in
+// demo-stats.test.ts sees them like any other demo source. Self-authored:
+// no license, no credit line. The SRT describes Méliès' 1902 "A Trip to the
+// Moon" (public domain), the CSV is public-record alpine data.
+const SRT_FIXTURE = join(REAL, 'demo-moon-voyage.srt');
+const CSV_FIXTURE = join(REAL, 'demo-peaks.csv');
+writeFileSync(
+	SRT_FIXTURE,
+	[
+		'1',
+		'00:00:12,000 --> 00:00:15,500',
+		'The astronomers gather for the great congress.',
+		'',
+		'2',
+		'00:00:42,250 --> 00:00:46,000',
+		'The capsule is loaded into the giant cannon.',
+		'',
+		'3',
+		'00:01:03,800 --> 00:01:07,400',
+		'<i>Fire!</i> The voyage to the Moon begins.',
+		'',
+		'4',
+		'00:01:28,500 --> 00:01:32,000',
+		'The Man in the Moon takes the rocket in the eye.',
+		''
+	].join('\n')
+);
+writeFileSync(
+	CSV_FIXTURE,
+	[
+		'Peak,Country,Elevation_m,First_ascent',
+		'Triglav,Slovenia,2864,1778',
+		'Mont Blanc,France,4808,1786',
+		'Matterhorn,Switzerland,4478,1865',
+		'Grossglockner,Austria,3798,1800',
+		'Monte Rosa,Switzerland,4634,1855',
+		'Säntis,Switzerland,2502,1846',
+		''
+	].join('\n')
+);
 
 // q85 = keeps a real photo's noise under budget without denoising; 4:2:0
 // matches the app's own JPEG output subsampling. Applied to BOTH sides.
@@ -120,9 +167,11 @@ interface RenderOut {
 	afterExt?: RenderOut['ext'];
 	/** archive: the demo is numbers + a manifest — no display files at all. */
 	noAssets?: true;
+	/** ocr: only the before side ships — the "after" is display.text. */
+	singleAsset?: true;
 	width: number;
 	height: number;
-	shows: 'crop' | 'frame' | 'file';
+	shows: 'crop' | 'frame' | 'file' | 'render';
 	crop?: Crop;
 	frame?: { index: number; ofFrames: number };
 	/** pdf: the raster frame the crop was cut from. */
@@ -133,6 +182,26 @@ interface RenderOut {
 	archive?: { entries: { name: string; bytes: number }[]; zipBytes: number };
 	/** exif: what the app's own parser found in the original (gone after). */
 	metadata?: { camera: string | null; taken: string | null; gps: string | null; fields: number };
+	/** Text kinds: the actual file text, verbatim (see DemoStats.display). */
+	text?: { before?: string; after?: string };
+	/** ocr: the page's own word-count claim + the pinned language. */
+	ocr?: { words: number; lang: string };
+	/** subtitle: cue count (from the page's own row info) + from→to. */
+	subtitle?: { cues: number; from: string; to: string };
+	/** data: rows read back from the DOWNLOADED xlsx (row 0 = header). */
+	sheet?: { rows: (string | number)[][] };
+	/** model: input geometry stats + the page's own texture claim + the pins
+	 *  the caption narrates. */
+	model?: {
+		triangles: number;
+		vertices: number;
+		texturesChanged: number;
+		texturesTotal: number;
+		codec: 'draco' | 'meshopt';
+		textureMaxDimension: number | null;
+	};
+	/** ebook: which archive entry the display pair was derived from. */
+	entryName?: string;
 }
 
 interface DemoJob {
@@ -155,6 +224,9 @@ interface DemoJob {
 	maxDimension?: number;
 	outputFormat: string;
 	formatChanged?: boolean;
+	/** subtitle/data: the output is legitimately BIGGER than the input (WEBVTT
+	 *  header, XLSX container) — the demo tells a structure story, not bytes. */
+	growthOk?: true;
 	budgetBytes: number;
 	/** pdf pushes 62 MB through Ghostscript wasm — far slower than 120 s. */
 	compressTimeoutMs?: number;
@@ -219,6 +291,12 @@ const expect7z = (b: Buffer) =>
 		b.subarray(0, 6).equals(Buffer.from([0x37, 0x7a, 0xbc, 0xaf, 0x27, 0x1c])),
 		'7z magic'
 	).toBe(true);
+const expectTxt = (b: Buffer) =>
+	expect(b.length, 'txt output must not be empty').toBeGreaterThan(0);
+const expectVtt = (b: Buffer) => expect(b.toString('utf8', 0, 6), 'WEBVTT magic').toBe('WEBVTT');
+const expectZip = (b: Buffer) =>
+	expect(b.subarray(0, 2).toString('latin1'), 'ZIP magic').toBe('PK');
+const expectGlb = (b: Buffer) => expect(b.readUInt32LE(0), 'GLB magic').toBe(0x46546c67);
 
 // ------------------------------------------------------------ render helpers
 
@@ -599,6 +677,246 @@ function exifRender(crop: Crop) {
 	};
 }
 
+/** The scan resized for display; the demo's "after" side is the recognized
+ *  TEXT (display.text.after — the downloaded .txt, verbatim), so only one
+ *  image ships. The word count the tiles cite is the page's own claim. */
+function ocrRender(lang: string) {
+	return async (input: Buffer, output: Buffer, p: Page): Promise<RenderOut> => {
+		const text = output.toString('utf8').replace(/\f/g, '\n').trimEnd();
+		expect(text.length, 'recognition must produce real text').toBeGreaterThan(100);
+		const info = (await p.getByTestId('row-info').textContent()) ?? '';
+		const uiWords = Number(/(\d[\d,]*)\s+words?\s+recognized/i.exec(info)?.[1]?.replace(/,/g, ''));
+		expect(uiWords, `row info must report a word count (got: ${info})`).toBeGreaterThan(0);
+		// The .txt's whitespace word count must track the engine's own claim —
+		// a drifting pair would mean the panel and the tile tell different runs.
+		const txtWords = text.split(/\s+/).length;
+		expect(Math.abs(uiWords - txtWords)).toBeLessThanOrEqual(Math.ceil(uiWords * 0.1));
+		const display = await sharp(input)
+			.resize({ width: 1200, withoutEnlargement: true })
+			.webp(DELIVERY_WEBP)
+			.toBuffer();
+		const meta = await sharp(display).metadata();
+		return {
+			before: display,
+			after: Buffer.alloc(0),
+			singleAsset: true,
+			ext: 'webp',
+			width: meta.width!,
+			height: meta.height!,
+			shows: 'render',
+			text: { after: text },
+			ocr: { words: uiWords, lang }
+		};
+	};
+}
+
+/** No display assets — both panels inline the complete actual files from the
+ *  manifest (subtitle files are tiny text). */
+function subtitleVerbatimRender() {
+	return async (input: Buffer, output: Buffer, p: Page): Promise<RenderOut> => {
+		const before = input.toString('utf8');
+		const after = output.toString('utf8');
+		expect(after.startsWith('WEBVTT'), 'output must be WebVTT').toBe(true);
+		const info = (await p.getByTestId('row-info').textContent()) ?? '';
+		const m = /SRT → VTT · (\d+) cues?/.exec(info);
+		expect(m, `row info must report the conversion (got: ${info})`).toBeTruthy();
+		return {
+			before: Buffer.alloc(0),
+			after: Buffer.alloc(0),
+			noAssets: true,
+			ext: 'jpg',
+			width: 0,
+			height: 0,
+			shows: 'file',
+			text: { before, after },
+			subtitle: { cues: Number(m![1]), from: 'srt', to: 'vtt' }
+		};
+	};
+}
+
+/** Full-frame view of the same in-book illustration from BOTH containers —
+ *  deterministic pick (the largest raster in the source, i.e. the title
+ *  plate), identical q85 WebP delivery on both sides. */
+function ebookIllustrationRender() {
+	return async (input: Buffer, output: Buffer): Promise<RenderOut> => {
+		const src = unzip(input);
+		const out = unzip(output);
+		const images = Object.keys(src)
+			.filter((n) => /\.(jpe?g|png)$/i.test(n))
+			.sort();
+		expect(images.length, 'the demo book needs raster images').toBeGreaterThanOrEqual(10);
+		const entryName = images.reduce((a, b) => (src[b].length > src[a].length ? b : a));
+		const beforeImg = Buffer.from(src[entryName]);
+		const afterImg = Buffer.from(out[entryName]);
+		expect(afterImg.length, `${entryName} must have been recompressed`).toBeLessThan(
+			beforeImg.length
+		);
+		await assertSameDims(beforeImg, afterImg);
+		const meta = await sharp(beforeImg).metadata();
+		return {
+			before: await sharp(beforeImg).webp(DELIVERY_WEBP).toBuffer(),
+			after: await sharp(afterImg).webp(DELIVERY_WEBP).toBuffer(),
+			ext: 'webp',
+			width: meta.width!,
+			height: meta.height!,
+			shows: 'frame',
+			frame: { index: images.indexOf(entryName), ofFrames: images.length },
+			entryName
+		};
+	};
+}
+
+/** Both GLBs rendered by three.js through the IDENTICAL fixed camera (framed
+ *  once, from the before model) — bundled dev-only by esbuild and imported
+ *  into the app page via /@fs (pdf/video rasterizer precedent). `three` is a
+ *  devDependency that never touches the app bundle. */
+function modelRender(width: number, height: number, textureMaxDimension: number) {
+	return async (input: Buffer, output: Buffer, p: Page): Promise<RenderOut> => {
+		const required =
+			(glbJson(output) as { extensionsRequired?: string[] }).extensionsRequired ?? [];
+		expect(required, 'the run must produce Draco geometry').toContain('KHR_draco_mesh_compression');
+		const infoIn = await glbInfo(input);
+		const uiInfo = (await p.getByTestId('row-info').textContent()) ?? '';
+		const tex = /(\d+) of (\d+) textures? recompressed/.exec(uiInfo);
+		expect(tex, `row info must report texture work (got: ${uiInfo})`).toBeTruthy();
+		// The run must honor the pinned cap — every output texture within it.
+		const infoOut = await glbInfo(output);
+		for (const t of infoOut.textures) {
+			expect(Math.max(t.width, t.height), 'texture must honor the cap').toBeLessThanOrEqual(
+				textureMaxDimension
+			);
+		}
+
+		expect(process.env.E2E_PREVIEW, 'model render needs the dev server').toBeFalsy();
+		const tmpDir = join('.svelte-kit', 'rasterize-tmp');
+		mkdirSync(tmpDir, { recursive: true });
+		const rendererJs = join(tmpDir, 'model-renderer.js');
+		execFileSync(
+			join('node_modules', '.bin', 'esbuild'),
+			[
+				join('e2e', 'demo', 'model-renderer.ts'),
+				'--bundle',
+				'--format=esm',
+				`--outfile=${rendererJs}`
+			],
+			{ stdio: 'pipe' }
+		);
+		const beforeGlb = join(tmpDir, 'model-demo-before.glb');
+		const afterGlb = join(tmpDir, 'model-demo-after.glb');
+		writeFileSync(beforeGlb, input);
+		writeFileSync(afterGlb, output);
+		const cwd = process.cwd();
+		try {
+			// Up to 5 attempts, 5 s apart — a dev-server reload or dep
+			// re-optimization landing mid-fetch surfaces as a transient
+			// "Failed to fetch" (rasterizePdfInPage precedent, measured here too).
+			let pngs: { before: string; after: string } | undefined;
+			let lastError: unknown;
+			for (let attempt = 0; attempt < 5 && !pngs; attempt++) {
+				try {
+					pngs = await p.evaluate(
+						async (args: {
+							renderer: string;
+							before: string;
+							after: string;
+							width: number;
+							height: number;
+							draco: string;
+						}) => {
+							// Indirect import so the test transpiler leaves the specifier alone.
+							const load = new Function('p', 'return import(p)') as (p: string) => Promise<{
+								renderGlbPair(
+									b: string,
+									a: string,
+									w: number,
+									h: number,
+									d: string
+								): Promise<{ before: string; after: string }>;
+							}>;
+							const mod = await load(args.renderer);
+							return mod.renderGlbPair(
+								args.before,
+								args.after,
+								args.width,
+								args.height,
+								args.draco
+							);
+						},
+						{
+							renderer: `/@fs${join(cwd, rendererJs)}`,
+							before: `/@fs${join(cwd, beforeGlb)}`,
+							after: `/@fs${join(cwd, afterGlb)}`,
+							width,
+							height,
+							draco: `/@fs${join(cwd, 'node_modules', 'three', 'examples', 'jsm', 'libs', 'draco', 'gltf')}/`
+						}
+					);
+				} catch (error) {
+					lastError = error;
+					await p.waitForTimeout(5_000);
+				}
+			}
+			if (!pngs) throw lastError;
+			const decode = (dataUrl: string) => {
+				expect(dataUrl.startsWith('data:image/png;base64,'), 'render must produce a PNG').toBe(
+					true
+				);
+				return Buffer.from(dataUrl.slice('data:image/png;base64,'.length), 'base64');
+			};
+			const before = await sharp(decode(pngs.before)).webp(DELIVERY_WEBP).toBuffer();
+			const after = await sharp(decode(pngs.after)).webp(DELIVERY_WEBP).toBuffer();
+			// Same-model net: quantized geometry + re-encoded textures shift
+			// pixels slightly; a wrong file/camera would crater the number.
+			const pairPsnr = await psnr(before, after);
+			console.log(`demo-assets[model]: render pair PSNR ${pairPsnr.toFixed(1)} dB`);
+			expect(pairPsnr, 'renders must show the same model').toBeGreaterThanOrEqual(20);
+			return {
+				before,
+				after,
+				ext: 'webp',
+				width,
+				height,
+				shows: 'render',
+				model: {
+					triangles: infoIn.triangles,
+					vertices: infoIn.vertices,
+					texturesChanged: Number(tex![1]),
+					texturesTotal: Number(tex![2]),
+					codec: 'draco',
+					textureMaxDimension
+				}
+			};
+		} finally {
+			rmSync(beforeGlb, { force: true });
+			rmSync(afterGlb, { force: true });
+		}
+	};
+}
+
+/** No display assets — the left panel inlines the CSV verbatim, the right
+ *  panel renders rows read back from the DOWNLOADED xlsx with SheetJS. */
+function dataSheetRender() {
+	return async (input: Buffer, output: Buffer, p: Page): Promise<RenderOut> => {
+		const info = await xlsxInfo(output);
+		expect(info.sheetNames).toHaveLength(1);
+		const rows = info.rows as (string | number)[][];
+		expect(rows.length).toBeGreaterThanOrEqual(3);
+		const uiInfo = (await p.getByTestId('row-info').textContent()) ?? '';
+		expect(uiInfo).toContain(`CSV → XLSX · ${rows.length} rows × ${rows[0].length} columns`);
+		return {
+			before: Buffer.alloc(0),
+			after: Buffer.alloc(0),
+			noAssets: true,
+			ext: 'jpg',
+			width: 0,
+			height: 0,
+			shows: 'file',
+			text: { before: input.toString('utf8') },
+			sheet: { rows }
+		};
+	};
+}
+
 // --------------------------------------------------------------------- jobs
 
 const JOBS: DemoJob[] = [
@@ -965,6 +1283,104 @@ const JOBS: DemoJob[] = [
 		drive: async () => {},
 		sniff: expectJpeg,
 		render: exifRender({ left: 1200, top: 800, width: 1440, height: 1080 })
+	},
+	{
+		kind: 'ocr',
+		page: '/image-to-text',
+		fixture: join(REAL, 'wikimedia-sherlock-1892-scandal-p3.jpg'),
+		engine: 'Tesseract',
+		outputFormat: 'txt',
+		formatChanged: true,
+		budgetBytes: 350_000,
+		compressTimeoutMs: 300_000,
+		credit: {
+			author: 'Arthur Conan Doyle',
+			url: 'https://commons.wikimedia.org/wiki/File:Doyle_-_Adventures_of_Sherlock_Holmes,_1892.djvu',
+			source: 'Wikimedia Commons',
+			license: 'public domain'
+		},
+		// Defaults are the demo settings: op toText, language English.
+		drive: async () => {},
+		sniff: expectTxt,
+		render: ocrRender('eng')
+	},
+	{
+		kind: 'subtitle',
+		page: '/srt-to-vtt',
+		fixture: SRT_FIXTURE,
+		engine: 'pure JavaScript',
+		outputFormat: 'vtt',
+		formatChanged: true,
+		// The WEBVTT header makes the output a few bytes BIGGER — that's the
+		// caption's point, not a failure.
+		growthOk: true,
+		budgetBytes: 0,
+		describeInput: async () => ({}),
+		drive: async () => {},
+		sniff: expectVtt,
+		render: subtitleVerbatimRender()
+	},
+	{
+		kind: 'ebook',
+		page: '/compress-epub',
+		fixture: join(REAL, 'gutenberg-14838-peter-rabbit.epub'),
+		engine: 'MozJPEG + OxiPNG',
+		quality: 80,
+		outputFormat: 'epub',
+		budgetBytes: 240_000,
+		compressTimeoutMs: 300_000,
+		credit: {
+			author: 'Beatrix Potter',
+			url: 'https://www.gutenberg.org/ebooks/14838',
+			source: 'Project Gutenberg',
+			license: 'public domain'
+		},
+		describeInput: async () => ({}),
+		// Defaults are the demo settings: quality 80, no size cap.
+		drive: async () => {},
+		sniff: expectZip,
+		render: ebookIllustrationRender()
+	},
+	{
+		kind: 'model',
+		page: '/compress-glb',
+		fixture: join(REAL, 'polyhaven-camera-01-2k.glb'),
+		engine: 'glTF Transform + Draco',
+		outputFormat: 'glb',
+		budgetBytes: 240_000,
+		compressTimeoutMs: 300_000,
+		credit: {
+			author: 'Rajil Jose Macatangay',
+			url: 'https://polyhaven.com/a/Camera_01',
+			source: 'Poly Haven',
+			license: 'CC0'
+		},
+		describeInput: async () => ({}),
+		// Draco + texture quality 80 are the page defaults; the Max texture
+		// size pill is pinned to 1024 px — the guide's own "usual culprit" fix
+		// (video quality+resize precedent) — and the caption narrates it.
+		drive: async (p) => {
+			const cap = p.getByRole('button', { name: '1024 px', exact: true });
+			await cap.click();
+			await expect(cap).toHaveAttribute('aria-pressed', 'true');
+		},
+		sniff: expectGlb,
+		render: modelRender(1280, 960, 1024)
+	},
+	{
+		kind: 'data',
+		page: '/csv-to-xlsx',
+		fixture: CSV_FIXTURE,
+		engine: 'SheetJS',
+		outputFormat: 'xlsx',
+		formatChanged: true,
+		// A real .xlsx container is bigger than 200 B of CSV — structure story.
+		growthOk: true,
+		budgetBytes: 0,
+		describeInput: async () => ({}),
+		drive: async () => {},
+		sniff: expectZip,
+		render: dataSheetRender()
 	}
 ];
 
@@ -1025,7 +1441,9 @@ for (const job of JOBS) {
 		job.sniff(artifact.bytes);
 		const compressedBytes = artifact.bytes.length;
 		expect(compressedBytes).toBeGreaterThan(0);
-		expect(compressedBytes, 'demo must show a real reduction').toBeLessThan(originalBytes);
+		if (!job.growthOk) {
+			expect(compressedBytes, 'demo must show a real reduction').toBeLessThan(originalBytes);
+		}
 
 		const out = await job.render(input, artifact.bytes, page);
 		// Geometry-lie detector, not a quality gate: honest pairs measure
@@ -1040,16 +1458,19 @@ for (const job of JOBS) {
 		}
 		mkdirSync(OUT_DIR, { recursive: true });
 		const beforeName = out.noAssets ? '' : `${job.kind}-before.${out.beforeExt ?? out.ext}`;
-		const afterName = out.noAssets ? '' : `${job.kind}-after.${out.afterExt ?? out.ext}`;
+		const afterName =
+			out.noAssets || out.singleAsset ? '' : `${job.kind}-after.${out.afterExt ?? out.ext}`;
 		if (!out.noAssets) {
 			expect(out.before.length, `${beforeName} over page-weight budget`).toBeLessThanOrEqual(
 				job.budgetBytes
 			);
-			expect(out.after.length, `${afterName} over page-weight budget`).toBeLessThanOrEqual(
-				job.budgetBytes
-			);
 			writeFileSync(join(OUT_DIR, beforeName), out.before);
-			writeFileSync(join(OUT_DIR, afterName), out.after);
+			if (!out.singleAsset) {
+				expect(out.after.length, `${afterName} over page-weight budget`).toBeLessThanOrEqual(
+					job.budgetBytes
+				);
+				writeFileSync(join(OUT_DIR, afterName), out.after);
+			}
 		}
 
 		// Optional second run: extra settings on the SAME parked file (e.g. the
@@ -1142,7 +1563,13 @@ for (const job of JOBS) {
 				...(out.still ? { still: out.still } : {}),
 				...(clip ? { clip } : {}),
 				...(out.archive ? { archive: out.archive } : {}),
-				...(out.metadata ? { metadata: out.metadata } : {})
+				...(out.metadata ? { metadata: out.metadata } : {}),
+				...(out.text ? { text: out.text } : {}),
+				...(out.ocr ? { ocr: out.ocr } : {}),
+				...(out.subtitle ? { subtitle: out.subtitle } : {}),
+				...(out.sheet ? { sheet: out.sheet } : {}),
+				...(out.model ? { model: out.model } : {}),
+				...(out.entryName ? { entryName: out.entryName } : {})
 			},
 			...(job.credit ? { credit: job.credit } : {})
 		});

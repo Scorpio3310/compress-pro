@@ -2,7 +2,7 @@
 	import statsJson from '$lib/demo-stats.json';
 	import { formatBytes } from '$lib/utils';
 	import { resolve } from '$app/paths';
-	import type { DemoKind, DemoStats } from '$lib/types';
+	import { OCR_LANGUAGES, type DemoKind, type DemoStats } from '$lib/types';
 	import ImageSlider from './ImageSlider.svelte';
 
 	// font: the specimen is rendered BY the converted WOFF2 — loaded under a
@@ -70,6 +70,17 @@
 	const beforeSrc = $derived(stats && assetUrl(stats.display.before));
 	const afterSrc = $derived(stats && assetUrl(stats.display.after));
 
+	// Kinds that render without a display-asset pair: archive/subtitle/data are
+	// tables and text panels straight from the manifest; ocr anchors on the
+	// scan alone — its "after" side is the recognized text.
+	const hasDisplay = $derived(
+		kind === 'archive' || kind === 'subtitle' || kind === 'data'
+			? true
+			: kind === 'ocr'
+				? !!beforeSrc
+				: !!(beforeSrc && afterSrc)
+	);
+
 	// Slider corner labels — heic flips format mid-run, say so right on the image.
 	const beforeLabel = $derived(
 		!stats
@@ -105,6 +116,44 @@
 				},
 				{ label: 'Pixels changed', value: '0', emphasize: false },
 				{ label: 'Size', value: `−${stats.savingsPercent}%`, emphasize: false }
+			];
+		}
+		// ocr/subtitle/data tell structure stories, not byte stories — a picture
+		// became text, a dialect flipped, rows became real cells.
+		if (kind === 'ocr' && stats.display.ocr) {
+			const o = stats.display.ocr;
+			return [
+				{ label: 'Words recognized', value: o.words.toLocaleString('en-US'), emphasize: true },
+				{
+					label: 'Language',
+					value: OCR_LANGUAGES.find((l) => l.code === o.lang)?.label ?? o.lang.toUpperCase(),
+					emphasize: false
+				},
+				{ label: 'Output', value: `.txt — ${formatBytes(stats.compressedBytes)}`, emphasize: false }
+			];
+		}
+		if (kind === 'subtitle' && stats.display.subtitle) {
+			const sub = stats.display.subtitle;
+			return [
+				{ label: 'Cues', value: String(sub.cues), emphasize: false },
+				{
+					label: 'Format',
+					value: `${sub.from.toUpperCase()} → ${sub.to.toUpperCase()}`,
+					emphasize: true
+				},
+				{
+					label: 'Size',
+					value: `${formatBytes(stats.originalBytes)} → ${formatBytes(stats.compressedBytes)}`,
+					emphasize: false
+				}
+			];
+		}
+		if (kind === 'data' && stats.display.sheet) {
+			const rows = stats.display.sheet.rows;
+			return [
+				{ label: 'Rows', value: String(rows.length), emphasize: false },
+				{ label: 'Columns', value: String(rows[0]?.length ?? 0), emphasize: false },
+				{ label: 'Format', value: 'CSV → XLSX', emphasize: true }
 			];
 		}
 		return [
@@ -250,6 +299,58 @@
 					beforeAlt: `Detail of the photo: the island church of Lake Bled, Slovenia, with Bled Castle on the cliff behind`,
 					afterAlt: ''
 				};
+			case 'ocr': {
+				const lang = OCR_LANGUAGES.find((l) => l.code === s.display.ocr?.lang)?.label ?? 'English';
+				return {
+					creditPrefix: 'Book by',
+					toolName: 'Image to Text',
+					lede: `the opening page of "A Scandal in Bohemia" — the 1892 first book edition of The Adventures of Sherlock Holmes — went through the`,
+					body: `tool — Tesseract, the OCR engine that has read the world's paper for decades, compiled to WebAssembly — with the language set to ${lang}. The panel above is the verbatim output: ${s.display.ocr?.words.toLocaleString('en-US')} words of selectable, copyable text out of a flat scan, uncorrected. The Victorian body type comes out nearly flawless — "To Sherlock Holmes she is always the woman" and all; only the ornamental drop capital and the blackletter heading defeat the engine, which is the honest trade a 130-year-old page offers. Drop the same scan in yourself and you'll get the same text.`,
+					beforeAlt: `Scan of the opening page of "A Scandal in Bohemia" from the 1892 first edition of The Adventures of Sherlock Holmes — the page the text below was recognized from`,
+					afterAlt: ''
+				};
+			}
+			case 'subtitle':
+				return {
+					creditPrefix: '',
+					toolName: 'SRT to VTT',
+					lede: `the ${s.display.subtitle?.cues}-cue SRT file on the left went through the`,
+					body: `tool — a few hundred lines of pure JavaScript, no WebAssembly, no server — and came out as the WebVTT file on the right: same text, same timing, with the cue numbers dropped, the WEBVTT header added and the millisecond comma swapped for a dot. Both panels are the complete actual files, byte for byte — the entire dialect gap, visible in one glance.`,
+					beforeAlt: '',
+					afterAlt: ''
+				};
+			case 'ebook':
+				return {
+					creditPrefix: 'Book by',
+					toolName: 'Compress EPUB',
+					lede: `this illustrated children's classic — ${orig} with 29 of Beatrix Potter's watercolours, as it left Project Gutenberg — went through the`,
+					body: `tool — MozJPEG and OxiPNG, the same engines as the image tabs, re-encoding every image while the container is rebuilt locally — and came out at ${comp}. What you're dragging is the same plate from inside both books, shown 1:1; the text is carried over byte-identical, and the byte counts refer to the complete files. A Gutenberg production is already optimized and still dropped ${s.savingsPercent}% — a typical export or DRM-free purchase has far more to give.`,
+					beforeAlt: `The cover plate of the original EPUB, shown 1:1`,
+					afterAlt: `The same plate after re-encoding at quality ${s.quality} — visually near-identical`
+				};
+			case 'model': {
+				const m = s.display.model;
+				const codec = m?.codec === 'meshopt' ? 'Meshopt' : 'Draco';
+				return {
+					creditPrefix: 'Model by',
+					toolName: 'Compress GLB',
+					lede: `this ${m ? Math.round(m.triangles / 100) / 10 + 'k-triangle ' : ''}photoscanned camera went through the`,
+					body: `tool — glTF Transform with the ${codec} geometry codec compiled to WebAssembly, plus the Max texture size cap at ${m?.textureMaxDimension} px, the "usual culprit" fix the guide itself teaches — and dropped from ${orig} to ${comp}. Both sides of the slider are the same fixed-camera render of the actual files: every triangle survives${m ? `, all ${m.texturesTotal} textures re-encoded` : ''}, only the bytes leave. Drag away — any softness you can find is the texture cap at work, not the geometry.`,
+					beforeAlt: `Render of the original 3D camera model at a fixed camera angle`,
+					afterAlt: `Render of the same model after Draco compression and the texture cap — visually near-identical`
+				};
+			}
+			case 'data': {
+				const rows = s.display.sheet?.rows.length ?? 0;
+				return {
+					creditPrefix: '',
+					toolName: 'CSV to XLSX',
+					lede: `the ${rows}-row CSV on the left went through the`,
+					body: `tool — SheetJS, the library behind most of the JavaScript spreadsheet world — and came out as a real .xlsx workbook. The table on the right is read straight back from the downloaded file: numbers became real numeric cells, date-looking strings deliberately stayed text, and none of it ever left the browser.`,
+					beforeAlt: '',
+					afterAlt: ''
+				};
+			}
 		}
 	}
 	const copy = $derived(stats && buildCopy(kind, stats));
@@ -283,7 +384,7 @@
 	const clipPosterSrc = $derived(stats?.display.clip && assetUrl(stats.display.clip.poster));
 </script>
 
-{#if stats && copy && (kind === 'archive' || (beforeSrc && afterSrc))}
+{#if stats && copy && hasDisplay}
 	<div>
 		{#if hero}
 			<p class="microlabel text-muted">Before / after</p>
@@ -385,13 +486,102 @@
 					</div>
 				</div>
 			{/if}
+		{:else if kind === 'ocr'}
+			<!-- The scan is the anchor; the RECOGNIZED TEXT is the demo. -->
+			{#if stats.display.text?.after}
+				<div class={hero ? 'mt-6' : ''} data-demo-ocr>
+					<img
+						src={beforeSrc}
+						alt={copy.beforeAlt}
+						width={stats.display.width}
+						height={stats.display.height}
+						loading="lazy"
+						decoding="async"
+						class="block w-full rounded-xl"
+					/>
+					<div class="mt-3 rounded-xl bg-card p-4">
+						<p class="text-[11px] font-medium tracking-label text-muted uppercase">
+							Extracted text — verbatim tool output
+						</p>
+						<!-- Ligatures off: the panel is verbatim tool output — show the
+						     actual characters. -->
+						<pre
+							class="mt-3 max-h-72 overflow-y-auto font-mono text-[12.5px] leading-relaxed whitespace-pre-wrap text-ink"
+							style="font-variant-ligatures: none">{stats.display.text.after}</pre>
+					</div>
+				</div>
+			{/if}
+		{:else if kind === 'subtitle'}
+			<!-- Both panels hold the complete actual files, inlined verbatim from
+			     the manifest — subtitle files are small enough to ship as text. -->
+			{#if stats.display.text?.before && stats.display.text?.after}
+				<div
+					class="{hero ? 'mt-6 ' : ''}grid grid-cols-2 gap-3 max-sm:grid-cols-1"
+					data-demo-subtitle
+				>
+					{#each [{ label: beforeLabel, body: stats.display.text.before }, { label: afterLabel, body: stats.display.text.after }] as panel (panel.label)}
+						<div class="rounded-xl bg-card p-4">
+							<p class="text-[11px] font-medium tracking-label text-muted uppercase">
+								{panel.label}
+							</p>
+							<!-- Ligatures off: Geist Mono would render the SRT arrow as one
+							     glyph — these panels claim byte-for-byte, so show the bytes. -->
+							<pre
+								class="mt-3 overflow-x-auto font-mono text-[12.5px] leading-relaxed text-ink"
+								style="font-variant-ligatures: none">{panel.body}</pre>
+						</div>
+					{/each}
+				</div>
+			{/if}
+		{:else if kind === 'data'}
+			<!-- Left: the CSV verbatim. Right: rows read back from the DOWNLOADED
+			     xlsx by the generator — a spreadsheet, rendered as one. -->
+			{#if stats.display.text?.before && stats.display.sheet}
+				<div class="{hero ? 'mt-6 ' : ''}grid grid-cols-2 gap-3 max-sm:grid-cols-1" data-demo-data>
+					<div class="rounded-xl bg-card p-4">
+						<p class="text-[11px] font-medium tracking-label text-muted uppercase">{beforeLabel}</p>
+						<pre
+							class="mt-3 overflow-x-auto font-mono text-[12.5px] leading-relaxed text-ink"
+							style="font-variant-ligatures: none">{stats.display.text.before}</pre>
+					</div>
+					<div class="rounded-xl bg-card p-4">
+						<p class="text-[11px] font-medium tracking-label text-muted uppercase">{afterLabel}</p>
+						<div class="mt-3 overflow-x-auto">
+							<table class="w-full text-left text-[12.5px] leading-relaxed tabular-nums">
+								<thead>
+									<tr class="microlabel border-b border-line text-faint">
+										{#each stats.display.sheet.rows[0] as cell, i (i)}
+											<th class="px-2 py-1.5 font-medium">{cell}</th>
+										{/each}
+									</tr>
+								</thead>
+								<tbody class="divide-y divide-line">
+									{#each stats.display.sheet.rows.slice(1) as row, i (i)}
+										<tr>
+											{#each row as cell, j (j)}
+												<td class="px-2 py-1.5">{cell}</td>
+											{/each}
+										</tr>
+									{/each}
+								</tbody>
+							</table>
+						</div>
+					</div>
+				</div>
+			{/if}
 		{:else}
 			<!-- pdf: the clean single-column window of a letter page is ~1224 px, not
 			     1440 — cap the slider at width/2 CSS px so the crop still displays
-			     1:1 on 2x screens instead of being upscaled to the container. -->
+			     1:1 on 2x screens instead of being upscaled to the container.
+			     ebook: the plate is only ~620 px wide — cap at its own width so the
+			     slider never stretches it past 1:1 CSS pixels. -->
 			<div
 				class={hero ? 'mt-6' : ''}
-				style={kind === 'pdf' ? `max-width:${stats.display.width / 2}px` : undefined}
+				style={kind === 'pdf'
+					? `max-width:${stats.display.width / 2}px`
+					: kind === 'ebook'
+						? `max-width:${stats.display.width}px`
+						: undefined}
 			>
 				<ImageSlider
 					beforeSrc={beforeSrc ?? ''}

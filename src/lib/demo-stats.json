@@ -412,5 +412,198 @@
 			"url": "https://unsplash.com/photos/island-surrounded-by-water-and-mountains-at-daytime-pOWBHdgy1Lo",
 			"source": "Unsplash"
 		}
+	},
+	"ocr": {
+		"tool": "/image-to-text",
+		"engine": "Tesseract",
+		"outputFormat": "txt",
+		"formatChanged": true,
+		"input": {
+			"name": "wikimedia-sherlock-1892-scandal-p3.jpg",
+			"width": 1920,
+			"height": 3049,
+			"megapixels": 6
+		},
+		"originalBytes": 907460,
+		"compressedBytes": 1468,
+		"savingsPercent": 100,
+		"display": {
+			"before": "ocr-before.webp",
+			"after": "",
+			"width": 1200,
+			"height": 1906,
+			"shows": "render",
+			"text": {
+				"after": "Hoventure F\nA SCANDAL IN BOHEMIA\nI\n\nRztOvKeN GSO Sherlock Holmes she is always the woman. I\nAe have seldom heard him mention her under any\n\nW ati other name. In his eyes she eclipses and predom-\nONS inates the whole of her sex. It was not that he\nfelt any emotion akin to love for Irene Adler. All emotions,\nand that one particularly, were abhorrent to his cold, precise,\nbut admirably balanced mind. He was, I take it, the most\nperfect reasoning and observing machine that the world has\nseen ; but, as a lover, he would have placed himself in a false\nposition. He never spoke of the softer passions, save with\na gibe and a sneer. They were admirable things for the\nobserver—excellent for drawing the veil from men’s motives\nand actions. But for the trained reasoner to admit such in-\ntrusions into his own delicate and finely adjusted tempera-\nment was to introduce a distracting factor which might throw\na doubt upon all his mental results, Grit in a sensitive instru-\nment, or a crack in one of his own high-power lenses, would\nnot be more disturbing than a strong emotion in a nature\nsuch as his. And yet there was but one woman to him, and\nthat woman was the late Irene Adler, of dubious and question-\nable memory.\n\n: I had seen little of Holmes lately. My marriage had drifted\nus away from each other. My own complete happiness, and\nthe home-centred interests which rise up around the man who\nfirst finds himself master of his own establishment, were suffi-"
+			},
+			"ocr": {
+				"words": 266,
+				"lang": "eng"
+			}
+		},
+		"credit": {
+			"author": "Arthur Conan Doyle",
+			"url": "https://commons.wikimedia.org/wiki/File:Doyle_-_Adventures_of_Sherlock_Holmes,_1892.djvu",
+			"source": "Wikimedia Commons",
+			"license": "public domain"
+		}
+	},
+	"subtitle": {
+		"tool": "/srt-to-vtt",
+		"engine": "pure JavaScript",
+		"outputFormat": "vtt",
+		"formatChanged": true,
+		"input": {
+			"name": "demo-moon-voyage.srt"
+		},
+		"originalBytes": 316,
+		"compressedBytes": 316,
+		"savingsPercent": 0,
+		"display": {
+			"before": "",
+			"after": "",
+			"width": 0,
+			"height": 0,
+			"shows": "file",
+			"text": {
+				"before": "1\n00:00:12,000 --> 00:00:15,500\nThe astronomers gather for the great congress.\n\n2\n00:00:42,250 --> 00:00:46,000\nThe capsule is loaded into the giant cannon.\n\n3\n00:01:03,800 --> 00:01:07,400\n<i>Fire!</i> The voyage to the Moon begins.\n\n4\n00:01:28,500 --> 00:01:32,000\nThe Man in the Moon takes the rocket in the eye.\n",
+				"after": "WEBVTT\n\n00:00:12.000 --> 00:00:15.500\nThe astronomers gather for the great congress.\n\n00:00:42.250 --> 00:00:46.000\nThe capsule is loaded into the giant cannon.\n\n00:01:03.800 --> 00:01:07.400\n<i>Fire!</i> The voyage to the Moon begins.\n\n00:01:28.500 --> 00:01:32.000\nThe Man in the Moon takes the rocket in the eye.\n"
+			},
+			"subtitle": {
+				"cues": 4,
+				"from": "srt",
+				"to": "vtt"
+			}
+		}
+	},
+	"ebook": {
+		"tool": "/compress-epub",
+		"engine": "MozJPEG + OxiPNG",
+		"quality": 80,
+		"outputFormat": "epub",
+		"input": {
+			"name": "gutenberg-14838-peter-rabbit.epub"
+		},
+		"originalBytes": 1510420,
+		"compressedBytes": 1158859,
+		"savingsPercent": 23,
+		"display": {
+			"before": "ebook-before.webp",
+			"after": "ebook-after.webp",
+			"width": 623,
+			"height": 877,
+			"shows": "frame",
+			"frame": {
+				"index": 0,
+				"ofFrames": 29
+			},
+			"entryName": "OEBPS/3447144818434117696_cover.jpg"
+		},
+		"credit": {
+			"author": "Beatrix Potter",
+			"url": "https://www.gutenberg.org/ebooks/14838",
+			"source": "Project Gutenberg",
+			"license": "public domain"
+		}
+	},
+	"model": {
+		"tool": "/compress-glb",
+		"engine": "glTF Transform + Draco",
+		"outputFormat": "glb",
+		"input": {
+			"name": "polyhaven-camera-01-2k.glb"
+		},
+		"originalBytes": 6184160,
+		"compressedBytes": 1349152,
+		"savingsPercent": 78,
+		"display": {
+			"before": "model-before.webp",
+			"after": "model-after.webp",
+			"width": 1280,
+			"height": 960,
+			"shows": "render",
+			"model": {
+				"triangles": 26987,
+				"vertices": 21347,
+				"texturesChanged": 9,
+				"texturesTotal": 9,
+				"codec": "draco",
+				"textureMaxDimension": 1024
+			}
+		},
+		"credit": {
+			"author": "Rajil Jose Macatangay",
+			"url": "https://polyhaven.com/a/Camera_01",
+			"source": "Poly Haven",
+			"license": "CC0"
+		}
+	},
+	"data": {
+		"tool": "/csv-to-xlsx",
+		"engine": "SheetJS",
+		"outputFormat": "xlsx",
+		"formatChanged": true,
+		"input": {
+			"name": "demo-peaks.csv"
+		},
+		"originalBytes": 221,
+		"compressedBytes": 9048,
+		"savingsPercent": 0,
+		"display": {
+			"before": "",
+			"after": "",
+			"width": 0,
+			"height": 0,
+			"shows": "file",
+			"text": {
+				"before": "Peak,Country,Elevation_m,First_ascent\nTriglav,Slovenia,2864,1778\nMont Blanc,France,4808,1786\nMatterhorn,Switzerland,4478,1865\nGrossglockner,Austria,3798,1800\nMonte Rosa,Switzerland,4634,1855\nSäntis,Switzerland,2502,1846\n"
+			},
+			"sheet": {
+				"rows": [
+					[
+						"Peak",
+						"Country",
+						"Elevation_m",
+						"First_ascent"
+					],
+					[
+						"Triglav",
+						"Slovenia",
+						"2864",
+						"1778"
+					],
+					[
+						"Mont Blanc",
+						"France",
+						"4808",
+						"1786"
+					],
+					[
+						"Matterhorn",
+						"Switzerland",
+						"4478",
+						"1865"
+					],
+					[
+						"Grossglockner",
+						"Austria",
+						"3798",
+						"1800"
+					],
+					[
+						"Monte Rosa",
+						"Switzerland",
+						"4634",
+						"1855"
+					],
+					[
+						"Säntis",
+						"Switzerland",
+						"2502",
+						"1846"
+					]
+				]
+			}
+		}
 	}
 }

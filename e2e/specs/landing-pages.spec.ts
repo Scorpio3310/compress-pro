@@ -259,6 +259,20 @@ test('LP-16: the before/after demo renders where honest and nowhere else', async
 	await expect(page.locator('[data-demo-archive]')).toBeVisible();
 	await gotoPath(page, '/remove-exif');
 	await expect(page.locator('[data-demo-exif]')).toBeVisible();
+	// The five hub families added 2026-07: ocr anchors on the scan plus a
+	// verbatim text panel, subtitle/data render manifest text panels (no
+	// assets at all), ebook and model are real slider pairs.
+	await gotoPath(page, '/image-to-text');
+	await expect(page.locator('[data-demo-ocr]')).toBeVisible();
+	await expect(page.locator('[aria-label="Image comparison slider"]')).toHaveCount(0);
+	await gotoPath(page, '/srt-to-vtt');
+	await expect(page.locator('[data-demo-subtitle]')).toBeVisible();
+	await gotoPath(page, '/compress-epub');
+	await expect(page.locator('[aria-label="Image comparison slider"]')).toBeVisible();
+	await gotoPath(page, '/compress-glb');
+	await expect(page.locator('[aria-label="Image comparison slider"]')).toBeVisible();
+	await gotoPath(page, '/csv-to-xlsx');
+	await expect(page.locator('[data-demo-data]')).toBeVisible();
 	// /merge-pdf and /compress-mov run the same engine families but have no
 	// demo of their own.
 	await gotoPath(page, '/merge-pdf');

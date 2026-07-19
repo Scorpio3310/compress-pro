@@ -54,16 +54,35 @@ const SPEC: Record<
 	font: { assetExt: 'woff2', budget: 300_000, mcuAligned: false },
 	// No display assets at all — a folder manifest + two archive sizes.
 	archive: { assetExt: 'jpg', budget: 0, mcuAligned: false },
-	exif: { assetExt: 'jpg', budget: 240_000, mcuAligned: false }
+	exif: { assetExt: 'jpg', budget: 240_000, mcuAligned: false },
+	// Only the scan ships — the "after" side is display.text (the .txt).
+	ocr: { assetExt: 'webp', budget: 350_000, mcuAligned: false },
+	// No display assets — both panels inline the actual files from display.text.
+	subtitle: { assetExt: 'jpg', budget: 0, mcuAligned: false },
+	// Full-frame view of the same in-book illustration, q85 WebP both sides.
+	ebook: { assetExt: 'webp', budget: 240_000, mcuAligned: false },
+	// Fixed-camera three.js renders of both actual files, q85 WebP.
+	model: { assetExt: 'webp', budget: 240_000, mcuAligned: false },
+	// No display assets — CSV panel + sheet table both come from the manifest.
+	data: { assetExt: 'jpg', budget: 0, mcuAligned: false }
 };
 const KINDS = Object.keys(SPEC) as DemoKind[];
+
+// The output is legitimately bigger (WEBVTT header, XLSX container) — these
+// demos tell structure stories; the size tile shows both real numbers.
+const GROWTH_OK = new Set<DemoKind>(['subtitle', 'data']);
+// Descriptor-less inputs: containers/models the sharp default can't describe.
+const DESCRIPTORLESS = new Set<DemoKind>(['font', 'subtitle', 'data', 'ebook', 'model']);
 
 // Source fixtures live in the gitignored tests/fixtures/real (see .gitignore and
 // ci.yml) — large local samples that `pnpm demo-assets` consumes to write the
 // committed assets + manifest. Present locally, absent in CI, so the byte-for-byte
 // source check self-skips there, like woff2-patch/real-fonts do for their fixtures.
 const SOURCE_NAMES = KINDS.flatMap((kind) => {
+	// Mid-regeneration a kind may not be in the manifest yet — the
+	// carries-every-kind test is what fails then, not this module's load.
 	const s = ALL[kind];
+	if (!s) return [];
 	return kind === 'archive' ? s.display.archive!.entries.map((e) => e.name) : [s.input.name];
 });
 const HAVE_FIXTURES = SOURCE_NAMES.every((n) => existsSync(join(FIXTURES, n)));
@@ -80,7 +99,7 @@ describe('demo stats manifest', () => {
 	it.each(KINDS)('%s: claims a real reduction with the exact app rounding', (kind) => {
 		const s = ALL[kind];
 		expect(s.compressedBytes).toBeGreaterThan(0);
-		expect(s.compressedBytes).toBeLessThan(s.originalBytes);
+		if (!GROWTH_OK.has(kind)) expect(s.compressedBytes).toBeLessThan(s.originalBytes);
 		// Same formula as compress.ts savingsPercent — the demo number must
 		// equal what the app UI itself would report for this run.
 		expect(s.savingsPercent).toBe(
@@ -114,16 +133,25 @@ describe('demo stats manifest', () => {
 		} else if (s.input.durationSec !== undefined) {
 			expect(s.input.durationSec).toBeGreaterThan(0);
 		} else {
-			expect(kind, 'only font may omit every input descriptor').toBe('font');
+			expect(DESCRIPTORLESS.has(kind), `${kind} may not omit every input descriptor`).toBe(true);
 		}
 	});
 
 	it.each(KINDS)('%s: ships both display assets within budget and format', (kind) => {
 		const s = ALL[kind];
-		if (kind === 'archive') {
-			// Numbers-only demo — deliberately no display files.
+		if (kind === 'archive' || kind === 'subtitle' || kind === 'data') {
+			// Numbers/text-only demos — deliberately no display files.
 			expect(s.display.before).toBe('');
 			expect(s.display.after).toBe('');
+			return;
+		}
+		if (kind === 'ocr') {
+			// Single asset: the scan; the after side is display.text (the .txt).
+			expect(s.display.after).toBe('');
+			expect(s.display.before.endsWith('.webp'), `${s.display.before} extension`).toBe(true);
+			const bytes = readFileSync(join(ASSETS, s.display.before));
+			expect(MAGIC.webp(bytes), `${s.display.before} magic`).toBe(true);
+			expect(bytes.length, `${s.display.before} over budget`).toBeLessThanOrEqual(SPEC.ocr.budget);
 			return;
 		}
 		if (kind === 'font') {
@@ -145,6 +173,9 @@ describe('demo stats manifest', () => {
 	});
 
 	// The kinds whose before/after assets are two rasters of the same content.
+	// ebook: the same in-book illustration; model: identical-camera renders of
+	// both actual files (quantized geometry + re-encoded textures shift pixels
+	// slightly — the 20 dB floor still catches a wrong file or camera).
 	const RASTER_PAIR_KINDS = [
 		'photo',
 		'png',
@@ -153,7 +184,9 @@ describe('demo stats manifest', () => {
 		'gif',
 		'pdf',
 		'video',
-		'exif'
+		'exif',
+		'ebook',
+		'model'
 	] as const;
 
 	it.each(RASTER_PAIR_KINDS)('%s: shipped pair shows the same content', async (kind) => {
@@ -182,8 +215,10 @@ describe('demo stats manifest', () => {
 	});
 
 	it.each(KINDS)('%s: display geometry is sane', (kind) => {
-		// Dimensionless demos: audio (players), font (specimen), archive (table).
+		// Dimensionless demos: audio (players), font (specimen), archive
+		// (table), subtitle/data (text panels straight from the manifest).
 		if (kind === 'audio' || kind === 'font' || kind === 'archive') return;
+		if (kind === 'subtitle' || kind === 'data') return;
 		const s = ALL[kind];
 		expect(s.display.width).toBeGreaterThan(0);
 		expect(s.display.height).toBeGreaterThan(0);
@@ -309,6 +344,79 @@ describe('demo stats manifest', () => {
 		expect(still.atSec).toBeLessThan(s.input.durationSec!);
 	});
 
+	it('ocr: the panel text, word claim and language hold together', () => {
+		const s = ALL.ocr;
+		expect(s.outputFormat).toBe('txt');
+		expect(s.formatChanged).toBe(true);
+		const o = s.display.ocr!;
+		expect(o, 'ocr needs its word/language payload').toBeDefined();
+		expect(o.words).toBeGreaterThan(50);
+		expect(o.lang).toBe('eng');
+		const text = s.display.text?.after ?? '';
+		expect(text.length, 'the panel needs the recognized text').toBeGreaterThan(100);
+		// The tile's claim and the shipped panel must describe the same run.
+		const txtWords = text.trim().split(/\s+/).length;
+		expect(Math.abs(o.words - txtWords)).toBeLessThanOrEqual(Math.ceil(o.words * 0.1));
+	});
+
+	it('subtitle: both panels ARE the measured files, byte for byte', () => {
+		const s = ALL.subtitle;
+		expect(s.outputFormat).toBe('vtt');
+		expect(s.formatChanged).toBe(true);
+		const sub = s.display.subtitle!;
+		expect(sub, 'subtitle needs its cue payload').toBeDefined();
+		expect(sub.cues).toBeGreaterThanOrEqual(3);
+		expect(sub.from).toBe('srt');
+		expect(sub.to).toBe('vtt');
+		const t = s.display.text!;
+		expect(t?.before && t?.after, 'subtitle needs both text panels').toBeTruthy();
+		expect(Buffer.byteLength(t.before!, 'utf8')).toBe(s.originalBytes);
+		expect(Buffer.byteLength(t.after!, 'utf8')).toBe(s.compressedBytes);
+		expect(t.after!.startsWith('WEBVTT'), 'after panel must be WebVTT').toBe(true);
+		expect(t.before!, 'before panel must be SRT (comma millis)').toMatch(/\d\d,\d\d\d --> /);
+	});
+
+	it('ebook: the illustration story holds and the savings stay honest', () => {
+		const s = ALL.ebook;
+		expect(s.outputFormat).toBe('epub');
+		expect(s.display.entryName, 'ebook needs its entry provenance').toBeTruthy();
+		expect(s.display.frame, 'ebook needs its image ordinal').toBeDefined();
+		// The demo book is an already-optimized PG production and lands under
+		// the FAQ's 30–60% "image-heavy" range — the caption says so explicitly
+		// (trust story, not cherry-picking). Floor pinned just under the run.
+		expect(s.savingsPercent).toBeGreaterThanOrEqual(20);
+		expect(s.credit?.license).toBe('public domain');
+	});
+
+	it('model: geometry stats, codec and the render pair hold together', () => {
+		const s = ALL.model;
+		expect(s.outputFormat).toBe('glb');
+		const m = s.display.model!;
+		expect(m, 'model needs its stats payload').toBeDefined();
+		expect(m.codec).toBe('draco');
+		// The caption narrates the Max-texture-size pin — pin it here so copy
+		// and run can only change together (audio bitrate precedent).
+		expect(m.textureMaxDimension).toBe(1024);
+		expect(m.triangles).toBeGreaterThan(1_000);
+		expect(m.vertices).toBeGreaterThan(1_000);
+		expect(m.texturesTotal).toBeGreaterThanOrEqual(1);
+		expect(m.texturesChanged).toBeGreaterThanOrEqual(1);
+		expect(s.savingsPercent, 'the model story is the byte drop').toBeGreaterThanOrEqual(70);
+		expect(s.credit?.license).toBe('CC0');
+	});
+
+	it('data: the CSV panel IS the measured input and the sheet reads back', () => {
+		const s = ALL.data;
+		expect(s.outputFormat).toBe('xlsx');
+		expect(s.formatChanged).toBe(true);
+		expect(Buffer.byteLength(s.display.text!.before!, 'utf8')).toBe(s.originalBytes);
+		const rows = s.display.sheet!.rows;
+		expect(rows.length).toBeGreaterThanOrEqual(3);
+		// Every row shares the header's column count — a ragged table would
+		// mean the read-back and the CSV describe different data.
+		for (const row of rows) expect(row.length).toBe(rows[0].length);
+	});
+
 	it.each(KINDS)('%s: tool matches the seo entry carrying this kind', (kind) => {
 		const carriers = [...FORMATS, ...TOOLS].filter((e) => e.demo === kind).map((e) => e.path);
 		expect(carriers, `${kind} needs at least one page`).not.toHaveLength(0);
@@ -339,7 +447,9 @@ describe('demo stats manifest', () => {
 			Magnific: 'magnific.com',
 			'HEIC Digital': 'heic.digital',
 			Pixabay: 'pixabay.com',
-			'Google Fonts': 'fonts.google.com'
+			'Google Fonts': 'fonts.google.com',
+			'Project Gutenberg': 'gutenberg.org',
+			'Poly Haven': 'polyhaven.com'
 		}[credit.source];
 		expect(credit.url.startsWith('https://')).toBe(true);
 		expect(credit.url).toContain(`${host}/`);

@@ -49,7 +49,12 @@ export type DemoKind =
 	| 'audio'
 	| 'font'
 	| 'archive'
-	| 'exif';
+	| 'exif'
+	| 'ocr'
+	| 'subtitle'
+	| 'ebook'
+	| 'model'
+	| 'data';
 
 export interface DemoCredit {
 	author: string;
@@ -62,7 +67,9 @@ export interface DemoCredit {
 		| 'Magnific'
 		| 'HEIC Digital'
 		| 'Pixabay'
-		| 'Google Fonts';
+		| 'Google Fonts'
+		| 'Project Gutenberg'
+		| 'Poly Haven';
 	/** Present for public-domain works — rendered as "— {license}." instead of
 	 *  "on {source}." (there is no author to credit, only a work to cite). */
 	license?: string;
@@ -105,12 +112,17 @@ export interface DemoStats {
 		after: string;
 		width: number;
 		height: number;
-		shows: 'crop' | 'frame' | 'file';
+		/** 'render' = the full frame is a derived raster of the file (model
+		 *  stills, ocr scan) — nothing was cropped and the asset is not the
+		 *  measured file itself. */
+		shows: 'crop' | 'frame' | 'file' | 'render';
 		crop?: { left: number; top: number; width: number; height: number };
 		frame?: { index: number; ofFrames: number };
 		/** pdf: the raster frame the crop was cut from — one page of the
-		 *  document rendered by the app's own pdf.js at this resolution. */
-		render?: { page: number; width: number; height: number; dpi: number };
+		 *  document rendered by the app's own pdf.js at this resolution.
+		 *  ebook: the decoded in-container illustration the crop was cut from
+		 *  (page = its ordinal among the images; dpi has no meaning there). */
+		render?: { page: number; width: number; height: number; dpi?: number };
 		/** gif: a live animated preview from a SECOND real tool run (quality +
 		 *  resize) — its own honest numbers, small enough to ship. */
 		anim?: { file: string; bytes: number; maxDimension: number };
@@ -136,6 +148,32 @@ export interface DemoStats {
 		/** exif: the curated metadata the tool found and removed — extracted by
 		 *  the app's own parser (src/lib/codecs/exif-parse). */
 		metadata?: { camera: string | null; taken: string | null; gps: string | null; fields: number };
+		/** Text kinds carry the actual file text verbatim in the manifest —
+		 *  subtitle ships both sides, ocr only the recognized output, data only
+		 *  the CSV input (the XLSX side renders from `sheet`). */
+		text?: { before?: string; after?: string };
+		/** ocr: recognized-word count + language of the run — the .txt size the
+		 *  tiles cite is compressedBytes (the downloaded file). */
+		ocr?: { words: number; lang: string };
+		/** subtitle: cue count and the from→to formats of the run. */
+		subtitle?: { cues: number; from: string; to: string };
+		/** data: the rows read back from the DOWNLOADED xlsx (SheetJS in the
+		 *  generator) — row 0 is the header row. */
+		sheet?: { rows: (string | number)[][] };
+		/** model: geometry/texture stats of the run + the pins the caption
+		 *  narrates (codec, and the Max-texture-size pill the run set — the
+		 *  guide's own "usual culprit" fix; audio-bitrate precedent). */
+		model?: {
+			triangles: number;
+			vertices: number;
+			texturesChanged: number;
+			texturesTotal: number;
+			codec: 'draco' | 'meshopt';
+			textureMaxDimension: number | null;
+		};
+		/** ebook/model: which archive entry (ebook) or rendered view (model) the
+		 *  display pair was derived from. */
+		entryName?: string;
 	};
 	credit?: DemoCredit;
 }

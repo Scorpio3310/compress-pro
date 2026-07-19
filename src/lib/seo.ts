@@ -269,6 +269,7 @@ export const FORMATS: (SeoLite & { format: FileFormat })[] = [
 	{
 		format: 'ocr',
 		path: '/image-to-text',
+		demo: 'ocr',
 		label: 'OCR',
 		h1: 'Extract text from images.',
 		feature: 'Extract text from images (OCR)'
@@ -276,6 +277,7 @@ export const FORMATS: (SeoLite & { format: FileFormat })[] = [
 	{
 		format: 'subtitle',
 		path: '/srt-to-vtt',
+		demo: 'subtitle',
 		label: 'Subs',
 		h1: 'Convert SRT to VTT.',
 		feature: 'Convert subtitles between SRT, VTT and ASS'
@@ -283,6 +285,7 @@ export const FORMATS: (SeoLite & { format: FileFormat })[] = [
 	{
 		format: 'ebook',
 		path: '/compress-epub',
+		demo: 'ebook',
 		label: 'Books',
 		h1: 'Compress EPUB e-books.',
 		feature: 'Compress the images inside EPUB e-books'
@@ -290,6 +293,7 @@ export const FORMATS: (SeoLite & { format: FileFormat })[] = [
 	{
 		format: 'model',
 		path: '/compress-glb',
+		demo: 'model',
 		label: '3D',
 		h1: 'Compress GLB 3D models.',
 		feature: 'Compress GLB 3D models (Draco, Meshopt, textures)'
@@ -297,6 +301,7 @@ export const FORMATS: (SeoLite & { format: FileFormat })[] = [
 	{
 		format: 'data',
 		path: '/csv-to-xlsx',
+		demo: 'data',
 		label: 'Data',
 		h1: 'Convert CSV to XLSX.',
 		feature: 'Convert spreadsheets and data files (CSV, XLSX, JSON, YAML)'

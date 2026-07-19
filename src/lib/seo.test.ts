@@ -226,7 +226,12 @@ describe('engine copy', () => {
 			'/compress-audio': 'audio',
 			'/font-converter': 'font',
 			'/zip-files': 'archive',
-			'/remove-exif': 'exif'
+			'/remove-exif': 'exif',
+			'/image-to-text': 'ocr',
+			'/srt-to-vtt': 'subtitle',
+			'/compress-epub': 'ebook',
+			'/compress-glb': 'model',
+			'/csv-to-xlsx': 'data'
 		});
 	});
 });
