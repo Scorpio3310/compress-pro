@@ -1133,5 +1133,107 @@ export const BODIES: Record<string, SeoBody> = {
 			},
 			{ q: 'Is it private?', a: PRIVACY_A_ARCHIVE }
 		]
+	},
+	'epub-to-txt': {
+		intro:
+			'Extract the full text of an EPUB as a plain .txt file entirely in your browser — **chapters in the book’s reading order, paragraphs and headings kept, all markup dropped**. Nothing is uploaded; the book never leaves your device.',
+		guide: [
+			{
+				heading: 'How the text comes out',
+				paragraphs: [
+					'An EPUB is a ZIP of XHTML chapters plus a manifest that records their reading order (the spine). This tool opens the archive locally, follows container.xml to the book’s package file, and walks the spine so chapters land in the order you would read them — not the order they happen to sit in the ZIP. Each chapter is parsed with the browser’s own HTML engine, so entities, footnote markup and the odd unclosed tag all resolve cleanly.',
+					'Paragraphs, headings and list items become plain-text paragraphs separated by blank lines; scripts, styles and other invisible machinery are dropped. Tables and footnotes degrade gently — their text survives as plain lines. The result is one .txt file: ideal for full-text search, text-to-speech, word counts or feeding a book to other text tools.'
+				]
+			},
+			{
+				heading: 'What it won’t read',
+				paragraphs: [
+					'DRM-protected books are refused with a clear message — their chapters are encrypted and no browser tool can decrypt them. Image-only books (scans wrapped in an EPUB) are refused too, since there is no text layer to extract; for scans, [OCR](/image-to-text) is the right tool. To make the book itself smaller instead of extracting from it, use [Compress EPUB](/compress-epub).'
+				]
+			}
+		],
+		faq: [
+			{
+				q: 'Does the text come out in the right order?',
+				a: 'Yes — chapters follow the EPUB spine, the same reading order your e-reader uses. If a book’s manifest is malformed, the tool falls back to the chapters in archive order rather than failing.'
+			},
+			{
+				q: 'What happens to images, tables and footnotes?',
+				a: 'Images are dropped (this is a text extractor). Tables and footnotes keep their text as plain lines — readable, if less pretty than the original layout.'
+			},
+			{
+				q: 'Can it read DRM-protected books?',
+				a: 'No. DRM encrypts the chapter files themselves, and the tool tells you so honestly instead of producing garbage. Books you own DRM-free extract completely.'
+			},
+			{ q: 'Is it private?', a: PRIVACY_A_ARCHIVE }
+		]
+	},
+	'cbz-to-pdf': {
+		intro:
+			'Convert CBZ comics to PDF entirely in your browser — **JPEG pages are embedded byte-for-byte, PNG pages pixel-exact, one PDF page per image in reading order**. Nothing is uploaded; the comic never leaves your device.',
+		guide: [
+			{
+				heading: 'Lossless by construction',
+				paragraphs: [
+					'PDF can carry JPEG and PNG-style image data natively, so this converter embeds each page without touching its pixels — JPEG bytes ride across verbatim, PNG pixel data is re-wrapped into the PDF’s own lossless encoding. The pixels you get in the PDF are exactly the pixels that were in the archive. Each PDF page takes the dimensions of its image, so nothing is cropped, padded or rescaled. WebP and GIF pages are the one exception: PDF has no native encoding for them, so they take a single re-encode to JPEG at the quality you set.',
+					'Pages are ordered filename-naturally (page2 before page10), matching how every comic reader presents the archive, and non-page entries like ComicInfo.xml are skipped automatically. The result opens in any PDF viewer, prints cleanly, and works on devices with no comic reader installed.'
+				]
+			},
+			{
+				heading: 'Size expectations and limits',
+				paragraphs: [
+					'Because the image bytes ride across unchanged, the PDF ends up roughly the size of the CBZ (plus a little PDF framing) — this is a format conversion, not a compression pass. To shrink the comic first, run it through [Compress CBZ](/compress-cbz) and convert the result. Very large collections have a hard 1 GB ceiling: a PDF is built in browser memory, and past that point the tab itself runs out — split the archive and convert the parts.'
+				]
+			}
+		],
+		faq: [
+			{
+				q: 'Are the pages recompressed?',
+				a: 'No — JPEG bytes are embedded verbatim and PNG pixels are carried over exactly into the PDF’s lossless encoding. Only WebP and GIF pages are re-encoded (to JPEG), because PDF cannot carry them natively.'
+			},
+			{
+				q: 'Is the page order preserved?',
+				a: 'Yes — pages sort filename-naturally, the same order comic readers use, so page2 comes before page10 even without zero-padding.'
+			},
+			{
+				q: 'Why is the PDF about as big as the CBZ — or a bit bigger?',
+				a: 'Because nothing is recompressed — the same pixels plus PDF structure around them. PNG-heavy comics can even grow slightly: the PDF’s lossless encoding is not always as tight as a well-optimized PNG. Compress the CBZ first if you want a smaller PDF.'
+			},
+			{ q: 'Is it private?', a: PRIVACY_A_ARCHIVE }
+		]
+	},
+	'cbr-to-pdf': {
+		intro:
+			'Convert CBR comics to PDF entirely in your browser — **the RAR is unpacked locally, then JPEG and PNG pages embed into the PDF byte-for-byte, one page per image**. Nothing is uploaded; the comic never leaves your device.',
+		guide: [
+			{
+				heading: 'From RAR straight to PDF',
+				paragraphs: [
+					'CBR is a RAR archive, a proprietary format many devices cannot open. This converter reads the RAR with an in-browser extraction engine, sorts the pages filename-naturally (page2 before page10, the order comic readers use), and builds a PDF where each page carries its image untouched — JPEG bytes embed verbatim, PNG pixels re-wrap losslessly, nothing is re-encoded. WebP or GIF pages take one re-encode to JPEG at your chosen quality, since PDF has no native encoding for them.',
+					'The result reads anywhere a PDF reads: phones, tablets, e-readers, print. To stay in the comic-archive world instead, [CBR to CBZ](/cbr-to-cbz) converts the container losslessly.'
+				]
+			},
+			{
+				heading: 'Limits worth knowing',
+				paragraphs: [
+					'Password-protected CBRs are not supported — extract them first with [Extract RAR](/extract-rar), then create a PDF from the images. The PDF is assembled in browser memory, so comics whose pages sum past 1 GB are refused with a clear message rather than crashing the tab; split those and convert the parts. Expect the PDF to be roughly the archive’s size — pages are embedded, not recompressed.'
+				]
+			}
+		],
+		faq: [
+			{
+				q: 'Does the image quality change?',
+				a: 'Not for JPEG and PNG pages — JPEG bytes embed verbatim and PNG pixels carry over exactly. Only WebP and GIF pages are re-encoded to JPEG, at the quality you set.'
+			},
+			{
+				q: 'Do I need RAR software installed?',
+				a: 'No — the RAR is unpacked by an extraction engine running inside the page, so it works on any device with a browser, including ones that cannot open CBR at all.'
+			},
+			{
+				q: 'What about password-protected CBRs?',
+				a: 'They are refused with an honest message. Extract the archive with Extract RAR (which supports passwords) and then convert the images.'
+			},
+			{ q: 'Is it private?', a: PRIVACY_A_ARCHIVE }
+		]
 	}
 };

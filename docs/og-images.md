@@ -154,6 +154,9 @@ each entry in `src/lib/seo.ts` — pages without one fall back to `/og.jpg`.
 | `/compress-epub`           | Compress EPUB.      | Lighter e-books, text untouched. Local.                        |
 | `/compress-cbz`            | Compress CBZ.       | Comics slimmed page by page. On-device.                        |
 | `/cbr-to-cbz`              | CBR → CBZ           | RAR comics repacked. Pages bit-exact.                          |
+| `/epub-to-txt`             | EPUB → TXT          | A whole book as plain text. On-device.                         |
+| `/cbz-to-pdf`              | CBZ → PDF           | Comic pages embedded lossless. Local.                          |
+| `/cbr-to-pdf`              | CBR → PDF           | RAR comics as PDFs. Pages untouched.                           |
 | `/compress-glb`            | Compress GLB.       | 3D models crushed with Draco. On-device.                       |
 | `/csv-to-xlsx`             | CSV → XLSX          | A real Excel workbook, made on-device.                         |
 | `/xlsx-to-csv`             | XLSX → CSV          | Clean CSV out of Excel. Values, locally.                       |

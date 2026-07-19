@@ -125,7 +125,7 @@ export const DETAILS: Record<string, SeoDetail | ConverterDetail> = {
 		description:
 			'Extract all text from a PDF into a .txt file right in your browser — digital documents only, scans need OCR. No uploads, no length limits. Free.',
 		tagline: 'The words out of any digital PDF — extracted on-device.',
-		related: ['/ocr-pdf', '/pdf-to-jpg', '/compress-pdf']
+		related: ['/ocr-pdf', '/pdf-to-jpg', '/epub-to-txt', '/compress-pdf']
 	},
 	'grayscale-pdf': {
 		ogImage: '/og/grayscale-pdf.jpg',

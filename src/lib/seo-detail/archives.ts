@@ -331,7 +331,7 @@ export const DETAILS: Record<string, SeoDetail | ConverterDetail> = {
 		description:
 			'Compress EPUB e-books right in your browser — the images inside are re-encoded, text and layout stay untouched. No uploads, no accounts. Free & private.',
 		tagline: 'Lighter e-books, same text — shrunk on your own device.',
-		related: ['/compress-cbz', '/cbr-to-cbz', '/compress-image']
+		related: ['/compress-cbz', '/cbr-to-cbz', '/epub-to-txt', '/compress-image']
 	},
 	'compress-cbz': {
 		ogImage: '/og/compress-cbz.jpg',
@@ -343,7 +343,7 @@ export const DETAILS: Record<string, SeoDetail | ConverterDetail> = {
 		description:
 			'Compress CBZ comic archives right in your browser — pages re-encoded at your quality, optional downscale for e-readers. Nothing is uploaded. Free.',
 		tagline: 'Comic archives slimmed page by page — all on your device.',
-		related: ['/compress-epub', '/cbr-to-cbz', '/compress-jpg']
+		related: ['/compress-epub', '/cbr-to-cbz', '/cbz-to-pdf', '/compress-jpg']
 	},
 	'cbr-to-cbz': {
 		ogImage: '/og/cbr-to-cbz.jpg',
@@ -357,7 +357,44 @@ export const DETAILS: Record<string, SeoDetail | ConverterDetail> = {
 		description:
 			'Convert CBR comics to CBZ right in your browser — pages carried over bit-exact by default, optional recompression. Nothing uploaded. Free, no limits.',
 		tagline: 'RAR comics repacked as CBZ locally — pages bit-identical.',
-		related: ['/compress-cbz', '/extract-rar', '/compress-epub']
+		related: ['/compress-cbz', '/extract-rar', '/cbr-to-pdf', '/compress-epub']
+	},
+	'epub-to-txt': {
+		ogImage: '/og/epub-to-txt.jpg',
+		preset: { kind: 'ebook', to: 'txt' },
+		accept: '.epub',
+		dropSubject: 'EPUB books',
+		dropHint: 'EPUB books · text extracted locally',
+		title: 'EPUB to TXT Converter — Extract Books Free | Compress Pro',
+		description:
+			'Extract the full text of an EPUB as a plain .txt file right in your browser — chapters in reading order, paragraphs kept, markup dropped. Nothing uploaded.',
+		tagline: 'A whole book as plain text — extracted on your own device.',
+		related: ['/compress-epub', '/pdf-to-text', '/cbz-to-pdf']
+	},
+	'cbz-to-pdf': {
+		ogImage: '/og/cbz-to-pdf.jpg',
+		// quality 90 only touches WebP/GIF pages — JPEG/PNG embed byte-exact.
+		preset: { kind: 'ebook', to: 'pdf', quality: 90 },
+		accept: '.cbz',
+		dropSubject: 'CBZ comics',
+		dropHint: 'CBZ comics · pages embedded into a PDF locally',
+		title: 'CBZ to PDF Converter — Free, Private, No Upload | Compress Pro',
+		description:
+			'Convert CBZ comics to PDF right in your browser — JPEG and PNG pages are embedded losslessly, one page per image, in reading order. Nothing is uploaded.',
+		tagline: 'Comic pages embedded into a PDF losslessly — on-device.',
+		related: ['/cbr-to-pdf', '/compress-cbz', '/jpg-to-pdf']
+	},
+	'cbr-to-pdf': {
+		ogImage: '/og/cbr-to-pdf.jpg',
+		preset: { kind: 'ebook', to: 'pdf', quality: 90 },
+		accept: '.cbr',
+		dropSubject: 'CBR comics',
+		dropHint: 'RAR comics · pages embedded into a PDF locally',
+		title: 'CBR to PDF Converter — Free, Private, No Upload | Compress Pro',
+		description:
+			'Convert CBR comics to PDF right in your browser — the RAR is unpacked locally and JPEG/PNG pages embed losslessly, one page per image. Nothing uploaded.',
+		tagline: 'RAR comics turned into PDFs locally — pages stay lossless.',
+		related: ['/cbz-to-pdf', '/cbr-to-cbz', '/extract-rar']
 	},
 	// Hub page of the model tab (pathFor target) — FORMATS entries carry no
 	// preset and converterFor never resolves them (no accept/dropSubject here).
