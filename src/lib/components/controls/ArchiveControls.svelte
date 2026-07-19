@@ -72,6 +72,24 @@
 			{/each}
 		</div>
 		<p class="mt-2 hint text-faint">{formatHints[settings.outputFormat]}</p>
+		<!-- What-happens line rides the format section — standalone it floated
+		     between sections with a full section padding of its own. -->
+		{#if settings.op === 'create'}
+			<p class="mt-1.5 hint text-faint">
+				{#if isBundlingArchiveFormat(settings.outputFormat)}
+					All listed files land in one archive{settings.outputFormat === 'zip'
+						? '.zip'
+						: `.${ARCHIVE_FORMAT_LABELS[settings.outputFormat].toLowerCase()}`}, names kept.
+				{:else}
+					Each file becomes its own compressed download — bundling isn't part of this format.
+				{/if}
+			</p>
+		{:else}
+			<p class="mt-1.5 hint text-faint">
+				Each archive is unpacked and repacked as {ARCHIVE_FORMAT_LABELS[settings.outputFormat]},
+				folder structure kept. The output is not encrypted.
+			</p>
+		{/if}
 	</div>
 
 	{#if settings.outputFormat !== 'tar'}
@@ -91,22 +109,6 @@
 		</div>
 	{/if}
 
-	{#if settings.op === 'create'}
-		<p class="hint text-faint">
-			{#if isBundlingArchiveFormat(settings.outputFormat)}
-				All listed files land in one archive{settings.outputFormat === 'zip'
-					? '.zip'
-					: `.${ARCHIVE_FORMAT_LABELS[settings.outputFormat].toLowerCase()}`}, names kept.
-			{:else}
-				Each file becomes its own compressed download — bundling isn't part of this format.
-			{/if}
-		</p>
-	{:else}
-		<p class="hint text-faint">
-			Each archive is unpacked and repacked as {ARCHIVE_FORMAT_LABELS[settings.outputFormat]},
-			folder structure kept. The output is not encrypted.
-		</p>
-	{/if}
 {:else}
 	<p class="text-xs text-faint">
 		Every file inside the archive becomes its own row — download them individually or all at once.
@@ -149,7 +151,8 @@
 					<input type="checkbox" bind:checked={settings.encryptNames} class="accent-accent" />
 					Also hide file names inside the archive
 				</label>
-				<p class="mt-1.5 hint text-faint">AES-256; without this, names stay listable.</p>
+				<!-- pl aligns with the checkbox label text (16px box + 10px gap) -->
+				<p class="mt-1.5 pl-6.5 hint text-faint">AES-256; without this, names stay listable.</p>
 			{:else}
 				<p class="mt-1.5 hint text-faint">
 					AES-256 encryption — needs 7-Zip, WinRAR or a modern unarchiver to open (not Windows'
