@@ -7,13 +7,32 @@ import { RAW_OPEN_SETTINGS, decodeRaw } from './raw';
 // web worker (which can't run under node) — the wasm-level effect of these
 // settings is covered by the develop test below.
 const openSpy = vi.fn<(bytes: Uint8Array, settings?: object) => Promise<void>>();
+
+/** Swappable decoder body so one module-level mock serves both the settings
+ *  tests (default) and the concurrency test (shared-state decoder). */
+let decoderImpl: {
+	open(bytes: Uint8Array, settings?: object): Promise<void>;
+	imageData(): Promise<unknown>;
+	dispose(): void;
+} = {
+	open: openSpy,
+	async imageData() {
+		return { width: 2, height: 1, colors: 3, bits: 8, dataSize: 6, data: new Uint8Array(6) };
+	},
+	dispose() {}
+};
+
 vi.mock('libraw-wasm', () => ({
 	default: class {
-		open = openSpy;
-		async imageData() {
-			return { width: 2, height: 1, colors: 3, bits: 8, dataSize: 6, data: new Uint8Array(6) };
+		open(bytes: Uint8Array, settings?: object) {
+			return decoderImpl.open(bytes, settings);
 		}
-		dispose() {}
+		imageData() {
+			return decoderImpl.imageData();
+		}
+		dispose() {
+			decoderImpl.dispose();
+		}
 	}
 }));
 
@@ -25,6 +44,51 @@ describe('decodeRaw', () => {
 		await decodeRaw(new File([new Uint8Array([73, 73, 42, 0])], 'shot.dng'));
 		expect(openSpy).toHaveBeenCalledTimes(1);
 		expect(openSpy.mock.calls[0][1]).toMatchObject({ outputBps: 8, useCameraWb: true });
+	});
+
+	it('concurrent decodes never cross wires on the shared engine (F-71)', async () => {
+		// The libraw worker is ONE shared instance; open() and imageData() are two
+		// separate awaited calls. Without a per-decode lock, file B's open slips
+		// between file A's open and imageData, so A gets B's pixels — the matrix
+		// visual inspector caught exactly this (ARW got the CR2's photo).
+		let current: number | null = null;
+		decoderImpl = {
+			async open(bytes) {
+				await Promise.resolve(); // yield — invites interleaving
+				current = bytes[0];
+			},
+			async imageData() {
+				await Promise.resolve();
+				return {
+					width: 1,
+					height: 1,
+					colors: 3,
+					bits: 8,
+					dataSize: 3,
+					data: new Uint8Array([current!, 0, 0])
+				};
+			},
+			dispose() {}
+		};
+		try {
+			const results = await Promise.all([
+				decodeRaw(new File([new Uint8Array([11, 0, 0, 0])], 'a.dng')),
+				decodeRaw(new File([new Uint8Array([22, 0, 0, 0])], 'b.dng')),
+				decodeRaw(new File([new Uint8Array([33, 0, 0, 0])], 'c.dng'))
+			]);
+			// Each decode must carry ITS OWN first byte through to its pixels.
+			expect(new Uint8Array(results[0].data)[0]).toBe(11);
+			expect(new Uint8Array(results[1].data)[0]).toBe(22);
+			expect(new Uint8Array(results[2].data)[0]).toBe(33);
+		} finally {
+			decoderImpl = {
+				open: openSpy,
+				async imageData() {
+					return { width: 2, height: 1, colors: 3, bits: 8, dataSize: 6, data: new Uint8Array(6) };
+				},
+				dispose() {}
+			};
+		}
 	});
 
 	it('RAW_OPEN_SETTINGS actually shifts the develop of an as-shot-neutral DNG', async () => {

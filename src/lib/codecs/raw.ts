@@ -26,6 +26,13 @@ export const RAW_OPEN_SETTINGS: LibRawSettings = { outputBps: 8, useCameraWb: tr
 
 let engine: Promise<LibRaw> | null = null;
 
+// The libraw worker is ONE shared instance and open()/imageData() are two
+// separate awaited round-trips. Concurrent image-lane files (imageLaneCap up
+// to 4) would otherwise interleave — file B's open landing between file A's
+// open and imageData, so A reads B's pixels (quality sweep F-71). Serialize
+// the open→imageData transaction on a promise chain so each decode is atomic.
+let decodeChain: Promise<unknown> = Promise.resolve();
+
 function getEngine(): Promise<LibRaw> {
 	engine ??= import('libraw-wasm')
 		.then((m) => new m.default())
@@ -45,27 +52,37 @@ function disposeEngine(): void {
 
 export async function decodeRaw(file: File, signal?: AbortSignal): Promise<PredecodedPixels> {
 	signal?.throwIfAborted();
-	const raw = await getEngine();
-	// Terminating the worker is the only way to interrupt a running demosaic;
-	// the next decode spawns a fresh engine via the self-resetting memo.
-	const onAbort = () => disposeEngine();
-	signal?.addEventListener('abort', onAbort, { once: true });
-	try {
-		await raw.open(new Uint8Array(await file.arrayBuffer()), RAW_OPEN_SETTINGS);
-		const img = await raw.imageData();
-		if (!img || !img.width || !(img.data instanceof Uint8Array)) {
-			throw new Error('This RAW file could not be decoded');
+	// Read the bytes BEFORE claiming the decode slot — I/O need not serialize,
+	// only the shared-engine open→imageData transaction must.
+	const bytes = new Uint8Array(await file.arrayBuffer());
+	const run = decodeChain.then(async () => {
+		signal?.throwIfAborted();
+		const raw = await getEngine();
+		// Terminating the worker is the only way to interrupt a running demosaic;
+		// the next decode spawns a fresh engine via the self-resetting memo.
+		const onAbort = () => disposeEngine();
+		signal?.addEventListener('abort', onAbort, { once: true });
+		try {
+			await raw.open(bytes, RAW_OPEN_SETTINGS);
+			const img = await raw.imageData();
+			if (!img || !img.width || !(img.data instanceof Uint8Array)) {
+				throw new Error('This RAW file could not be decoded');
+			}
+			if (img.colors !== 3 && img.colors !== 4) {
+				throw new Error(`Unsupported RAW channel count (${img.colors})`);
+			}
+			return {
+				data: img.data.buffer as ArrayBuffer,
+				width: img.width,
+				height: img.height,
+				channels: img.colors
+			} satisfies PredecodedPixels;
+		} finally {
+			signal?.removeEventListener('abort', onAbort);
 		}
-		if (img.colors !== 3 && img.colors !== 4) {
-			throw new Error(`Unsupported RAW channel count (${img.colors})`);
-		}
-		return {
-			data: img.data.buffer as ArrayBuffer,
-			width: img.width,
-			height: img.height,
-			channels: img.colors
-		};
-	} finally {
-		signal?.removeEventListener('abort', onAbort);
-	}
+	});
+	// Keep the chain alive even when this decode rejects, so a failed file never
+	// wedges the queue for the ones behind it.
+	decodeChain = run.catch(() => {});
+	return run;
 }
