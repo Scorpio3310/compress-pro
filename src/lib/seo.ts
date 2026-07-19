@@ -354,7 +354,8 @@ export const CONVERTERS: ConverterLite[] = [
 		path: '/webp-to-jpg',
 		label: 'WebP → JPG',
 		feature: 'Convert WebP to JPG',
-		h1: 'Convert WebP to JPG.'
+		h1: 'Convert WebP to JPG.',
+		demo: 'webp-to-jpg'
 	},
 	{
 		format: 'webp',
@@ -459,14 +460,16 @@ export const CONVERTERS: ConverterLite[] = [
 		path: '/jpg-to-webp',
 		label: 'JPG → WebP',
 		feature: 'Convert JPG to WebP',
-		h1: 'Convert JPG to WebP.'
+		h1: 'Convert JPG to WebP.',
+		demo: 'jpg-to-webp'
 	},
 	{
 		format: 'png',
 		path: '/png-to-webp',
 		label: 'PNG → WebP',
 		feature: 'Convert PNG to WebP',
-		h1: 'Convert PNG to WebP.'
+		h1: 'Convert PNG to WebP.',
+		demo: 'png-to-webp'
 	},
 	{
 		format: 'pdf',
@@ -1065,7 +1068,8 @@ export const TOOLS: ConverterLite[] = [
 		path: '/resize-image',
 		label: 'Resize image',
 		feature: 'Resize images to a longest-side cap',
-		h1: 'Resize images.'
+		h1: 'Resize images.',
+		demo: 'resize'
 	},
 	{
 		format: 'jpg',

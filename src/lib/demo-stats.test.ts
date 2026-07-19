@@ -3,7 +3,7 @@ import { existsSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import sharp from 'sharp';
 import statsJson from './demo-stats.json';
-import { FORMATS, TOOLS } from './seo';
+import { CONVERTERS, FORMATS, TOOLS } from './seo';
 import { fullSeoFor } from './seo-full.server';
 import type { DemoKind, DemoStats } from './types';
 
@@ -64,13 +64,20 @@ const SPEC: Record<
 	// Fixed-camera three.js renders of both actual files, q85 WebP.
 	model: { assetExt: 'webp', budget: 240_000, mcuAligned: false },
 	// No display assets — CSV panel + sheet table both come from the manifest.
-	data: { assetExt: 'jpg', budget: 0, mcuAligned: false }
+	data: { assetExt: 'jpg', budget: 0, mcuAligned: false },
+	// Converter demos — same fixtures and crop windows as their compress kinds.
+	'png-to-webp': { assetExt: 'webp', budget: 240_000, mcuAligned: true },
+	'jpg-to-webp': { assetExt: 'webp', budget: 240_000, mcuAligned: true },
+	'webp-to-jpg': { assetExt: 'jpg', budget: 240_000, mcuAligned: true },
+	// The crop is cut from re-rastered (fitted) content — no MCU phase to keep.
+	resize: { assetExt: 'webp', budget: 240_000, mcuAligned: false }
 };
 const KINDS = Object.keys(SPEC) as DemoKind[];
 
-// The output is legitimately bigger (WEBVTT header, XLSX container) — these
-// demos tell structure stories; the size tile shows both real numbers.
-const GROWTH_OK = new Set<DemoKind>(['subtitle', 'data']);
+// The output is legitimately bigger (WEBVTT header, XLSX container; a 22 MP
+// JPG re-encode of a lossy WebP) — these demos tell structure/compatibility
+// stories; the size tile shows both real numbers.
+const GROWTH_OK = new Set<DemoKind>(['subtitle', 'data', 'webp-to-jpg']);
 // Descriptor-less inputs: containers/models the sharp default can't describe.
 const DESCRIPTORLESS = new Set<DemoKind>(['font', 'subtitle', 'data', 'ebook', 'model']);
 
@@ -186,7 +193,11 @@ describe('demo stats manifest', () => {
 		'video',
 		'exif',
 		'ebook',
-		'model'
+		'model',
+		'png-to-webp',
+		'jpg-to-webp',
+		'webp-to-jpg',
+		'resize'
 	] as const;
 
 	it.each(RASTER_PAIR_KINDS)('%s: shipped pair shows the same content', async (kind) => {
@@ -418,9 +429,26 @@ describe('demo stats manifest', () => {
 	});
 
 	it.each(KINDS)('%s: tool matches the seo entry carrying this kind', (kind) => {
-		const carriers = [...FORMATS, ...TOOLS].filter((e) => e.demo === kind).map((e) => e.path);
+		// CONVERTERS included: the png-to-webp-style kinds live on converter pages.
+		const carriers = [...FORMATS, ...CONVERTERS, ...TOOLS]
+			.filter((e) => e.demo === kind)
+			.map((e) => e.path);
 		expect(carriers, `${kind} needs at least one page`).not.toHaveLength(0);
 		expect(carriers).toContain(ALL[kind].tool);
+	});
+
+	it('converter kinds pin the run their captions narrate', () => {
+		// The caption narrates the format flip / the resize cap — pin them here
+		// so copy and run can only change together (model/audio precedent).
+		for (const kind of ['png-to-webp', 'jpg-to-webp'] as const) {
+			expect(ALL[kind].formatChanged, kind).toBe(true);
+			expect(ALL[kind].outputFormat, kind).toBe('webp');
+		}
+		expect(ALL['webp-to-jpg'].formatChanged).toBe(true);
+		expect(ALL['webp-to-jpg'].outputFormat).toBe('jpg');
+		expect(ALL.resize.maxDimension).toBe(1920);
+		expect(ALL.resize.outputFormat).toBe('jpg');
+		expect(ALL.resize.formatChanged ?? false).toBe(false);
 	});
 
 	it.each(KINDS)('%s: engine names appear in the page’s Under the hood copy', (kind) => {

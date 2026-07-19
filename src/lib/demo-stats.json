@@ -570,5 +570,141 @@
 				]
 			}
 		}
+	},
+	"png-to-webp": {
+		"tool": "/png-to-webp",
+		"engine": "libwebp",
+		"quality": 80,
+		"outputFormat": "webp",
+		"formatChanged": true,
+		"input": {
+			"name": "magnific-407746309-watercolor.png",
+			"width": 2417,
+			"height": 1114,
+			"megapixels": 3
+		},
+		"originalBytes": 2446893,
+		"compressedBytes": 198040,
+		"savingsPercent": 92,
+		"display": {
+			"before": "png-to-webp-before.webp",
+			"after": "png-to-webp-after.webp",
+			"width": 1440,
+			"height": 1080,
+			"shows": "crop",
+			"crop": {
+				"left": 496,
+				"top": 16,
+				"width": 1440,
+				"height": 1080
+			}
+		},
+		"credit": {
+			"author": "Magnific",
+			"url": "https://www.magnific.com/free-psd/majestic-mountain-landscape-watercolor-masterpiece_407746309.htm",
+			"source": "Magnific"
+		}
+	},
+	"jpg-to-webp": {
+		"tool": "/jpg-to-webp",
+		"engine": "libwebp",
+		"quality": 80,
+		"outputFormat": "webp",
+		"formatChanged": true,
+		"input": {
+			"name": "magnific-12304873-seiser-alm.jpg",
+			"width": 4000,
+			"height": 2666,
+			"megapixels": 11
+		},
+		"originalBytes": 8173457,
+		"compressedBytes": 1194684,
+		"savingsPercent": 85,
+		"display": {
+			"before": "jpg-to-webp-before.webp",
+			"after": "jpg-to-webp-after.webp",
+			"width": 1440,
+			"height": 1080,
+			"shows": "crop",
+			"crop": {
+				"left": 320,
+				"top": 320,
+				"width": 1440,
+				"height": 1080
+			}
+		},
+		"credit": {
+			"author": "Magnific",
+			"url": "https://www.magnific.com/free-photo/landscape-seiser-alm-near-langkofel-group-mountains-sunlight-italy_12304873.htm",
+			"source": "Magnific"
+		}
+	},
+	"webp-to-jpg": {
+		"tool": "/webp-to-jpg",
+		"engine": "MozJPEG",
+		"quality": 80,
+		"outputFormat": "jpg",
+		"formatChanged": true,
+		"input": {
+			"name": "unsplash-Bkci_8qcdvQ-kalen-emsley.webp",
+			"width": 5760,
+			"height": 3840,
+			"megapixels": 22
+		},
+		"originalBytes": 5086678,
+		"compressedBytes": 2819256,
+		"savingsPercent": 45,
+		"display": {
+			"before": "webp-to-jpg-before.jpg",
+			"after": "webp-to-jpg-after.jpg",
+			"width": 1440,
+			"height": 1080,
+			"shows": "crop",
+			"crop": {
+				"left": 864,
+				"top": 1152,
+				"width": 1440,
+				"height": 1080
+			}
+		},
+		"credit": {
+			"author": "Kalen Emsley",
+			"url": "https://unsplash.com/photos/snow-capped-mountains-with-valley-and-forest-Bkci_8qcdvQ",
+			"source": "Unsplash"
+		}
+	},
+	"resize": {
+		"tool": "/resize-image",
+		"engine": "MozJPEG",
+		"quality": 80,
+		"maxDimension": 1920,
+		"outputFormat": "jpg",
+		"input": {
+			"name": "magnific-12304873-seiser-alm.jpg",
+			"width": 4000,
+			"height": 2666,
+			"megapixels": 11
+		},
+		"originalBytes": 8173457,
+		"compressedBytes": 368245,
+		"savingsPercent": 95,
+		"display": {
+			"before": "resize-before.webp",
+			"after": "resize-after.webp",
+			"width": 1024,
+			"height": 768,
+			"shows": "crop",
+			"crop": {
+				"left": 320,
+				"top": 160,
+				"width": 1024,
+				"height": 768
+			}
+		},
+		"credit": {
+			"author": "Magnific",
+			"url": "https://www.magnific.com/free-photo/landscape-seiser-alm-near-langkofel-group-mountains-sunlight-italy_12304873.htm",
+			"source": "Magnific"
+		}
 	}
 }

@@ -490,6 +490,12 @@ export const BODIES: Record<string, SeoBody> = {
 						['Archival copy', '90–95']
 					]
 				}
+			},
+			{
+				heading: 'Under the hood',
+				paragraphs: [
+					'The JPG side is encoded by MozJPEG — Mozilla’s tuned encoder, the same one the compressor pages run — compiled to WebAssembly and running on your device. The WebP decode happens right in the browser, so the whole trip is local from first byte to last.'
+				]
 			}
 		],
 		faq: [
@@ -786,6 +792,12 @@ export const BODIES: Record<string, SeoBody> = {
 				paragraphs: [
 					'Off the web, JPG is still king: email attachments, print shops, older desktop software and plenty of upload forms refuse WebP. The practical setup is both — keep the JPG as the compatible master and serve WebP copies on your site. If the master itself is heavy, [Compress JPG](/compress-jpg) shrinks it without changing format.'
 				]
+			},
+			{
+				heading: 'Under the hood',
+				paragraphs: [
+					'Encoding runs on libwebp — Google’s reference WebP encoder, the exact code browsers themselves ship — compiled to WebAssembly and running locally. What this page produces is what the format’s author produces; no server re-encode, no quality surprises.'
+				]
 			}
 		],
 		faq: [
@@ -851,6 +863,12 @@ export const BODIES: Record<string, SeoBody> = {
 				heading: 'Pick the quality by content',
 				paragraphs: [
 					'Screenshots and UI graphics look identical at quality 80–90; photographic PNGs tolerate less. Quality 100 keeps pixels exact when nothing may shift. And the trip is reversible — [WebP to PNG](/webp-to-png) decodes back to lossless PNG whenever an old tool insists on it.'
+				]
+			},
+			{
+				heading: 'Under the hood',
+				paragraphs: [
+					'The conversion runs libwebp — Google’s reference encoder for the format — compiled to WebAssembly, on your own device. Transparency survives because the encoder handles the alpha channel natively; nothing is flattened along the way.'
 				]
 			}
 		],
@@ -1351,6 +1369,12 @@ export const BODIES: Record<string, SeoBody> = {
 				heading: 'How longest-side resizing works',
 				paragraphs: [
 					'Thinking in “longest side” beats thinking in width×height: one number covers landscape, portrait and square images without distortion. Resizing is also where the big savings hide — a 48-megapixel phone photo holds many times the pixels a 4K screen can even show, so capping it at 1920 px routinely cuts 80–90% of the file before quality settings matter at all. Once the dimensions are right, [compressing the JPG](/compress-jpg) squeezes what remains.'
+				]
+			},
+			{
+				heading: 'Under the hood',
+				paragraphs: [
+					'The resample runs first, at high quality, and the result is re-encoded by MozJPEG — Mozilla’s tuned JPEG encoder, compiled to WebAssembly and running on your device. Aspect ratio is preserved exactly; only the pixel count changes.'
 				]
 			},
 			{

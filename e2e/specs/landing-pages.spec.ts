@@ -281,6 +281,11 @@ test('LP-16: the before/after demo renders where honest and nowhere else', async
 	await expect(page.locator('[data-demo-specimen]')).toBeVisible();
 	await gotoPath(page, '/create-7z');
 	await expect(page.locator('[data-demo-archive]')).toBeVisible();
+	// Converter demos with their own generated pairs (png-to-webp family + resize).
+	for (const path of ['/png-to-webp', '/jpg-to-webp', '/webp-to-jpg', '/resize-image']) {
+		await gotoPath(page, path);
+		await expect(page.locator('[aria-label="Image comparison slider"]')).toBeVisible();
+	}
 	// /merge-pdf and /compress-mov run the same engine families but have no
 	// demo of their own.
 	await gotoPath(page, '/merge-pdf');

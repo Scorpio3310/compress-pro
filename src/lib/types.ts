@@ -54,7 +54,11 @@ export type DemoKind =
 	| 'subtitle'
 	| 'ebook'
 	| 'model'
-	| 'data';
+	| 'data'
+	| 'png-to-webp'
+	| 'jpg-to-webp'
+	| 'webp-to-jpg'
+	| 'resize';
 
 export interface DemoCredit {
 	author: string;

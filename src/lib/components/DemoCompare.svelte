@@ -156,6 +156,19 @@
 				{ label: 'Format', value: 'CSV → XLSX', emphasize: true }
 			];
 		}
+		// webp-to-jpg trades bytes for compatibility — a −% card would show 0
+		// (savingsPercent clamps); the format flip IS the story.
+		if (kind === 'webp-to-jpg') {
+			return [
+				{ label: 'Format', value: 'WEBP → JPG', emphasize: true },
+				{
+					label: 'Size',
+					value: `${formatBytes(stats.originalBytes)} → ${formatBytes(stats.compressedBytes)}`,
+					emphasize: false
+				},
+				{ label: 'Opens', value: 'Everywhere', emphasize: false }
+			];
+		}
 		return [
 			{ label: 'Original', value: formatBytes(stats.originalBytes), emphasize: false },
 			{ label: 'Compressed', value: formatBytes(stats.compressedBytes), emphasize: false },
@@ -217,6 +230,42 @@
 					body: `tool — decoded by libheif, re-encoded by MozJPEG at quality ${s.quality} — and dropped from ${orig} (HEIC) to ${comp} (JPG). Browsers can open HEIC but not save it, so the output is a universal JPG — the format change is part of the result. The slider shows a 100% detail crop of both files; the byte counts refer to the complete files.`,
 					beforeAlt: `Detail crop of the original ${s.input.megapixels}-megapixel HEIC photo of colorful sewing thread spools, at 100% zoom`,
 					afterAlt: `The same detail after conversion to JPG at quality ${s.quality} — visually near-identical`
+				};
+			case 'png-to-webp':
+				return {
+					creditPrefix: 'Artwork by',
+					toolName: 'PNG to WebP',
+					lede: `this ${s.input.width} × ${s.input.height} watercolor illustration went through the`,
+					body: `converter — libwebp at quality ${s.quality} — and dropped from ${orig} (PNG) to ${comp} (WebP), with alpha support intact where a PNG carries it. What you're dragging is a 100% detail crop of both files, delivered identically on both sides; the byte counts refer to the complete files.`,
+					beforeAlt: `Detail crop of the original watercolor mountain illustration PNG at 100% zoom`,
+					afterAlt: `The same detail after conversion to WebP at quality ${s.quality} — visually near-identical`
+				};
+			case 'jpg-to-webp':
+				return {
+					creditPrefix: 'Photo by',
+					toolName: 'JPG to WebP',
+					lede: `this ${s.input.megapixels}-megapixel JPG (${s.input.width} × ${s.input.height}) went through the`,
+					body: `converter — libwebp at quality ${s.quality} — and dropped from ${orig} (JPG) to ${comp} (WebP): the class of savings WebP was built for, at matching visual quality. What you're dragging is a 100% detail crop of both files; the byte counts refer to the complete files. Drop the same photo in yourself and you'll get the same number.`,
+					beforeAlt: `Detail crop of the original ${s.input.megapixels}-megapixel JPG: an alpine meadow below the Langkofel peaks in hazy morning light, at 100% zoom`,
+					afterAlt: `The same detail after conversion to WebP at quality ${s.quality} — visually near-identical`
+				};
+			case 'webp-to-jpg':
+				return {
+					creditPrefix: 'Photo by',
+					toolName: 'WebP to JPG',
+					lede: `this ${s.input.megapixels}-megapixel WebP went through the`,
+					body: `converter — MozJPEG at quality ${s.quality} — and came out as a JPG that opens absolutely everywhere: ${orig} (WebP) in, ${comp} (JPG) out. A ${s.input.megapixels}-megapixel JPG legitimately spends more bytes than the lossy WebP it came from — this trip buys compatibility, not size. The slider is a 100% detail crop of both files; the byte counts refer to the complete files.`,
+					beforeAlt: `Detail crop of the original ${s.input.megapixels}-megapixel WebP photo: a rugged mountain ridge before snow-capped peaks, at 100% zoom`,
+					afterAlt: `The same detail after conversion to JPG at quality ${s.quality} — visually identical, universally openable`
+				};
+			case 'resize':
+				return {
+					creditPrefix: 'Photo by',
+					toolName: 'Resize Image',
+					lede: `this ${s.input.megapixels}-megapixel photo (${s.input.width} × ${s.input.height}) went through the`,
+					body: `tool with a ${s.maxDimension} px cap — resized first, then re-encoded by MozJPEG at quality ${s.quality} — and collapsed from ${orig} to ${comp}. The aspect ratio stays exact. Both sides of the slider are shown at the output's scale (what any screen does with the original anyway), cropped 1:1, so what you're comparing is the honest on-screen difference; the byte counts refer to the complete files.`,
+					beforeAlt: `Detail crop of the original ${s.input.megapixels}-megapixel photo shown at the resized scale: an alpine meadow below the Langkofel peaks, at 100% zoom`,
+					afterAlt: `The same detail from the ${s.maxDimension} px resized JPG at quality ${s.quality} — the honest on-screen comparison`
 				};
 			case 'gif':
 				return {

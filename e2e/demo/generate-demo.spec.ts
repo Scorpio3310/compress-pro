@@ -61,7 +61,11 @@ const KIND_ORDER: DemoKind[] = [
 	'subtitle',
 	'ebook',
 	'model',
-	'data'
+	'data',
+	'png-to-webp',
+	'jpg-to-webp',
+	'webp-to-jpg',
+	'resize'
 ];
 
 // Authored demo inputs (subtitle/data) — deterministic bytes written into the
@@ -334,6 +338,43 @@ function cropRender(crop: Crop, fmt: 'jpeg' | 'webp' | 'png') {
 			before: await encode(input),
 			after: await encode(output),
 			ext: fmt === 'jpeg' ? 'jpg' : fmt,
+			width: crop.width,
+			height: crop.height,
+			shows: 'crop',
+			crop
+		};
+	};
+}
+
+/** resize-image: the output is the pipeline's own fit of the resize pin —
+ *  verified against fitDimensions — and the before side is sharp-downscaled to
+ *  those same dimensions (what any screen does with the original), so the
+ *  identical crop compares content at the shared display scale
+ *  (videoStillRender philosophy). Both sides are re-rasters — no MCU claim. */
+function resizeCropRender(crop: Crop, maxDimension: number) {
+	return async (input: Buffer, output: Buffer): Promise<RenderOut> => {
+		const metaIn = await sharp(input).metadata();
+		const metaOut = await sharp(output).metadata();
+		// The IMAGE pipeline's fit — plain Math.round on both sides (video-math's
+		// fitDimensions rounds for codec constraints and lands one pixel off).
+		const scale = maxDimension / Math.max(metaIn.width!, metaIn.height!);
+		const fitted = {
+			width: Math.round(metaIn.width! * scale),
+			height: Math.round(metaIn.height! * scale)
+		};
+		expect(
+			{ width: metaOut.width, height: metaOut.height },
+			'output must land exactly on the pipeline’s own fit of the resize pin'
+		).toEqual(fitted);
+		expect(crop.left + crop.width, 'crop must sit inside the fitted frame').toBeLessThanOrEqual(
+			fitted.width
+		);
+		expect(crop.top + crop.height).toBeLessThanOrEqual(fitted.height);
+		const beforeFitted = await sharp(input).resize(fitted.width, fitted.height).toBuffer();
+		return {
+			before: await sharp(beforeFitted).extract(crop).webp(DELIVERY_WEBP).toBuffer(),
+			after: await sharp(output).extract(crop).webp(DELIVERY_WEBP).toBuffer(),
+			ext: 'webp',
 			width: crop.width,
 			height: crop.height,
 			shows: 'crop',
@@ -1018,6 +1059,106 @@ const JOBS: DemoJob[] = [
 				megapixels: Math.round((meta.width! * meta.height!) / 1e6)
 			};
 		}
+	},
+	// Converter demos — same fixtures as the compress kinds above (shared
+	// sources keep the licensing surface small; duplicate input names across
+	// kinds are fine for the byte-for-byte source check). Crop windows reuse
+	// each fixture's proven tuning.
+	{
+		kind: 'png-to-webp',
+		page: '/png-to-webp',
+		fixture: join(REAL, 'magnific-407746309-watercolor.png'),
+		engine: 'libwebp',
+		quality: 80,
+		outputFormat: 'webp',
+		formatChanged: true,
+		budgetBytes: 240_000,
+		credit: {
+			author: 'Magnific',
+			url: 'https://www.magnific.com/free-psd/majestic-mountain-landscape-watercolor-masterpiece_407746309.htm',
+			source: 'Magnific'
+		},
+		drive: async (p) => {
+			// The landing preset already flips the output pill — pin it AND the
+			// page's default quality anyway (svg/pdf precedent: drift-proof runs).
+			await setOutputFormat(p, 'WebP');
+			await setQuality(p, 80);
+		},
+		sniff: expectWebp,
+		render: cropRender({ left: 496, top: 16, width: 1440, height: 1080 }, 'webp')
+	},
+	{
+		kind: 'jpg-to-webp',
+		page: '/jpg-to-webp',
+		fixture: join(REAL, 'magnific-12304873-seiser-alm.jpg'),
+		engine: 'libwebp',
+		quality: 80,
+		outputFormat: 'webp',
+		formatChanged: true,
+		budgetBytes: 240_000,
+		credit: {
+			author: 'Magnific',
+			url: 'https://www.magnific.com/free-photo/landscape-seiser-alm-near-langkofel-group-mountains-sunlight-italy_12304873.htm',
+			source: 'Magnific'
+		},
+		drive: async (p) => {
+			await setOutputFormat(p, 'WebP');
+			await setQuality(p, 80);
+		},
+		sniff: expectWebp,
+		render: cropRender({ left: 320, top: 320, width: 1440, height: 1080 }, 'webp')
+	},
+	{
+		kind: 'webp-to-jpg',
+		page: '/webp-to-jpg',
+		fixture: join(REAL, 'unsplash-Bkci_8qcdvQ-kalen-emsley.webp'),
+		engine: 'MozJPEG',
+		quality: 80,
+		outputFormat: 'jpg',
+		formatChanged: true,
+		// A 22 MP JPEG at q80 may legitimately outweigh the lossy WebP source —
+		// this demo's story is compatibility, not bytes (subtitle/data precedent).
+		growthOk: true,
+		budgetBytes: 240_000,
+		credit: {
+			author: 'Kalen Emsley',
+			url: 'https://unsplash.com/photos/snow-capped-mountains-with-valley-and-forest-Bkci_8qcdvQ',
+			source: 'Unsplash'
+		},
+		drive: async (p) => {
+			await setOutputFormat(p, 'JPG');
+			await setQuality(p, 80);
+		},
+		sniff: expectJpeg,
+		render: cropRender({ left: 864, top: 1152, width: 1440, height: 1080 }, 'jpeg')
+	},
+	{
+		kind: 'resize',
+		page: '/resize-image',
+		fixture: join(REAL, 'magnific-12304873-seiser-alm.jpg'),
+		engine: 'MozJPEG',
+		quality: 80,
+		maxDimension: 1920,
+		outputFormat: 'jpg',
+		budgetBytes: 240_000,
+		credit: {
+			author: 'Magnific',
+			url: 'https://www.magnific.com/free-photo/landscape-seiser-alm-near-langkofel-group-mountains-sunlight-italy_12304873.htm',
+			source: 'Magnific'
+		},
+		drive: async (p) => {
+			// The landing preset arms maxDimension 1920 — pin it, the quality AND
+			// the output pill (the tab's Auto default would emit WebP) so a
+			// preset/default drift can't flip the run (video precedent).
+			await setOutputFormat(p, 'JPG');
+			await setMaxDimension(p, 1920);
+			await setQuality(p, 80);
+		},
+		sniff: expectJpeg,
+		// 1024×768 (not the raster kinds' 1440×1080): the fitted frame is only
+		// 1920×1280, and a meadow-detail crop at q85 WebP must stay under the
+		// 240 KB page-weight budget on the BEFORE side too.
+		render: resizeCropRender({ left: 320, top: 160, width: 1024, height: 768 }, 1920)
 	},
 	{
 		kind: 'gif',
