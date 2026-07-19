@@ -82,11 +82,19 @@ export class MatrixRecorder {
 		return `rasters/${this.family}/${id}/${name}`;
 	}
 
-	/** Before|after side-by-side (each panel ≤ half the max side), one file. */
+	/** Before|after side-by-side (each panel ≤ half the max side), one file.
+	 *  Both panels go through ONE sharp pipeline (srgb) so a browser-canvas PNG
+	 *  and a sharp-decoded PNG read equally bright, and panels of unequal
+	 *  height are centered — a top-pinned shorter panel used to look like a
+	 *  vertical offset (O-07: both cost false alarms in visual inspection). */
 	async saveSideBySide(id: string, name: string, before: Buffer, after: Buffer): Promise<string> {
 		const half = Math.floor(MAX_RASTER_SIDE / 2) - 4;
 		const panel = (b: Buffer) =>
-			sharp(b).resize({ width: half, height: MAX_RASTER_SIDE, fit: 'inside' }).png().toBuffer();
+			sharp(b)
+				.toColourspace('srgb')
+				.resize({ width: half, height: MAX_RASTER_SIDE, fit: 'inside' })
+				.png()
+				.toBuffer();
 		const [a, b] = await Promise.all([panel(before), panel(after)]);
 		const [ma, mb] = await Promise.all([sharp(a).metadata(), sharp(b).metadata()]);
 		const height = Math.max(ma.height ?? 0, mb.height ?? 0);
@@ -99,8 +107,8 @@ export class MatrixRecorder {
 			}
 		})
 			.composite([
-				{ input: a, left: 0, top: 0 },
-				{ input: b, left: (ma.width ?? 0) + 8, top: 0 }
+				{ input: a, left: 0, top: Math.floor((height - (ma.height ?? 0)) / 2) },
+				{ input: b, left: (ma.width ?? 0) + 8, top: Math.floor((height - (mb.height ?? 0)) / 2) }
 			])
 			.png()
 			.toBuffer();

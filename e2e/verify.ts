@@ -458,7 +458,9 @@ export async function stitchHorizontal(frames: Buffer[], gap = 4): Promise<Buffe
 	const height = Math.max(...metas.map((m) => m.height ?? 0));
 	let left = 0;
 	const composites = frames.map((input, i) => {
-		const c = { input, left, top: 0 };
+		// Center unequal heights — a top-pinned shorter frame reads as a
+		// vertical offset during visual inspection (O-07).
+		const c = { input, left, top: Math.floor((height - (metas[i].height ?? 0)) / 2) };
 		left += (metas[i].width ?? 0) + gap;
 		return c;
 	});
