@@ -273,6 +273,14 @@ test('LP-16: the before/after demo renders where honest and nowhere else', async
 	await expect(page.locator('[aria-label="Image comparison slider"]')).toBeVisible();
 	await gotoPath(page, '/csv-to-xlsx');
 	await expect(page.locator('[data-demo-data]')).toBeVisible();
+	// Honest reuses: converter/tool pages whose preset runs the exact pipeline
+	// that made the assets render the hub's demo (seo.test.ts pins the map).
+	await gotoPath(page, '/heic-to-jpg');
+	await expect(page.locator('[aria-label="Image comparison slider"]')).toBeVisible();
+	await gotoPath(page, '/ttf-to-woff2');
+	await expect(page.locator('[data-demo-specimen]')).toBeVisible();
+	await gotoPath(page, '/create-7z');
+	await expect(page.locator('[data-demo-archive]')).toBeVisible();
 	// /merge-pdf and /compress-mov run the same engine families but have no
 	// demo of their own.
 	await gotoPath(page, '/merge-pdf');

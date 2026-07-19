@@ -323,7 +323,10 @@ export const CONVERTERS: ConverterLite[] = [
 		path: '/heic-to-jpg',
 		label: 'HEIC → JPG',
 		feature: 'Convert HEIC to JPG',
-		h1: 'Convert HEIC to JPG.'
+		h1: 'Convert HEIC to JPG.',
+		// Honest reuse: the heic demo run IS a HEIC→JPG develop (q75, JPG out) —
+		// the exact pipeline this page preconfigures.
+		demo: 'heic'
 	},
 	{
 		format: 'heic',
@@ -764,7 +767,9 @@ export const CONVERTERS: ConverterLite[] = [
 		path: '/ttf-to-woff2',
 		label: 'TTF → WOFF2',
 		feature: 'Convert TTF to WOFF2',
-		h1: 'Convert TTF to WOFF2.'
+		h1: 'Convert TTF to WOFF2.',
+		// Honest reuse: the font demo run is exactly TTF in → WOFF2 out.
+		demo: 'font'
 	},
 	{
 		format: 'font',
@@ -1117,7 +1122,10 @@ export const TOOLS: ConverterLite[] = [
 		path: '/create-7z',
 		label: 'Create 7Z',
 		feature: 'Create 7Z archives',
-		h1: 'Create 7Z archives.'
+		h1: 'Create 7Z archives.',
+		// Honest reuse: the archive demo's primary number is its create-7Z run
+		// (Balanced preset) — the operation this page preconfigures.
+		demo: 'archive'
 	},
 	{
 		format: 'zip',
