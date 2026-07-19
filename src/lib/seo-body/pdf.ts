@@ -305,6 +305,21 @@ export const BODIES: Record<string, SeoBody> = {
 				paragraphs: [
 					'PDF pages carry a rotation property, and this tool sets it — the page content itself is untouched, so quality cannot degrade and the file size barely moves. That also makes it instant, even for hundred-page scans. To drop or reorder pages while you are at it, [Split PDF](/split-pdf) handles ranges, and [Merge PDF](/merge-pdf) puts documents together.'
 				]
+			},
+			{
+				heading: 'Which rotation fixes which scan',
+				paragraphs: [
+					'Sheet-fed scanners and phone captures produce the same few misfires every time. Look at where the top of the text points and pick the matching fix:'
+				],
+				table: {
+					columns: ['The scan came out', 'The fix'],
+					rows: [
+						['Sideways, text reads top-to-bottom on the left', '90° right'],
+						['Sideways, text reads top-to-bottom on the right', '90° left'],
+						['Upside down — a stack fed in backwards', '180°'],
+						['Mixed orientations in one file', 'Split, rotate each part, merge back']
+					]
+				}
 			}
 		],
 		faq: [
@@ -332,6 +347,24 @@ export const BODIES: Record<string, SeoBody> = {
 				paragraphs: [
 					'A watermark labels the document visibly — every reader sees it, every print carries it. It is a deterrent and a statement of status, not security: determined editing can remove it, and it does not encrypt anything. When the content itself must be locked, [Protect PDF](/protect-pdf) adds real AES-256 encryption; the two combine well — watermark first, then protect.'
 				]
+			},
+			{
+				heading: 'Stamps that do their job',
+				paragraphs: [
+					'The stamps that work are short, specific and in caps — a whole sentence shrinks to fit the diagonal and loses its punch. A few that have earned their place:'
+				],
+				table: {
+					columns: ['Stamp', 'When it earns its place'],
+					rows: [
+						['DRAFT', 'Work in progress — invites comments, forestalls sign-off'],
+						['CONFIDENTIAL', 'Marks restricted material before it circulates'],
+						[
+							'A client or recipient name',
+							'Each copy traceable to its receiver — leaks lose their anonymity'
+						],
+						['SAMPLE — DO NOT COPY', 'Portfolios, proofs and previews sent ahead of payment']
+					]
+				}
 			}
 		],
 		faq: [
@@ -359,6 +392,24 @@ export const BODIES: Record<string, SeoBody> = {
 				paragraphs: [
 					'Numbers matter most right after combining files — a stitched-together report reads like one document once its pages count through. The natural flow is [Merge PDF](/merge-pdf) first, then number the result here. The numbering is drawn into each page like any footer; the content above it is untouched.'
 				]
+			},
+			{
+				heading: 'Where “page X of Y” matters',
+				paragraphs: [
+					'The “3 / 12” form does more than count — the total is a completeness claim. Anyone holding page 3 of 12 can see that nine pages are missing, which is exactly what several kinds of documents need:'
+				],
+				table: {
+					columns: ['Document', 'Why the numbers matter'],
+					rows: [
+						['Contracts and agreements', 'X of Y shows no page was added or removed after signing'],
+						[
+							'Court and agency filings',
+							'Clerks and reviewers cite by page — many portals require it'
+						],
+						['Print-and-bind handouts', 'A dropped stack reassembles itself'],
+						['Merged scan bundles', 'Separate receipts and letters read as one countable document']
+					]
+				}
 			}
 		],
 		faq: [
@@ -413,6 +464,28 @@ export const BODIES: Record<string, SeoBody> = {
 				paragraphs: [
 					'Printing color documents on a mono printer produces muddy, inconsistent grays — converting first gives the printer exactly what it will print. Grayscale images also compress tighter, so colorful decks often shrink along the way; run [Compress PDF](/compress-pdf) after for the full squeeze. The conversion re-serializes the document through the same Ghostscript engine the compressor uses.'
 				]
+			},
+			{
+				heading: 'What converts to what',
+				paragraphs: [
+					'Grayscale keeps brightness and discards hue — which is fine for most content and a real trap for one kind: colors chosen to differ only in hue. A red line and a green line of equal brightness become the same gray.',
+					'If a chart leans on a color legend, check that page in the output — and consider re-labeling the series before converting.'
+				],
+				table: {
+					columns: ['Content', 'In grayscale'],
+					rows: [
+						['Photographs', 'Smooth, natural tones — the classic black-and-white look'],
+						[
+							'Charts with same-brightness colors',
+							'Series can merge into one gray — the case to check'
+						],
+						['Text and vector lines', 'Recolored, never rasterized — stays perfectly sharp'],
+						[
+							'Colored highlights and fills',
+							'Light gray shading; contrast against text usually survives'
+						]
+					]
+				}
 			}
 		],
 		faq: [

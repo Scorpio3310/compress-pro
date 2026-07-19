@@ -599,6 +599,21 @@ export const BODIES: Record<string, SeoBody> = {
 				paragraphs: [
 					'They are siblings: .ogg and .oga are the same Ogg container, and .opus is Ogg carrying Opus under its own extension — voice messages usually arrive that way, and [OPUS to MP3](/opus-to-mp3) handles them. All of them convert here too; for bitrate advice and target-size mode, see the [audio tool](/compress-audio).'
 				]
+			},
+			{
+				heading: 'Pick the bitrate by what the source was',
+				paragraphs: [
+					'Lossy in, lossy out — the MP3 should sit at or slightly above the source’s rate, and OGG files tend to arrive from a few predictable places:'
+				],
+				table: {
+					columns: ['The source', 'MP3 pick'],
+					rows: [
+						['Game soundtrack rips', '192 kbps — music deserves the headroom'],
+						['Podcast feed episodes', '128 kbps — speech stays clean, files stay small'],
+						['Voice clips wearing .ogg', '96–128 kbps — the source was low-rate to begin with'],
+						['High-quality Vorbis music', '256 kbps to avoid stacking audible loss']
+					]
+				}
 			}
 		],
 		faq: [
@@ -626,6 +641,21 @@ export const BODIES: Record<string, SeoBody> = {
 				paragraphs: [
 					'Recorders and broadcast tools often write bare ADTS .aac because it needs no finalization — but players want wrapped, tagged files. MP3 is the universal answer; [M4A to MP3](/m4a-to-mp3) covers the wrapped Apple flavor, and the [audio tool](/compress-audio) converts either into M4A, OGG, FLAC and more.'
 				]
+			},
+			{
+				heading: 'The right MP3 rate for each source',
+				paragraphs: [
+					'Raw .aac files come from gear, not stores — and the gear tells you what the audio can carry:'
+				],
+				table: {
+					columns: ['The source', 'MP3 pick'],
+					rows: [
+						['A voice recorder’s ADTS dump', '128 kbps — clean speech, small file'],
+						['Broadcast and radio captures', '192 kbps — produced audio carries music beds'],
+						['An old phone’s recordings', '128 kbps; the microphone was the bottleneck anyway'],
+						['High-rate AAC music', '256 kbps so the re-encode stays inaudible']
+					]
+				}
 			}
 		],
 		faq: [
@@ -652,6 +682,13 @@ export const BODIES: Record<string, SeoBody> = {
 				heading: 'A decode, not an upgrade',
 				paragraphs: [
 					'Treat this as unpacking: the WAV is the MP3’s content in a form every tool accepts, no better and no worse. Archiving losslessly only works from lossless sources — [WAV to FLAC](/wav-to-flac) halves master sizes; going back the other way, [WAV to MP3](/wav-to-mp3) makes the small share copy.'
+				]
+			},
+			{
+				heading: 'Sample rates and bit depth, briefly',
+				paragraphs: [
+					'The output here is 16-bit, 44.1 kHz stereo — the CD convention, and what samplers, transcription suites and older editors were built around. MP3 itself is almost always 44.1 kHz, so the decode is a straight unpack with no resampling involved.',
+					'Video land runs on 48 kHz instead; if a video editor insists on it, import the 44.1 kHz WAV anyway — every serious editor resamples on the timeline, and one resample of already-lossy audio is nothing to fear. What matters is avoiding repeated lossy ENCODES, not resamples.'
 				]
 			}
 		],
@@ -734,6 +771,20 @@ export const BODIES: Record<string, SeoBody> = {
 				paragraphs: [
 					'Sometimes the camera was just the way the sound got recorded. Extraction discards the picture and encodes the audio to MP3, so an hour of lecture footage becomes a small file any phone, player or notes app opens. [MP4 to MP3](/mp4-to-mp3) is the same tool for MP4 files, [MP4 to WAV](/mp4-to-wav) extracts editing-grade PCM instead, and the video itself shrinks on [Compress MOV](/compress-mov).'
 				]
+			},
+			{
+				heading: 'An hour of footage, in megabytes',
+				paragraphs: [
+					'The math is friendly: MP3 size is bitrate × time, and the video you are discarding was fifty times larger. For a typical hour-long MOV:'
+				],
+				table: {
+					columns: ['Recording', 'Pick', 'An hour lands at'],
+					rows: [
+						['Lecture, interview, meeting', '96–128 kbps', '≈ 43–58 MB'],
+						['Concert or gig clip', '192 kbps', '≈ 86 MB'],
+						['Ambient and field sound', '128 kbps', '≈ 58 MB']
+					]
+				}
 			}
 		],
 		faq: [
@@ -842,6 +893,21 @@ export const BODIES: Record<string, SeoBody> = {
 				paragraphs: [
 					'Opus wins listening tests at every bitrate: speech is clean at 32–64 kbps, music rivals higher-rate MP3 at 96–128 kbps. That makes it the right target for voice notes, podcasts, streaming and game audio — WhatsApp voice messages are Opus already. For a lossless archive use [WAV to FLAC](/wav-to-flac); when a legacy player must open the file, [WAV to MP3](/wav-to-mp3) stays the compatibility pick.'
 				]
+			},
+			{
+				heading: 'The Opus bitrate ladder',
+				paragraphs: [
+					'Opus was designed to be chosen by content, not by superstition — each step down the ladder buys real megabytes:'
+				],
+				table: {
+					columns: ['Content', 'Bitrate', 'An hour is roughly'],
+					rows: [
+						['Voice memo, dictation', '32 kbps', '14 MB'],
+						['Podcast, interview', '48–64 kbps', '22–29 MB'],
+						['Music, everyday listening', '96 kbps', '43 MB'],
+						['Music, critical ears', '128–160 kbps', '58–72 MB']
+					]
+				}
 			}
 		],
 		faq: [

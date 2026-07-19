@@ -1065,6 +1065,24 @@ export const BODIES: Record<string, SeoBody> = {
 				paragraphs: [
 					'CR2 is Canon’s TIFF-based RAW container from the EOS era. Developing it interpolates full color from the sensor mosaic, applies your camera’s white balance and writes sRGB — LibRaw’s defaults, matching what Canon’s own software would start from. The [generic RAW converter](/raw-to-jpg) handles mixed shoots (including newer CR3 siblings it may not read — those need a desktop tool), and [Compress JPG](/compress-jpg) squeezes the results further.'
 				]
+			},
+			{
+				heading: 'Proofing a shoot in minutes',
+				paragraphs: [
+					'The classic CR2 chore is not one file — it is two hundred, needed as JPGs an hour after the shoot. Batch develop plus the resize control turns that into one drop; pick the settings by where the proofs are going:'
+				],
+				table: {
+					columns: ['Deliverable', 'Setting'],
+					rows: [
+						[
+							'Client gallery by email',
+							'Resize to 2048 px, quality 75 — dozens of shots per 25 MB'
+						],
+						['Fast cull on a laptop', 'Resize to 1200 px — tiny files that scrub instantly'],
+						['Print-shop handoff', 'Full resolution, quality 90'],
+						['A portal with a hard cap', 'Target-size mode — type the limit itself']
+					]
+				}
 			}
 		],
 		faq: [
@@ -1091,6 +1109,13 @@ export const BODIES: Record<string, SeoBody> = {
 				heading: 'Developing NEF without Nikon software',
 				paragraphs: [
 					'NEF is Nikon’s RAW container, and opening it usually means installing NX Studio or a commercial editor. Here the develop happens in the browser: demosaic, camera white balance, sRGB out — LibRaw’s faithful defaults. Mixed-brand shoots belong on the [generic RAW converter](/raw-to-jpg); the finished JPGs shrink further with [Compress JPG](/compress-jpg) or convert to [WebP](/jpg-to-webp) for the web.'
+				]
+			},
+			{
+				heading: 'Compressed NEF vs uncompressed',
+				paragraphs: [
+					'Nikon bodies write NEF in up to three flavors: lossless compressed (the default on most cameras — about a third smaller, pixels mathematically identical), plain compressed (“visually lossless”, smaller still), and uncompressed (mostly older bodies and cautious menus). The size difference lives entirely on the memory card.',
+					'For this converter it is a non-question: all three decode through the same LibRaw path and develop to the same JPG. If you have been shooting uncompressed out of caution, the lossless-compressed menu option buys card space and costs nothing that survives to the develop.'
 				]
 			}
 		],
@@ -1119,6 +1144,24 @@ export const BODIES: Record<string, SeoBody> = {
 				paragraphs: [
 					'ARW is Sony’s RAW flavor, and the usual route to JPG runs through Imaging Edge or a paid editor. This page develops it directly: LibRaw demosaics the sensor data, applies the camera’s white balance and writes sRGB. For mixed cards use the [RAW converter](/raw-to-jpg); for web-bound exports flip the output pill to [WebP](/jpg-to-webp) or AVIF and skip a second conversion.'
 				]
+			},
+			{
+				heading: 'High-megapixel Alphas without the wait',
+				paragraphs: [
+					'Sony’s appeal is resolution — and a 61-megapixel A7R frame is a 120 MB negative that almost no destination wants at full size. Resizing during the develop collapses the work into one pass:'
+				],
+				table: {
+					columns: ['Output need', 'Setting'],
+					rows: [
+						['Full-detail master', 'Full resolution, quality 85–90'],
+						['Web and social exports', 'Resize to 2048 px — 61 MP collapses to a couple of MB'],
+						[
+							'Email or a form with a cap',
+							'Target-size mode — the tool works backwards from the limit'
+						],
+						['Culling on a screen', 'Resize to 1200 px and flick through at speed']
+					]
+				}
 			}
 		],
 		faq: [
@@ -1145,6 +1188,13 @@ export const BODIES: Record<string, SeoBody> = {
 				heading: 'The RAW everything speaks — almost',
 				paragraphs: [
 					'DNG is the openly documented RAW container: phones with pro mode, drones, and Lightroom-converted archives all write it. What they don’t do is open everywhere — plenty of apps and forms still want a plain JPG, which is exactly the develop this page performs (demosaic, camera white balance, sRGB). Mixed RAW batches belong on the [RAW converter](/raw-to-jpg), and [Compress JPG](/compress-jpg) squeezes the results to any cap.'
+				]
+			},
+			{
+				heading: 'Why phone DNGs look flatter than the phone’s JPG',
+				paragraphs: [
+					'A phone’s JPG is not one photo — it is a stack of exposures merged, tone-mapped, denoised and sharpened by the camera pipeline. The DNG next to it is a single exposure’s sensor data, and a standard develop renders exactly that: honest colors, less punch, more visible noise in the shadows. Nothing is wrong; the computational layer simply is not in the negative.',
+					'That flatness is the point — it is editing headroom. Treat the developed JPG as a neutral base for your own adjustments, and when you just want the phone look with no editing, the phone’s own JPG already is that look — shoot RAW+JPG and use each for what it is.'
 				]
 			}
 		],

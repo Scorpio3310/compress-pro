@@ -401,6 +401,13 @@ export const BODIES: Record<string, SeoBody> = {
 				paragraphs: [
 					'tar bundles; gzip/bzip2/xz compress the bundle. tar.gz (or .tgz — same thing) is the everyday combination, and [Create TAR.GZ](/create-tar-gz) builds it in one step. A plain tar from this page can also be compressed later with [Gzip](/gzip-files) — the result is byte-for-byte a tar.gz.'
 				]
+			},
+			{
+				heading: 'tar for machines',
+				paragraphs: [
+					'tar’s real audience today is software, not people. The format is one strictly sequential stream — no index to seek, no directory at the end — which makes it perfect for pipes: a producer can start writing while the consumer starts reading, and two tars concatenate into a valid third.',
+					'That is why machine interfaces keep asking for it: docker build sends your context to the daemon as a tar stream, kubectl cp moves files in and out of containers the same way, CI systems tar cache directories between jobs, and plenty of upload APIs accept exactly one uncompressed .tar. When the consumer is a program, plain tar is not a missing feature — it is the spec.'
+				]
 			}
 		],
 		faq: [
@@ -428,6 +435,24 @@ export const BODIES: Record<string, SeoBody> = {
 				paragraphs: [
 					'ZIP compresses each file separately, so a thousand small source files each pay the overhead alone. A tarball compresses the whole tar as one stream, letting the compressor exploit repetition ACROSS files — that is why source releases ship as .tar.gz. Already have a ZIP? [ZIP to TAR.GZ](/zip-to-tar-gz) converts it; the other direction is [TAR.GZ to ZIP](/tar-gz-to-zip).'
 				]
+			},
+			{
+				heading: 'The tarball compressors, measured',
+				paragraphs: [
+					'Same tar underneath, three squeezes — the format pills switch between them. On a typical source tree or text-heavy payload the trade looks like this:'
+				],
+				table: {
+					columns: ['Compressor', 'Size', 'Speed'],
+					rows: [
+						[
+							'gzip (.tar.gz)',
+							'Baseline — roughly a third of the original',
+							'Fast to build, fast to unpack'
+						],
+						['bzip2 (.tar.bz2)', '10–20% below gzip', 'Noticeably slower to build'],
+						['xz (.tar.xz)', '25–40% below gzip', 'Slowest build by far; unpacking stays quick']
+					]
+				}
 			}
 		],
 		faq: [
@@ -454,6 +479,13 @@ export const BODIES: Record<string, SeoBody> = {
 				heading: 'Where bz2 sits between gz and xz',
 				paragraphs: [
 					'bzip2 lands noticeably smaller than gzip on text and source code, at a real speed cost — the middle child of the tarball family. [Create TAR.GZ](/create-tar-gz) stays the fast, maximally compatible default; [Create TAR.XZ](/create-tar-xz) squeezes hardest of the three. Compressing single files without the tar wrapper is [Bzip2 files](/bzip2-files).'
+				]
+			},
+			{
+				heading: 'Where .tar.bz2 survives today',
+				paragraphs: [
+					'bzip2’s decade as the ratio champion ended when xz arrived, and new projects rarely pick it — but the format is far from dead. Long-lived build pipelines and Makefiles stay pinned to the .tar.bz2 they were written against, mirrored archives keep historical releases in the format their checksums were published for, and a mountain of scientific datasets was archived in it during the 2000s.',
+					'It also kept one technical card: bzip2 compresses in independent 900 KB blocks, which makes parallel decompression natural — tools like pbzip2 saturate every core, something classic single-stream gzip cannot do. If a consumer on the other end expects .tar.bz2, producing exactly that here is the whole point of this page.'
 				]
 			}
 		],
@@ -482,6 +514,24 @@ export const BODIES: Record<string, SeoBody> = {
 				paragraphs: [
 					'xz (LZMA2) typically undercuts gzip by 25–40% on compressible payloads, which is why release artifacts ship as .tar.xz — built once, downloaded many times. The price is CPU: creation is the slowest of the family, so patience on big trees is normal. [Create TAR.GZ](/create-tar-gz) wins when speed or maximum compatibility matters, and [Create 7Z](/create-7z) offers the same LZMA family plus AES-256 encryption.'
 				]
+			},
+			{
+				heading: 'What ships as .tar.xz',
+				paragraphs: [
+					'The format earned its place at the top of the food chain — where a file is built once and downloaded millions of times, the extra build minutes buy real bandwidth:'
+				],
+				table: {
+					columns: ['Ecosystem', 'Why xz'],
+					rows: [
+						[
+							'kernel.org',
+							'Linux kernel sources ship as .tar.xz — bandwidth at that scale is money'
+						],
+						['GNU and GNOME releases', 'The project standard for source tarballs'],
+						['Debian source packages', 'orig tarballs moved from gz to xz years ago'],
+						['Slackware packages', 'The distribution’s .txz package is a tar.xz by another name']
+					]
+				}
 			}
 		],
 		faq: [
@@ -590,6 +640,27 @@ export const BODIES: Record<string, SeoBody> = {
 				paragraphs: [
 					'Extraction gives you the files; sometimes you want them back in an archive that opens everywhere. [RAR to ZIP](/rar-to-zip) does exactly that in one step. The [archive tool](/zip-files) is the general-purpose version of this page — every format, create and extract, one place.'
 				]
+			},
+			{
+				heading: 'Where RARs still come from',
+				paragraphs: [
+					'RAR thrives where something was archived once and downloaded for years — so the .rar reaching you today usually fits a recognizable pattern:'
+				],
+				table: {
+					columns: ['The source', 'What to expect inside'],
+					rows: [
+						[
+							'A photo or design studio handoff',
+							'Multi-GB image sets — studios standardized on WinRAR long ago'
+						],
+						['Game mods and fan patches', 'Loose files meant to be dropped into a game folder'],
+						['Old forums and download portals', 'Software and media packs from RAR’s heyday'],
+						[
+							'A family backup from a past decade',
+							'Documents and photos worth more than the format holding them'
+						]
+					]
+				}
 			}
 		],
 		faq: [
@@ -617,6 +688,22 @@ export const BODIES: Record<string, SeoBody> = {
 				paragraphs: [
 					'Need the contents once? Extract here and grab the files. Passing the archive along? [7Z to ZIP](/7z-to-zip) rebuilds it as a ZIP anyone can open, and [Create 7Z](/create-7z) makes fresh 7Z archives — with AES-256 if you set a password.'
 				]
+			},
+			{
+				heading: 'What tends to travel as 7Z',
+				paragraphs: ['Nobody picks 7Z casually — it shows up where its strengths were the point:'],
+				table: {
+					columns: ['The source', 'Why it came as 7Z'],
+					rows: [
+						['Dataset and database dumps', 'LZMA2 lands text and CSV 20–40% below ZIP'],
+						[
+							'A power user’s backup or handoff',
+							'7-Zip is simply the default archiver on their machine'
+						],
+						['Encrypted deliveries', 'AES-256 with hidden file names beats ZIP’s aging crypto'],
+						['Firmware and driver mirrors', 'Compressed once, downloaded thousands of times']
+					]
+				}
 			}
 		],
 		faq: [
@@ -644,6 +731,27 @@ export const BODIES: Record<string, SeoBody> = {
 				paragraphs: [
 					'Source releases, GitHub archive downloads and node package tarballs all arrive as .tar.gz. Want a single Windows-friendly file instead of loose downloads? [TAR.GZ to ZIP](/tar-gz-to-zip) repacks in one step. Building tarballs from scratch is [Create TAR.GZ](/create-tar-gz).'
 				]
+			},
+			{
+				heading: 'The tarballs that land on non-unix desks',
+				paragraphs: [
+					'A tarball on a Windows or phone screen almost always arrived one of a few ways — and knowing which tells you what is inside:'
+				],
+				table: {
+					columns: ['You got it from', 'Inside'],
+					rows: [
+						[
+							'GitHub’s “Download source” button',
+							'The repository tree at that tag, one folder deep'
+						],
+						['An npm package download', 'A package/ folder with the published files'],
+						['A server or hosting backup', 'Site files and database dumps, usually timestamped'],
+						[
+							'A Linux-first vendor’s download page',
+							'Binaries and a README expecting a unix unpack'
+						]
+					]
+				}
 			}
 		],
 		faq: [
@@ -671,6 +779,27 @@ export const BODIES: Record<string, SeoBody> = {
 				paragraphs: [
 					'On a machine with a shell, gunzip does this in a keystroke; on a locked-down laptop or a phone, this page is the shell-free equivalent. The reverse — making .gz files — is [Gzip files](/gzip-files); bundling many files into one compressed download is [Create TAR.GZ](/create-tar-gz).'
 				]
+			},
+			{
+				heading: 'The everyday .gz, by habitat',
+				paragraphs: [
+					'Single-file gzip is infrastructure’s favorite wrapper, and the file name usually announces exactly what came out of where:'
+				],
+				table: {
+					columns: ['File', 'What it is'],
+					rows: [
+						[
+							'access.log.gz, error.log.1.gz',
+							'Rotated web-server logs — logrotate gzips the older days'
+						],
+						['dump.sql.gz', 'A database export; many restore tools read it compressed'],
+						[
+							'export.csv.gz, data.json.gz',
+							'API and analytics exports shipped small to save bandwidth'
+						],
+						['anything.tar.gz', 'Not a single file — a tarball, and it unwraps fully here too']
+					]
+				}
 			}
 		],
 		faq: [
@@ -698,6 +827,21 @@ export const BODIES: Record<string, SeoBody> = {
 				paragraphs: [
 					'.Z predates gzip: it is the output of compress(1), built on 1984-vintage LZW, and modern systems often ship without the tool that reads it — exactly why a browser page is the convenient way in. Chains like source.tar.Z unwrap both layers automatically, first the .Z stream, then the tar bundle. Newer single-file cousins live on [Extract GZ](/extract-gz), and everything else archive-shaped opens on [Zip & Unzip](/zip-files).'
 				]
+			},
+			{
+				heading: '.Z and .gz, side by side',
+				paragraphs: [
+					'gzip was written specifically to replace compress — LZW was patent-encumbered in the early 90s, and the free replacement also happened to compress better. The family resemblance comes with clear tells:'
+				],
+				table: {
+					columns: ['Trait', '.Z (compress)', '.gz (gzip)'],
+					rows: [
+						['Era', '1984 to the early 90s', '1992 onward'],
+						['Algorithm', 'LZW — the patent that started it all', 'DEFLATE, patent-free by design'],
+						['Natural habitat', 'FTP mirrors, tape backups, SunOS-era sources', 'Everything since'],
+						['Compression', 'Modest', 'Noticeably tighter on the same input']
+					]
+				}
 			}
 		],
 		faq: [
@@ -725,6 +869,30 @@ export const BODIES: Record<string, SeoBody> = {
 				paragraphs: [
 					'Every FILE on the disc extracts byte-perfect. What does not survive is bootability — boot sectors are disc plumbing, not files, so extracting (or [converting to ZIP](/iso-to-zip)) never yields a bootable copy. To write a bootable USB, hand the original ISO to Rufus or balenaEtcher and let it do its thing.'
 				]
+			},
+			{
+				heading: 'Anatomy of a disc image',
+				paragraphs: [
+					'An ISO is a filesystem frozen into a file, and its layers explain both what you get here and what no extractor can give you:'
+				],
+				table: {
+					columns: ['Piece', 'What it holds'],
+					rows: [
+						['ISO9660 file tree', 'Every file and folder on the disc — extracts byte-perfect'],
+						[
+							'Joliet / Rock Ridge extensions',
+							'Long and unicode file names — applied automatically'
+						],
+						[
+							'El Torito boot record',
+							'The bootable part — plumbing, not a file; it cannot survive extraction'
+						],
+						[
+							'UDF layer (newer media)',
+							'Readable in most cases; copy-protected video discs are the exception'
+						]
+					]
+				}
 			}
 		],
 		faq: [
@@ -752,6 +920,21 @@ export const BODIES: Record<string, SeoBody> = {
 				paragraphs: [
 					'Extracted driver files usually go straight to Device Manager, but when a set of files should travel on, repack them via the [archive tool](/zip-files) into a [ZIP](/zip-files) or [7Z](/create-7z). Old software archives often nest formats — a CAB inside a ZIP inside an ISO all opens here, one layer per drop.'
 				]
+			},
+			{
+				heading: 'What cabinets carry',
+				paragraphs: [
+					'Microsoft has shipped its platform in cabinets for thirty years, so the contents follow the job the .cab arrived to do:'
+				],
+				table: {
+					columns: ['Cabinet', 'Typical contents'],
+					rows: [
+						['A driver package', 'The INF, SYS, DLL and CAT files Device Manager asks for'],
+						['A Windows Update payload', 'System files staged for servicing'],
+						['Inside an .msi installer', 'The application files the installer copies out'],
+						['A printer or vendor bundle', 'Firmware blobs and setup utilities']
+					]
+				}
 			}
 		],
 		faq: [
@@ -779,6 +962,20 @@ export const BODIES: Record<string, SeoBody> = {
 				paragraphs: [
 					'Both package formats are thin wrappers around a standard archive — deb wraps a tar, [rpm](/extract-rpm) wraps a cpio. That is why one engine opens both, and why the files inside look so ordinary once unwrapped. For repacking extracted files, the [archive tool](/zip-files) builds any format.'
 				]
+			},
+			{
+				heading: 'Anatomy of a .deb',
+				paragraphs: [
+					'Under the extension sits an ar archive holding exactly three members, in strict order — and only the last one is what you came for:'
+				],
+				table: {
+					columns: ['Member', 'What it holds'],
+					rows: [
+						['debian-binary', 'The format version — four bytes of ceremony (“2.0”)'],
+						['control.tar.(gz|xz)', 'Metadata: dependencies, checksums, maintainer scripts'],
+						['data.tar.(gz|xz|zst)', 'The payload — every file the package would install']
+					]
+				}
 			}
 		],
 		faq: [
@@ -806,6 +1003,20 @@ export const BODIES: Record<string, SeoBody> = {
 				paragraphs: [
 					'The rpm payload chain (rpm → cpio.xz → cpio → files) is exactly the kind of nesting the extractor chases automatically — same as [deb packages](/extract-deb) and [tarballs](/extract-tar-gz). Plain [cpio archives](/extract-cpio) open directly too.'
 				]
+			},
+			{
+				heading: 'Anatomy of an .rpm',
+				paragraphs: [
+					'An rpm reads like a stack of stapled sections, and only the bottom one holds files:'
+				],
+				table: {
+					columns: ['Section', 'What it holds'],
+					rows: [
+						['Lead + signature', 'Magic bytes and GPG signatures — package-manager territory'],
+						['Header', 'Name, version, dependencies and the promised file list'],
+						['Payload', 'A compressed cpio archive with the actual files — what extracts here']
+					]
+				}
 			}
 		],
 		faq: [
@@ -833,6 +1044,21 @@ export const BODIES: Record<string, SeoBody> = {
 				paragraphs: [
 					'The terminal recipe — gunzip | cpio -idmv — assumes a shell, the right flags and some scar tissue. Dropping the file here is the flat-pack version. Related plumbing: [rpm packages](/extract-rpm) unwrap to cpio automatically, and [tarballs](/extract-tar-gz) get the same treatment on their side of the family.'
 				]
+			},
+			{
+				heading: 'Where cpio still lives',
+				paragraphs: [
+					'cpio lost the human-facing war to tar decades ago, but it never left the plumbing:'
+				],
+				table: {
+					columns: ['Habitat', 'What it is doing there'],
+					rows: [
+						['initramfs / initrd images', 'The early-boot filesystem Linux unpacks into RAM'],
+						['rpm package payloads', 'The file archive under every Fedora and SUSE package'],
+						['Firmware update bundles', 'Vendors staple cpio blobs into their updaters'],
+						['Old backup scripts', 'find | cpio pipelines from before tar won']
+					]
+				}
 			}
 		],
 		faq: [
@@ -860,6 +1086,21 @@ export const BODIES: Record<string, SeoBody> = {
 				paragraphs: [
 					'Retro collections mix formats freely — LHA next to [ARJ](/extract-arj) next to early ZIP. Everything opens on the same [archive tab](/zip-files), and once extracted, repacking into a modern [7Z](/create-7z) keeps the bytes and drops the archaeology.'
 				]
+			},
+			{
+				heading: 'Where .lzh files surface today',
+				paragraphs: [
+					'The format faded from daily use around the millennium, but whole preservation scenes still speak it fluently:'
+				],
+				table: {
+					columns: ['The trove', 'What is inside'],
+					rows: [
+						['Amiga software collections', 'Games and demos — .lha was the platform’s standard'],
+						['Japanese BBS-era archives', 'Software and doujin works; names may be Shift-JIS'],
+						['PC-98 preservation sites', 'A whole Japanese computing lineage packed in .lzh'],
+						['Shareware CD-ROMs', 'Thousands of small archives pressed in the early 90s']
+					]
+				}
 			}
 		],
 		faq: [
@@ -887,6 +1128,24 @@ export const BODIES: Record<string, SeoBody> = {
 				paragraphs: [
 					'ARJ sits alongside [LHA](/extract-lha) and early ZIP in most retro collections — all three open here. Once rescued, files worth keeping deserve a modern container: [7Z with AES](/create-7z) for private archives, [ZIP](/zip-files) for anything meant to be shared.'
 				]
+			},
+			{
+				heading: 'What an .arj usually turns out to be',
+				paragraphs: [
+					'ARJ’s window was narrow — roughly 1991 to 1995 — which makes the contents unusually predictable:'
+				],
+				table: {
+					columns: ['The source', 'Expect inside'],
+					rows: [
+						['A DOS-era backup run', 'Documents, spreadsheets and dBase files from the family 386'],
+						['BBS download folders', 'Shareware, text-file zines and door games'],
+						[
+							'A floppy-spanned set (.a01, .a02…)',
+							'Only a joined single archive opens — see the FAQ'
+						],
+						['Driver disks from the attic', 'Sound-card and modem installers nobody dares delete']
+					]
+				}
 			}
 		],
 		faq: [
