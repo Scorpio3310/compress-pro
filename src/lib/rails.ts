@@ -1,4 +1,11 @@
-import type { FontOp, OcrSettings, PdfOp, SubtitleSettings, ZipSettings } from './types';
+import type {
+	EbookSettings,
+	FontOp,
+	OcrSettings,
+	PdfOp,
+	SubtitleSettings,
+	ZipSettings
+} from './types';
 
 /** One item of a secondary op rail. `id` doubles as the e2e hook
  *  (`button[data-seg="<id>"]`) and `label` as the exact accessible name —
@@ -53,4 +60,11 @@ export const OCR_OPS: { id: OcrSettings['op']; label: string }[] = [
 export const SUBTITLE_TARGETS: { id: SubtitleSettings['to']; label: string }[] = [
 	{ id: 'vtt', label: 'To VTT' },
 	{ id: 'srt', label: 'To SRT' }
+];
+/** Full list — +page mix-filters TXT/PDF by the parked batch before it
+ *  reaches the rail (TXT reads EPUBs, PDF lays out comics). */
+export const EBOOK_OUTPUTS: { id: EbookSettings['to']; label: string }[] = [
+	{ id: 'auto', label: 'Compress' },
+	{ id: 'txt', label: 'To TXT' },
+	{ id: 'pdf', label: 'To PDF' }
 ];

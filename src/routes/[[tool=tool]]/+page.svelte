@@ -5,6 +5,7 @@
 		UploadedFile,
 		CompressedFile,
 		TabState,
+		EbookSettings,
 		OcrSettings,
 		PdfOp,
 		ProgressInfo,
@@ -22,7 +23,15 @@
 	import { fontMeta, probeFont, removeFontMeta } from '$lib/font-meta.svelte';
 	import { estimateAudioBytes, estimateVideoBytes } from '$lib/video-estimate';
 	import * as actionLabels from '$lib/action-labels';
-	import { FONT_OPS, OCR_OPS, PDF_OPS, SUBTITLE_TARGETS, ZIP_OPS, type Rail } from '$lib/rails';
+	import {
+		EBOOK_OUTPUTS,
+		FONT_OPS,
+		OCR_OPS,
+		PDF_OPS,
+		SUBTITLE_TARGETS,
+		ZIP_OPS,
+		type Rail
+	} from '$lib/rails';
 	import Tabs, { type TabBadgeStatus } from '$lib/components/Tabs.svelte';
 	import FileUpload from '$lib/components/FileUpload.svelte';
 	import CompressButton from '$lib/components/controls/CompressButton.svelte';
@@ -107,6 +116,32 @@
 	let zipOp = $derived(settings.zip.op);
 	let fontOp = $derived(settings.font.op);
 
+	// TXT reads EPUBs, PDF lays out comics — an ebook rail item that can't
+	// succeed for ANY parked file is dropped rather than left to error on run.
+	// Mixed batches keep both (per-file guards in compress.ts stay the arbiter,
+	// and also cover renamed/mislabeled files this extension check can't see).
+	// An empty batch keeps all three, so the snap below never fires pre-upload.
+	const ebookHasEpub = $derived(tabStates.ebook.files.some((f) => /\.epub$/i.test(f.name)));
+	const ebookHasComic = $derived(tabStates.ebook.files.some((f) => /\.(cbz|cbr)$/i.test(f.name)));
+	const ebookShowTxt = $derived(!ebookHasComic || ebookHasEpub);
+	const ebookShowPdf = $derived(!ebookHasEpub || ebookHasComic);
+	const ebookRailItems = $derived(
+		EBOOK_OUTPUTS.filter((o) =>
+			o.id === 'txt' ? ebookShowTxt : o.id === 'pdf' ? ebookShowPdf : true
+		)
+	);
+	$effect(() => {
+		// A selection whose rail item just vanished (persisted `to`, or the
+		// batch changed under it) snaps VISIBLY back to compress — never a
+		// hidden state the CTA doesn't reflect.
+		if (
+			(settings.ebook.to === 'txt' && !ebookShowTxt) ||
+			(settings.ebook.to === 'pdf' && !ebookShowPdf)
+		) {
+			settings.ebook.to = 'auto';
+		}
+	});
+
 	// The active tab's secondary op rail. Image tabs return null — their rail
 	// is format links, derived inside Tabs. Item ids/labels are e2e contracts
 	// (see rails.ts); the click side effects live in the handle*Change handlers.
@@ -151,6 +186,14 @@
 					items: SUBTITLE_TARGETS,
 					value: settings.subtitle.to,
 					onselect: (id) => handleSubtitleTargetChange(id as SubtitleSettings['to'])
+				};
+			case 'ebook':
+				return {
+					group: 'ebook',
+					label: 'E-book output',
+					items: ebookRailItems,
+					value: settings.ebook.to,
+					onselect: (id) => handleEbookOutputChange(id as EbookSettings['to'])
 				};
 			default:
 				return null;
@@ -670,6 +713,15 @@
 		settings.subtitle.to = to;
 	}
 
+	function handleEbookOutputChange(to: EbookSettings['to']) {
+		if (to === settings.ebook.to) return;
+		const state = tabStates.ebook;
+		clearResults(state);
+		state.error = null;
+		// Every output reads the same parked EPUB/CBZ/CBR batch — files stay.
+		settings.ebook.to = to;
+	}
+
 	// Converter landing pages preset the tool. afterNavigate fires on hydration
 	// ('enter') and on every client navigation while this shared component stays
 	// mounted — once per navigation, so manual changes afterwards are never
@@ -767,7 +819,7 @@
 			if (preset.quality !== undefined) settings.ebook.quality = preset.quality;
 			// No `to` in the preset means the page promises compression — a
 			// persisted txt/pdf choice from a converter visit must not leak in.
-			settings.ebook.to = preset.to ?? 'auto';
+			handleEbookOutputChange(preset.to ?? 'auto');
 		} else if (preset.kind === 'archive') {
 			handleZipOpChange(preset.op);
 			if (preset.to) settings.zip.outputFormat = preset.to;
@@ -1059,7 +1111,6 @@
 					{totalOriginalSize}
 					{estimatedSize}
 					{fontAxes}
-					ebookFileNames={tabStates.ebook.files.map((f) => f.name)}
 				/>
 			</div>
 		{/if}

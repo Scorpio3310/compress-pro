@@ -59,9 +59,6 @@
 		estimatedSize?: string | null;
 		/** Variable axes of the font tab's files (page-computed from probes). */
 		fontAxes?: FontAxisInfo[];
-		/** Names of the ebook tab's files (page-computed) — gates which output
-		 *  segments (TXT/PDF) the ebook controls show. */
-		ebookFileNames?: string[];
 		/** The Advanced disclosure's open state — owned by the page so presets
 		 *  (e.g. /resize-image) can open it. */
 		advancedOpen: boolean;
@@ -74,7 +71,6 @@
 		totalOriginalSize,
 		estimatedSize = null,
 		fontAxes = [],
-		ebookFileNames = [],
 		advancedOpen = $bindable()
 	}: Props = $props();
 
@@ -141,7 +137,7 @@
 			{:else if format === 'subtitle'}
 				<SubtitleControls bind:settings={subtitleSettings} />
 			{:else if format === 'ebook'}
-				<EbookControls bind:settings={ebookSettings} fileNames={ebookFileNames} />
+				<EbookControls bind:settings={ebookSettings} />
 			{:else if format === 'model'}
 				<ModelControls bind:settings={modelSettings} />
 			{:else if format === 'data'}
