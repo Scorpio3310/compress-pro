@@ -423,6 +423,9 @@ export interface EbookSettings {
 	quality: number;
 	/** Longest-side cap in px for those images, downscale-only; null = off. */
 	maxDimension: number | null;
+	/** Output: 'auto' recompresses the container (epub→epub, cbz/cbr→cbz);
+	 *  'txt' extracts EPUB text; 'pdf' builds a PDF from comic pages. */
+	to: 'auto' | 'txt' | 'pdf';
 }
 
 /** Per-tab settings with the concrete type per key (no cast needed for e.g. `.pdf`). */

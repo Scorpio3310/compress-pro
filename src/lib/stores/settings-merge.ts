@@ -100,7 +100,8 @@ export function defaultSettings(): SettingsMap {
 		},
 		ebook: {
 			quality: 80,
-			maxDimension: null
+			maxDimension: null,
+			to: 'auto' as const
 		},
 		model: {
 			compression: 'draco' as const,
@@ -339,6 +340,7 @@ export function mergeStoredSettings(target: SettingsMap, stored: unknown): void 
 		else if ([1200, 1600, 2048].includes(o.maxDimension as number)) {
 			target.ebook.maxDimension = o.maxDimension as number;
 		}
+		target.ebook.to = oneOf(o.to, ['auto', 'txt', 'pdf'] as const, target.ebook.to);
 	}
 	if (typeof s.model === 'object' && s.model !== null) {
 		const o = s.model as Record<string, unknown>;

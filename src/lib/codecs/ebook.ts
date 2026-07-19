@@ -22,7 +22,7 @@ export interface EbookResult {
 	warning: string | null;
 }
 
-interface Entry {
+export interface Entry {
 	name: string;
 	bytes: Uint8Array;
 }
@@ -114,7 +114,7 @@ export function ebookInfo(
 /** fflate can't write zip64 — its entry count silently wraps at 16 bits. */
 const MAX_ENTRIES = 65_535;
 
-async function readArchive(
+export async function readArchive(
 	file: UploadedFile,
 	onProgress: (fraction: number, detail: string | null) => void,
 	signal?: AbortSignal
