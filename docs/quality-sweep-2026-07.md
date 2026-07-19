@@ -158,40 +158,43 @@ tar-gz↔zip, ttf↔woff, ttf↔woff2, woff↔woff2) whose title token SETS are 
 ### After
 (populated at the end)
 
-## OPEN items (need a human decision)
+## OPEN items — resolution round (2026-07-19)
 
-- **O-02 (UX polish, archives):** an extracted entry with no extension (e.g. the JPEG
-  payload inside sample-2.bz2) downloads as "<name>.txt" — Chromium appends an extension
-  because the blob is typed `''` (compress.ts entryRow). Suggestion: magic-sniff common
-  types for extension-less extracted entries (image sniffing already exists in
-  file-visual.ts) and set blob type + display name accordingly.
-- **O-03 (feature wiring, RAW metadata):** "Keep metadata" on RAW inputs now shows an
-  honest "Metadata not kept …" note (F-25 fix). FULL preservation needs: LibRaw
-  metadata() → minimal EXIF TIFF in raw.ts, an optional `exifTiff` on PredecodedPixels
-  (protocol.ts), and the splice in image.ts (already in place for other paths). Small,
-  well-scoped follow-up.
-- **O-04 (copy polish):** with honest signed savings (F-64), CompareModal can render
-  "Saved −300 %" in green for grown files — consider a "Grew 300 %" phrasing/color
-  variant in CompareModal/SavingsSummary.
-- **O-05 (cancel granularity):** merge Cancel now bites at per-file progress ticks and
-  commit gates (F-43); threading the AbortSignal INTO pdf-tools' mergePdfs loop would
-  make it bite mid-copyPages of one huge member too.
+Six of the eight went to FIXED in one pass; two stay OPEN by decision.
+
+- **O-01 — FIXED (7cdbc78):** one title per reversed pair reworded with a distinct
+  angle (legacy IE, "back to", unix servers, players & TVs, Opus…); all pair jaccards
+  now ≤ 0.43 and `validate-seo` reports **0 warnings** (was 10) across 154 pages.
+- **O-02 — FIXED (53afbda):** entryRow magic-sniffs extension-less extracted entries
+  (jpg/png/webp/gif via ebook.ts sniffers, before dedup) and types the blob — the
+  bz2/gz image payload now downloads as `<name>.jpg`. Covered by AR-19 with a new
+  committed `photo-payload.gz` fixture.
+- **O-03 — FIXED (4a3e721):** RAW keep-metadata is real — `raw.metadata()` in the
+  decode transaction, new `exif-build.ts` writes a bare LE TIFF (IFD0 + Exif sub-IFD
+  + GPS IFD, Orientation always 1 — pixels leave LibRaw pre-rotated), spliced by the
+  existing exif-copy path; the TIFF never travels to the worker. Honest note remains
+  only for RAWs that expose no readable EXIF. Covered by exif-build.test (round-trip
+  through the app's own TiffReader), the flipped image.test, and KM-09 on a real
+  Canon DNG (make/model/ISO read back, orientation 1). `readExifSummary` gained
+  iso/exposureTime/fNumber/focalLength.
+- **O-04 — FIXED (abf974d):** CompareModal shows "Grew N%" in warn color for grown
+  files (was green "Saved −N%"); FileList/SavingsSummary were already honest.
+  Asserted in K-02.
+- **O-05 — FIXED (7b363b4):** `mergePdfs` takes the AbortSignal and copies in
+  25-page chunks with abort gates between them — Cancel now bites inside a huge
+  member, not just between files. Unit-covered (pre-aborted + mid-run abort).
+- **O-07 — FIXED (ac1a0a4):** side-by-side compositor normalizes both panels
+  through one sharp srgb pipeline and centers unequal heights (record.ts +
+  stitchHorizontal); verified visually on video↔gif cells.
+
+Still OPEN by decision (2026-07-19):
+
 - **O-06 (legacy archives, names):** old RAR/LZH/ARJ/CAB with OEM-codepage entry names
   still come out garbled through the 7zz worker (engine mangles them lossily before
   MEMFS; -mcp rejected). Zip gets repaired from its own central directory (30f6085);
   other formats would each need a minimal name+CRC header walker, or the js7z-tools
   (7-Zip 25.01) upgrade already noted in memory. Content is correct either way.
-- **O-07 (harness polish):** the side-by-side raster compositor offsets the right panel
-  ~12 px and can render dark scenes slightly darker on one side (different decode paths
-  for GIF vs video panels) — cosmetic, but it cost two false S2 alarms during visual
-  inspection; align panels pixel-exact and decode both sides through one path.
 - **O-08 (perf watch):** MEM-04 (AVIF batch) settled Δ is high and noisy across runs
   (529 MB before, 846 MB after; peaks similar) — pooled image workers keep wasm heaps
   alive by design; no per-run leak signal, but worth a look if users report memory
   pressure after large AVIF batches.
-
-- **O-01 (SEO, editorial):** 10 reversed converter pairs share identical title token
-  sets (e.g. "Convert TTF to WOFF2 …" vs "Convert WOFF2 to TTF …") — potential keyword
-  cannibalization between A→B and B→A pages. Suggestion: differentiate one side's title
-  angle (e.g. B→A gets "Restore/Extract …" phrasing or a use-case qualifier). Rankings
-  currently unaffected as directions differ; purely precautionary.
