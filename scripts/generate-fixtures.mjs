@@ -2749,17 +2749,23 @@ async function generateEbooks() {
 	const containerXml =
 		'<?xml version="1.0" encoding="UTF-8"?><container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles></container>';
 	const contentOpf =
-		'<?xml version="1.0" encoding="UTF-8"?><package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="uid"><metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:identifier id="uid">urn:uuid:5f3a2e10-9d7c-4b56-8f21-compresspro1</dc:identifier><dc:title>Fixture Book</dc:title><dc:language>en</dc:language><meta property="dcterms:modified">2026-01-01T00:00:00Z</meta></metadata><manifest><item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/><item id="ch1" href="chapter1.xhtml" media-type="application/xhtml+xml"/><item id="img1" href="images/photo1.jpg" media-type="image/jpeg"/><item id="img2" href="images/photo2.jpg" media-type="image/jpeg"/><item id="img3" href="images/diagram.png" media-type="image/png"/></manifest><spine><itemref idref="ch1"/></spine></package>';
+		'<?xml version="1.0" encoding="UTF-8"?><package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="uid"><metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:identifier id="uid">urn:uuid:5f3a2e10-9d7c-4b56-8f21-compresspro1</dc:identifier><dc:title>Fixture Book</dc:title><dc:language>en</dc:language><meta property="dcterms:modified">2026-01-01T00:00:00Z</meta></metadata><manifest><item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/><item id="ch2" href="chapter2.xhtml" media-type="application/xhtml+xml"/><item id="ch1" href="chapter1.xhtml" media-type="application/xhtml+xml"/><item id="img1" href="images/photo1.jpg" media-type="image/jpeg"/><item id="img2" href="images/photo2.jpg" media-type="image/jpeg"/><item id="img3" href="images/diagram.png" media-type="image/png"/></manifest><spine><itemref idref="ch1"/><itemref idref="ch2"/></spine></package>';
 	const navXhtml =
 		'<?xml version="1.0" encoding="UTF-8"?><html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops"><head><title>Nav</title></head><body><nav epub:type="toc"><ol><li><a href="chapter1.xhtml">Chapter 1</a></li></ol></nav></body></html>';
 	const chapterXhtml =
 		'<?xml version="1.0" encoding="UTF-8"?><html xmlns="http://www.w3.org/1999/xhtml"><head><title>Chapter 1</title></head><body><h1>Chapter 1</h1><p>The quick brown fox jumps over the lazy dog, verifying ebook recompression.</p><img src="images/photo1.jpg" alt="photo one"/><img src="images/photo2.jpg" alt="photo two"/><img src="images/diagram.png" alt="diagram"/></body></html>';
+	// ch2 sits BEFORE ch1 in both the zip and the OPF manifest, but AFTER it in
+	// the spine — epub-to-txt output order proves the spine won. The &amp; and
+	// <style> give entity resolution and skip-list handling teeth.
+	const chapter2Xhtml =
+		'<?xml version="1.0" encoding="UTF-8"?><html xmlns="http://www.w3.org/1999/xhtml"><head><title>Chapter 2</title><style>p { color: red; }</style></head><body><h1>Chapter 2</h1><p>Second chapter marker sentence &amp; spine-order proof.</p></body></html>';
 
 	const epubEntries = {
 		mimetype: [enc('application/epub+zip'), { level: 0 }],
 		'META-INF/container.xml': [enc(containerXml), { level: 6 }],
 		'OEBPS/content.opf': [enc(contentOpf), { level: 6 }],
 		'OEBPS/nav.xhtml': [enc(navXhtml), { level: 6 }],
+		'OEBPS/chapter2.xhtml': [enc(chapter2Xhtml), { level: 6 }],
 		'OEBPS/chapter1.xhtml': [enc(chapterXhtml), { level: 6 }],
 		'OEBPS/images/photo1.jpg': [new Uint8Array(jpg1), { level: 0 }],
 		'OEBPS/images/photo2.jpg': [new Uint8Array(jpg2), { level: 0 }],

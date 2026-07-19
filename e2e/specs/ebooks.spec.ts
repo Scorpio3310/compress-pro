@@ -1,13 +1,24 @@
 /**
- * EB-01…09: the ebook tab — EPUB/CBZ/CBR image recompression. The container
- * is rebuilt as a ZIP (mimetype-first/stored for EPUB), raster images inside
- * re-encode in their own format with a per-entry keep-original guard, and
- * everything else passes through byte-identical.
+ * EB-01…14: the ebook tab — EPUB/CBZ/CBR image recompression, plus the
+ * converter outputs: EPUB → TXT (spine-ordered text extraction) and CBZ/CBR →
+ * PDF (pages embedded losslessly). The container is rebuilt as a ZIP
+ * (mimetype-first/stored for EPUB), raster images inside re-encode in their
+ * own format with a per-entry keep-original guard, and everything else passes
+ * through byte-identical.
  */
 import { readFileSync } from 'node:fs';
 import { expect, fx, test } from '../fixtures';
-import { compress, downloadRow, gotoPath, setEbookQuality, upload } from '../helpers';
-import { imageMeta, pixelDiff, sevenZipEntries, unzip, zipCentralNames, zipFirstEntry } from '../verify';
+import { compress, downloadRow, gotoPath, rasterizePdfInPage, setEbookQuality, upload } from '../helpers';
+import {
+	imageMeta,
+	jpegSosOffset,
+	pdfInfo,
+	pixelDiff,
+	sevenZipEntries,
+	unzip,
+	zipCentralNames,
+	zipFirstEntry
+} from '../verify';
 
 const CBZ_ORDER = [
 	'page01.jpg',
@@ -175,4 +186,100 @@ test('EB-09: the max-dimension cap downscales only the oversized page', async ({
 	expect([p2.width, p2.height]).toEqual([700, 1000]);
 	// the downscaled run must ship, not revert (transformed → resized seam)
 	expect(art.bytes.length).toBeLessThan(readFileSync(fx('sample.cbz')).length);
+});
+
+test('EB-10: /epub-to-txt extracts spine-ordered plain text @smoke', async ({ page }) => {
+	await gotoPath(page, '/epub-to-txt');
+	await expect(page).toHaveTitle(/EPUB to TXT/);
+	await expect(page.locator('input[type=file]')).toHaveAttribute('accept', '.epub');
+	await upload(page, fx('sample.epub'));
+	// controls mount with the first file — the landing preset must have stuck
+	await expect(page.getByRole('button', { name: 'To TXT', exact: true })).toHaveAttribute(
+		'aria-pressed',
+		'true'
+	);
+	await expect(page.getByTestId('compress-cta')).toHaveText('Extract text from 1 file');
+	await compress(page, { timeout: 120_000 });
+	const art = await downloadRow(page);
+	expect(art.name).toBe('sample.txt');
+	const text = art.bytes.toString('utf8');
+	expect(text).toContain('The quick brown fox jumps over the lazy dog');
+	// entity resolved to a literal ampersand, not left as &amp;
+	expect(text).toContain('Second chapter marker sentence & spine-order proof.');
+	// ch2 sits before ch1 in both the zip and the manifest — the SPINE decides
+	expect(text.indexOf('quick brown fox')).toBeLessThan(text.indexOf('Second chapter marker'));
+	// headings survive as their own paragraphs; markup and styles do not
+	expect(text).toContain('Chapter 1');
+	expect(text).toContain('Chapter 2');
+	expect(text).not.toContain('color: red');
+	expect(text).not.toMatch(/<[a-z]/i);
+	await expect(page.getByTestId('row-info')).toContainText('2 chapters');
+});
+
+test('EB-11: /cbz-to-pdf embeds jpg pages byte-verbatim, one page per image @smoke', async ({
+	page
+}) => {
+	await gotoPath(page, '/cbz-to-pdf');
+	await expect(page).toHaveTitle(/CBZ to PDF/);
+	await expect(page.locator('input[type=file]')).toHaveAttribute('accept', '.cbz');
+	await upload(page, fx('sample.cbz'));
+	await expect(page.getByRole('button', { name: 'To PDF', exact: true })).toHaveAttribute(
+		'aria-pressed',
+		'true'
+	);
+	await compress(page, { timeout: 120_000 });
+	const art = await downloadRow(page);
+	expect(art.name).toBe('sample.pdf');
+	// 6 image pages in natural order — ComicInfo.xml is not a page
+	const info = await pdfInfo(art.bytes);
+	expect(info.pageCount).toBe(6);
+	// page = image dims (1 px = 1 pt), oversized scan first
+	expect(info.pageSizes[0]).toEqual({ w: 1400, h: 2000 });
+	// lossless embed: the source jpg's entropy-coded tail appears VERBATIM in
+	// the PDF — identical bytes ⇒ identical pixels, no decoder in the loop
+	const src = unzip(readFileSync(fx('sample.cbz')));
+	const page01 = Buffer.from(src['page01.jpg']);
+	expect(art.bytes.includes(page01.subarray(jpegSosOffset(page01)))).toBe(true);
+	await expect(page.getByTestId('row-info')).toContainText(
+		'6 pages · 4 embedded losslessly · 2 re-encoded'
+	);
+	// the page actually DRAWS the image (an embedded-but-blank page would still
+	// pass the byte check)
+	const raster = await rasterizePdfInPage(page, art.bytes, 1);
+	if (raster) {
+		const { ratio } = await pixelDiff(page01, raster);
+		expect(ratio, 'PDF page 1 renders the source scan').toBeLessThan(0.05);
+	}
+});
+
+test('EB-12: /cbr-to-pdf refuses an image-free archive with an honest error', async ({ page }) => {
+	await gotoPath(page, '/cbr-to-pdf');
+	await expect(page).toHaveTitle(/CBR to PDF/);
+	await expect(page.locator('input[type=file]')).toHaveAttribute('accept', '.cbr');
+	// the fixture CBR holds text files only — a real comic conversion is
+	// covered by the matrix suite with example.cbr
+	await upload(page, fx('sample.cbr'));
+	await expect(page.getByRole('button', { name: 'To PDF', exact: true })).toHaveAttribute(
+		'aria-pressed',
+		'true'
+	);
+	const run = await compress(page, { expectError: true });
+	expect(run.error).toMatch(/no image pages/i);
+	await expect(page.getByTestId('compress-cta')).toBeEnabled();
+});
+
+test('EB-13: a comic dropped on /epub-to-txt is redirected, not mangled', async ({ page }) => {
+	await gotoPath(page, '/epub-to-txt');
+	await upload(page, fx('sample.cbz'));
+	const run = await compress(page, { expectError: true });
+	expect(run.error).toMatch(/cbz-to-pdf/);
+	await expect(page.getByTestId('compress-cta')).toBeEnabled();
+});
+
+test('EB-14: a DRM-protected EPUB is refused on /epub-to-txt too', async ({ page }) => {
+	await gotoPath(page, '/epub-to-txt');
+	await upload(page, fx('sample-drm.epub'));
+	const run = await compress(page, { expectError: true });
+	expect(run.error).toMatch(/DRM/i);
+	await expect(page.getByTestId('compress-cta')).toBeEnabled();
 });

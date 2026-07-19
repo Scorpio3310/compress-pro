@@ -5,7 +5,10 @@
  * SheetJS / yaml / pdf-lib / pdfjs), container semantics are asserted (OCF
  * mimetype-first + stored, entry parity, cue counts, round-trip deep
  * equality, the YAML date-coercion trap), and ebook first-image
- * before/afters land as side-by-side rasters.
+ * before/afters land as side-by-side rasters. The converter outputs run too:
+ * every real EPUB through /epub-to-txt (word-coverage gated against a node
+ * tag-strip estimate) and real comics through /cbz-to-pdf //cbr-to-pdf
+ * (page count vs magic-byte sniff, jpg byte-verbatim embed, page-1 raster).
  *
  * Cell titles: `MX [docs] <file> :: <action> @<level>` — grep one to re-run.
  */
@@ -15,13 +18,22 @@ import type { Page } from '@playwright/test';
 import sharp from 'sharp';
 import { parse as parseYaml } from 'yaml';
 import { expect, test } from '../fixtures';
-import { compress, downloadRow, gotoPath, setEbookQuality, upload } from '../helpers';
+import {
+	compress,
+	downloadRow,
+	gotoPath,
+	rasterizePdfInPage,
+	setEbookQuality,
+	upload
+} from '../helpers';
 import { REAL_PHOTO } from '../thresholds';
 import {
 	imageMeta,
+	jpegSosOffset,
 	pdfEncryptionMeta,
 	pdfInfo,
 	pdfTextContent,
+	pixelDiff,
 	qualityMetrics,
 	sevenZipEntries,
 	unzip,
@@ -524,6 +536,218 @@ for (const f of cbrs) {
 			});
 			throw error;
 		}
+	});
+}
+
+// ===========================================================================
+// A2) EPUB → TXT (every real EPUB) and CBZ/CBR → PDF (real comics)
+// ===========================================================================
+
+/** Node-side reference: tag-stripped word estimate over every HTML-ish entry.
+ *  Deliberately crude — it gates coverage (the app must not silently drop the
+ *  book's text), not fidelity (spine order is pinned by the fixture e2e). */
+function epubWordEstimate(entries: Record<string, Uint8Array>): number {
+	let words = 0;
+	for (const [name, bytes] of Object.entries(entries)) {
+		if (!/\.(x?html?|htm)$/i.test(name)) continue;
+		const text = Buffer.from(bytes)
+			.toString('utf8')
+			.replace(/<(script|style)[\s\S]*?<\/\1>/gi, ' ')
+			.replace(/<[^>]*>/g, ' ')
+			.replace(/&[a-z#0-9]+;/gi, ' ');
+		words += text.split(/\s+/).filter(Boolean).length;
+	}
+	return words;
+}
+
+async function runEpubToTxt(page: Page, f: RealFile): Promise<string | null> {
+	const elapsed = timer();
+	const input = readFileSync(f.abs);
+	try {
+		const srcEntries = await readZipEntries(input, f.name);
+		const srcWords = epubWordEstimate(srcEntries);
+		await gotoPath(page, '/epub-to-txt');
+		await upload(page, f.abs);
+		const run = await compress(page, { timeout: 240_000 }).catch((error) => ({
+			error: String(error),
+			warnings: [] as string[]
+		}));
+		if (run.error) {
+			// DRM and image-only books refuse honestly — but an "image-only"
+			// refusal on a book whose chapters clearly hold text is a bug.
+			const problems: string[] = [];
+			if (!/DRM|no extractable text/i.test(run.error)) {
+				problems.push(`unexpected refusal: ${run.error.slice(0, 150)}`);
+			} else if (!/DRM/i.test(run.error) && srcWords > 500) {
+				problems.push(`refused as text-free but source holds ~${srcWords} words`);
+			}
+			rec.cell({
+				family: 'docs',
+				file: f.rel,
+				tool: '/epub-to-txt',
+				action: 'epub-to-txt',
+				level: 'default',
+				status: problems.length ? 'fail' : 'pass',
+				inBytes: input.length,
+				durationMs: elapsed(),
+				metrics: { refused: true, srcWordsEstimate: srcWords },
+				notes: run.error.slice(0, 150)
+			});
+			return problems.length ? `${f.rel}: ${problems.join('; ')}` : null;
+		}
+		const art = await downloadRow(page);
+		const problems: string[] = [];
+		if (!art.name.endsWith('.txt')) problems.push(`output name "${art.name}"`);
+		const text = art.bytes.toString('utf8');
+		const words = text.split(/\s+/).filter(Boolean).length;
+		if (text.trim().length === 0) problems.push('empty text output');
+		if (/<\/(p|div|span|a|h[1-6])>/i.test(text)) problems.push('markup leaked into the text');
+		// Coverage floor: spine-driven extraction may skip nav/landmark files,
+		// but losing half the estimated words means chapters went missing.
+		if (srcWords > 200 && words < srcWords * 0.5) {
+			problems.push(`extracted ${words} words < 50% of source estimate ${srcWords}`);
+		}
+		rec.cell({
+			family: 'docs',
+			file: f.rel,
+			tool: '/epub-to-txt',
+			action: 'epub-to-txt',
+			level: 'default',
+			status: problems.length ? 'fail' : 'pass',
+			inBytes: input.length,
+			outBytes: art.bytes.length,
+			metrics: { chars: text.length, words, srcWordsEstimate: srcWords },
+			durationMs: elapsed()
+		});
+		return problems.length ? `${f.rel}: ${problems.join('; ')}` : null;
+	} catch (error) {
+		rec.cell({
+			family: 'docs',
+			file: f.rel,
+			tool: '/epub-to-txt',
+			action: 'epub-to-txt',
+			level: 'default',
+			status: 'error',
+			inBytes: input.length,
+			durationMs: elapsed(),
+			error: truncate(error)
+		});
+		return `${f.rel}: ${truncate(error).slice(0, 200)}`;
+	}
+}
+
+chunk(bySize(epubs), 4).forEach((files, i) => {
+	test(`MX [docs] batch${i + 1} :: epub-to-txt @default`, async ({ page }) => {
+		await runBatch(page, files, runEpubToTxt);
+	});
+});
+
+/** Magic-byte page sniff mirroring the app's (extension lies happen in real
+ *  comics — the PDF page count must match what the app actually embeds). */
+function sniffPage(b: Uint8Array): 'jpg' | 'png' | 'webp' | 'gif' | null {
+	if (b.length > 2 && b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) return 'jpg';
+	if (b.length > 3 && b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47) return 'png';
+	if (
+		b.length > 11 &&
+		b[0] === 0x52 &&
+		b[1] === 0x49 &&
+		b[2] === 0x46 &&
+		b[3] === 0x46 &&
+		b[8] === 0x57 &&
+		b[9] === 0x45 &&
+		b[10] === 0x42 &&
+		b[11] === 0x50
+	)
+		return 'webp';
+	if (b.length > 3 && b[0] === 0x47 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x38) return 'gif';
+	return null;
+}
+
+async function runComicToPdf(page: Page, f: RealFile): Promise<string | null> {
+	const elapsed = timer();
+	const input = readFileSync(f.abs);
+	const tool = f.ext === 'cbr' ? '/cbr-to-pdf' : '/cbz-to-pdf';
+	const id = rec.id(f.rel, 'to-pdf', 'default');
+	try {
+		const srcEntries =
+			f.ext === 'cbr' ? await sevenZipEntries(input, f.name) : await readZipEntries(input, f.name);
+		const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
+		const pageNames = Object.keys(srcEntries)
+			.filter((n) => sniffPage(srcEntries[n]) !== null)
+			.sort((a, b) => collator.compare(a, b));
+		await gotoPath(page, tool);
+		await upload(page, f.abs);
+		await compress(page, { timeout: 240_000 });
+		const art = await downloadRow(page);
+		const problems: string[] = [];
+		if (!art.name.endsWith('.pdf')) problems.push(`output name "${art.name}"`);
+		const info = await pdfInfo(art.bytes); // decode-back: throws on garbage
+		if (info.pageCount !== pageNames.length) {
+			problems.push(`pageCount ${info.pageCount} != ${pageNames.length} image entries`);
+		}
+		const metrics: Metrics = { pages: info.pageCount };
+		const rasters: string[] = [];
+		const firstName = pageNames[0];
+		if (firstName) {
+			const first = Buffer.from(srcEntries[firstName]);
+			const kind = sniffPage(first);
+			metrics.firstPage = firstName;
+			metrics.firstPageKind = kind;
+			const meta = await imageMeta(first);
+			const size = info.pageSizes[0];
+			if (size && (size.w !== meta.width || size.h !== meta.height)) {
+				problems.push(`page 1 ${size.w}×${size.h} pt != image ${meta.width}×${meta.height} px`);
+			}
+			// jpg pages must ride byte-verbatim (the lossless promise, on a real file)
+			if (kind === 'jpg' && !art.bytes.includes(first.subarray(jpegSosOffset(first)))) {
+				problems.push('first jpg page NOT embedded byte-verbatim');
+			}
+			const raster = await rasterizePdfInPage(page, art.bytes, 1);
+			if (raster) {
+				const { ratio } = await pixelDiff(first, raster);
+				metrics.firstPageDiffRatio = Number(ratio.toFixed(5));
+				const ceiling = kind === 'jpg' || kind === 'png' ? 0.05 : 0.2;
+				if (ratio > ceiling) {
+					problems.push(`page 1 render diff ${ratio.toFixed(4)} > ${ceiling}`);
+				}
+				rasters.push(await rec.saveSideBySide(id, 'page1.png', await toPng(first), raster));
+			}
+		}
+		rec.cell({
+			family: 'docs',
+			file: f.rel,
+			tool,
+			action: 'to-pdf',
+			level: 'default',
+			status: problems.length ? 'fail' : 'pass',
+			inBytes: input.length,
+			outBytes: art.bytes.length,
+			metrics,
+			durationMs: elapsed(),
+			rasters,
+			notes: 'conversion — pdf ≈ archive size by design (pages embed, not recompress)'
+		});
+		return problems.length ? `${f.rel}: ${problems.join('; ')}` : null;
+	} catch (error) {
+		rec.cell({
+			family: 'docs',
+			file: f.rel,
+			tool,
+			action: 'to-pdf',
+			level: 'default',
+			status: 'error',
+			inBytes: input.length,
+			durationMs: elapsed(),
+			error: truncate(error)
+		});
+		return `${f.rel}: ${truncate(error).slice(0, 200)}`;
+	}
+}
+
+for (const f of [...cbzs, ...cbrs]) {
+	test(`MX [docs] ${f.rel} :: to-pdf @default`, async ({ page }) => {
+		test.slow(); // 30 MB extract + full-document PDF assembly in the tab
+		await runBatch(page, [f], runComicToPdf);
 	});
 }
 
