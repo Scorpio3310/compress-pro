@@ -322,11 +322,13 @@ export const DETAILS: Record<string, SeoDetail | ConverterDetail> = {
 		tagline: 'Open LHA and LZH archives — retro formats, done locally.',
 		related: ['/extract-arj', '/zip-files', '/create-7z']
 	},
-	// Hub page of the ebook tab (pathFor target) — FORMATS entries carry no
-	// preset (and converterFor never resolves them, so accept/dropSubject
-	// would be dead weight); the tab defaults + TAB_ACCEPT are the behavior.
+	// Hub page of the ebook tab (pathFor target) — converterFor never resolves
+	// it, so accept/dropSubject stay off (tab defaults + TAB_ACCEPT are the
+	// behavior). The bare preset resets a persisted `to` (txt/pdf) back to
+	// compress: without it, a /cbz-to-pdf visit would make this page convert.
 	'compress-epub': {
 		ogImage: '/og/compress-epub.jpg',
+		preset: { kind: 'ebook' },
 		title: 'Compress EPUB Online — Free, Private, No Upload | Compress Pro',
 		description:
 			'Compress EPUB e-books right in your browser — the images inside are re-encoded, text and layout stay untouched. No uploads, no accounts. Free & private.',

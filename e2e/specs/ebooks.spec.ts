@@ -276,6 +276,29 @@ test('EB-13: a comic dropped on /epub-to-txt is redirected, not mangled', async 
 	await expect(page.getByTestId('compress-cta')).toBeEnabled();
 });
 
+test('EB-15: a persisted txt/pdf output does not leak into compress pages', async ({ page }) => {
+	// Visiting a converter persists `to` — a later compress/cbz landing must
+	// reset it, or /cbr-to-cbz would hand back a PDF and /compress-epub would
+	// refuse EPUBs outright.
+	await gotoPath(page, '/cbz-to-pdf');
+	await gotoPath(page, '/cbr-to-cbz');
+	await upload(page, fx('sample.cbr'));
+	await expect(page.getByRole('button', { name: 'Compress', exact: true })).toHaveAttribute(
+		'aria-pressed',
+		'true'
+	);
+	await compress(page, { timeout: 120_000 });
+	const art = await downloadRow(page);
+	expect(art.name).toBe('sample.cbz');
+
+	await gotoPath(page, '/epub-to-txt');
+	await gotoPath(page, '/compress-epub');
+	await upload(page, fx('sample.epub'));
+	await expect(page.getByTestId('compress-cta')).toHaveText('Compress 1 file');
+	await compress(page, { timeout: 120_000 });
+	expect((await downloadRow(page)).name).toBe('sample.epub');
+});
+
 test('EB-14: a DRM-protected EPUB is refused on /epub-to-txt too', async ({ page }) => {
 	await gotoPath(page, '/epub-to-txt');
 	await upload(page, fx('sample-drm.epub'));

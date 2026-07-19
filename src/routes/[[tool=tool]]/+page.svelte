@@ -627,7 +627,10 @@
 	afterNavigate(() => {
 		// data is this navigation's resolved load output — afterNavigate fires
 		// only after load settled and the DOM updated, so the preset is current.
-		const preset = data.converter?.preset;
+		// Format hubs aren't converters, but their detail may still carry a
+		// reset preset (the ebook hub clears a persisted txt/pdf output).
+		const preset =
+			data.converter?.preset ?? (data.entry as { preset?: ConverterPreset }).preset;
 		if (!preset) return;
 		// "Identical to the user clicking" also means obeying the busy freeze
 		// every click-surface has (inert settings, opsDisabled, gated intake):
@@ -673,7 +676,9 @@
 			settings.subtitle.to = preset.to;
 		} else if (preset.kind === 'ebook') {
 			if (preset.quality !== undefined) settings.ebook.quality = preset.quality;
-			if (preset.to !== undefined) settings.ebook.to = preset.to;
+			// No `to` in the preset means the page promises compression — a
+			// persisted txt/pdf choice from a converter visit must not leak in.
+			settings.ebook.to = preset.to ?? 'auto';
 		} else if (preset.kind === 'archive') {
 			handleZipOpChange(preset.op);
 			if (preset.to) settings.zip.outputFormat = preset.to;
